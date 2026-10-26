@@ -1,16 +1,22 @@
-import type { CatalogItem, PlanPoint, RoomLayout, SceneItem, SceneState } from "@fitroom/shared";
+import type {
+  CatalogItem,
+  FitProducts,
+  PlanPoint,
+  RoomLayout,
+  SceneItem,
+  SceneState,
+} from "@fitroom/shared";
 import { cmToMeters, wallLengthCm } from "@fitroom/shared";
 
 export const AUTOSAVE_KEY = "fitroom.autosave.v1";
 export const SNAP_CM = 5;
 export const ROTATE_SNAP_DEG = 15;
 
-export interface FitRecord {
-  type: string;
-  severity: "error" | "warning";
-  itemIds: string[];
-  message: string;
-  location: PlanPoint;
+/** Product sizes + categories for the shared fit engine. */
+export function catalogProducts(catalog: Map<string, CatalogItem>): FitProducts {
+  return new Map(
+    [...catalog.values()].map((c) => [c.id, { size: { ...c.size }, category: c.category }]),
+  );
 }
 
 function uid(prefix: string): string {
@@ -202,70 +208,6 @@ export function isInsideRoom(
     }
   }
   return true;
-}
-
-export function computeFitIssues(
-  state: SceneState,
-  catalog: Map<string, CatalogItem>,
-  room: RoomLayout,
-): FitRecord[] {
-  const issues: FitRecord[] = [];
-  const items = state.items;
-  for (let i = 0; i < items.length; i += 1) {
-    const item = items[i];
-    if (item === undefined) continue;
-    if (!isInsideRoom(item, catalog, room)) {
-      issues.push({
-        type: "outside",
-        severity: "error",
-        itemIds: [item.instanceId],
-        message: "Piece extends outside the room",
-        location: { ...item.position },
-      });
-    }
-    for (let j = i + 1; j < items.length; j += 1) {
-      const other = items[j];
-      if (other === undefined) continue;
-      const a = itemCorners(item, catalog);
-      const b = itemCorners(other, catalog);
-      if (cornersOverlap(a, b)) {
-        issues.push({
-          type: "overlap",
-          severity: "error",
-          itemIds: [item.instanceId, other.instanceId],
-          message: "Pieces overlap",
-          location: {
-            x: (item.position.x + other.position.x) / 2,
-            z: (item.position.z + other.position.z) / 2,
-          },
-        });
-      }
-    }
-    for (const opening of room.openings) {
-      if (opening.type !== "door" || opening.swing !== "in") continue;
-      const wall = room.walls.find((w) => w.id === opening.wallId);
-      if (wall === undefined) continue;
-      const wallLen = wallLengthCm(wall.start, wall.end) || 1;
-      const dirX = (wall.end.x - wall.start.x) / wallLen;
-      const dirZ = (wall.end.z - wall.start.z) / wallLen;
-      const hingeAt = opening.hinge === "left" ? opening.offset : opening.offset + opening.width;
-      const hx = wall.start.x + dirX * hingeAt;
-      const hz = wall.start.z + dirZ * hingeAt;
-      const swingR = opening.width;
-      const dist = Math.hypot(item.position.x - hx, item.position.z - hz);
-      if (dist < swingR + 20) {
-        issues.push({
-          type: "door-swing",
-          severity: "warning",
-          itemIds: [item.instanceId],
-          message: `Inside the swing of ${opening.id}`,
-          location: { ...item.position },
-        });
-        break;
-      }
-    }
-  }
-  return issues;
 }
 
 /** Clearance kept between a new piece and every placed piece, centimetres. */

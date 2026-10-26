@@ -4,27 +4,57 @@ import "@fontsource/nunito/700.css";
 import "@fontsource/nunito/800.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import type { CatalogItem, RoomLayout, SceneItem } from "@fitroom/shared";
-import { cmToMeters, isHealthResponse } from "@fitroom/shared";
+import type {
+  CatalogItem,
+  FitAnalysis,
+  FitIssue,
+  PlanPoint,
+  RoomLayout,
+  SceneItem,
+  SceneState,
+} from "@fitroom/shared";
+import { FitEngine, cmToMeters, isHealthResponse } from "@fitroom/shared";
 import roomJson from "../../shared/samples/living-420x360.json";
 import catalogJson from "../../shared/catalog/catalog.json";
+import validScene from "../../shared/samples/fit-tests/valid.json";
+import overlapScene from "../../shared/samples/fit-tests/overlap.json";
+import outsideScene from "../../shared/samples/fit-tests/outside.json";
+import doorSwingScene from "../../shared/samples/fit-tests/door-swing.json";
+import walkway70Scene from "../../shared/samples/fit-tests/walkway-70.json";
+import walkway78Scene from "../../shared/samples/fit-tests/walkway-78.json";
+import walkway82Scene from "../../shared/samples/fit-tests/walkway-82.json";
+import shallowWallScene from "../../shared/samples/fit-tests/shallow-wall.json";
+import shallowBoxedScene from "../../shared/samples/fit-tests/shallow-boxed.json";
 import { CatalogPanel } from "./catalog-ui";
 import { applyVariant, loadModel } from "./models";
 import { PlanOverlay } from "./plan";
+import { FitOverlay } from "./fit-overlay";
 import { Inspector } from "./inspector";
 import { buildRoom, WALL_MATERIAL } from "./room";
 import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
 import {
-  computeFitIssues,
+  catalogProducts,
   distanceToWallM,
   makeInstanceId,
   nearestFreeSpot,
   roomBounds,
   SceneStore,
   snapToGrid,
-  type FitRecord,
 } from "./state";
 import "./style.css";
+
+/** Dev menu: the nine fit-test scenes, loadable from the bottom toolbar. */
+const TEST_SCENES: Record<string, SceneState> = {
+  valid: validScene as unknown as SceneState,
+  overlap: overlapScene as unknown as SceneState,
+  outside: outsideScene as unknown as SceneState,
+  "door-swing": doorSwingScene as unknown as SceneState,
+  "walkway-70": walkway70Scene as unknown as SceneState,
+  "walkway-78": walkway78Scene as unknown as SceneState,
+  "walkway-82": walkway82Scene as unknown as SceneState,
+  "shallow-wall": shallowWallScene as unknown as SceneState,
+  "shallow-boxed": shallowBoxedScene as unknown as SceneState,
+};
 
 const ROOM = roomJson as unknown as RoomLayout;
 const CATALOG = catalogJson as unknown as CatalogItem[];
@@ -102,11 +132,16 @@ class FitRoomApp {
   private sizeTag: HTMLElement;
   private measureEl: HTMLElement;
   private planOverlay: PlanOverlay;
+  private fitOverlay: FitOverlay;
   private inspector: Inspector;
-  private issues: FitRecord[] = [];
+  private fitEngine: FitEngine;
+  private analysis: FitAnalysis | null = null;
+  private issues: FitIssue[] = [];
   private mode: "orbit" | "plan" = "orbit";
   private drag: { id: string; offsetX: number; offsetZ: number } | null = null;
   private rotating = false;
+  /** Trailing debounce for live fit feedback while dragging (ms). */
+  private liveTimer: ReturnType<typeof setTimeout> | null = null;
   private container: HTMLElement;
   /** Render-on-demand: a queued rAF id (0 = none) plus a shadow refresh flag. */
   private rafId = 0;
@@ -191,6 +226,13 @@ class FitRoomApp {
 
     this.planOverlay = new PlanOverlay(container, ROOM);
     this.planOverlay.setVisible(false);
+
+    // Fit engine: wall + fixture blocking is precomputed once per room; each
+    // check only re-stamps the footprints (or, while dragging, the moved
+    // item's neighbourhood) before the two grid floods.
+    this.fitEngine = new FitEngine(ROOM, catalogProducts(CATALOG_MAP));
+    this.fitOverlay = new FitOverlay(this.scene, container);
+    this.fitOverlay.setGroupResolver((id) => this.instances.get(id)?.group);
 
     const inspectorHost = document.getElementById("inspector");
     const host = inspectorHost ?? document.createElement("div");
@@ -310,8 +352,9 @@ class FitRoomApp {
     }
     const entry = id === null ? undefined : this.instances.get(id);
     if (entry !== undefined) {
-      const bad = id !== null && this.issues.some((f) => f.itemIds.includes(id));
-      this.outline = new THREE.BoxHelper(entry.group, bad ? 0xb3261e : 0xe59500);
+      const inError =
+        id !== null && this.issues.some((f) => f.severity === "error" && f.itemIds.includes(id));
+      this.outline = new THREE.BoxHelper(entry.group, inError ? 0xb3261e : 0xe59500);
       this.scene.add(this.outline);
       this.rotateHandle.visible = true;
       this.positionHandle(entry);
@@ -386,17 +429,24 @@ class FitRoomApp {
     this.updateMeasure();
     // Models (and their textures) arrived asynchronously: draw + refresh shadows.
     this.markSceneChanged();
+    // Newly loaded groups may complete the issue outlines: refresh the check.
+    this.refreshIssues();
   }
 
-  private refreshIssues(): void {
-    this.issues = computeFitIssues(this.store.state, CATALOG_MAP, ROOM);
+  /**
+   * Re-run the fit check. While dragging, pass the moved item id so only
+   * its neighbourhood is re-stamped; commits re-check everything.
+   */
+  private refreshIssues(movedIds?: readonly string[]): void {
+    this.analysis = this.fitEngine.analyze(this.store.state, movedIds);
+    this.issues = this.analysis.issues;
     const badge = document.getElementById("fit-badge");
     if (badge instanceof HTMLButtonElement) {
       const errors = this.issues.filter((i) => i.severity === "error").length;
       const warns = this.issues.length - errors;
       if (errors > 0) {
         badge.dataset["state"] = "bad";
-        badge.textContent = `✕ ${this.issues.length} problem${this.issues.length === 1 ? "" : "s"}`;
+        badge.textContent = `✕ ${errors} problem${errors === 1 ? "" : "s"}`;
       } else if (warns > 0) {
         badge.dataset["state"] = "warn";
         badge.textContent = `! ${warns} warning${warns === 1 ? "" : "s"}`;
@@ -405,11 +455,21 @@ class FitRoomApp {
         badge.textContent = "✓ Everything fits";
       }
     }
+    this.fitOverlay.setAnalysis(this.analysis, this.issues);
     this.renderFitList();
     this.updateTopBar();
   }
 
-  /** Problem list opened from the fit badge; picking one selects the piece. */
+  /** Live fit feedback while dragging, trailing-debounced to stay smooth. */
+  private scheduleLiveIssues(movedId: string): void {
+    if (this.liveTimer !== null) clearTimeout(this.liveTimer);
+    this.liveTimer = setTimeout(() => {
+      this.liveTimer = null;
+      this.refreshIssues([movedId]);
+    }, 120);
+  }
+
+  /** Problem list opened from the fit badge; picking one focuses the camera. */
   private renderFitList(): void {
     const host = document.getElementById("fit-list");
     if (host === null) return;
@@ -421,6 +481,7 @@ class FitRoomApp {
     for (const issue of this.issues) {
       const b = document.createElement("button");
       b.type = "button";
+      b.dataset["severity"] = issue.severity;
       const first = issue.itemIds[0];
       const item =
         first === undefined
@@ -430,10 +491,33 @@ class FitRoomApp {
       b.textContent = `${issue.severity === "error" ? "✕" : "!"} ${issue.message}${entry === undefined ? "" : ` — ${entry.name}`}`;
       b.addEventListener("click", () => {
         if (first !== undefined) this.select(first);
+        this.focusCameraOn(issue.location);
         host.setAttribute("hidden", "");
       });
       host.appendChild(b);
     }
+  }
+
+  /** Point the orbit camera at a plan position (issue focus). */
+  private focusCameraOn(point: PlanPoint): void {
+    if (this.mode !== "orbit") this.setMode("orbit");
+    const target = new THREE.Vector3(cmToMeters(point.x), 0.4, cmToMeters(point.z));
+    const offset = this.orbitCam.position.clone().sub(this.controls.target);
+    if (offset.lengthSq() < 1e-6) offset.set(1.5, 2.2, 2.2);
+    offset.setLength(3.2);
+    this.orbitCam.position.copy(target).add(offset);
+    this.controls.target.copy(target);
+    this.controls.update();
+    this.requestRender();
+  }
+
+  /** Load a fit-test scene from the dev menu (items only, keep the camera). */
+  private loadTestScene(name: string): void {
+    const scene = TEST_SCENES[name];
+    if (scene === undefined) return;
+    const clone = JSON.parse(JSON.stringify(scene)) as SceneState;
+    this.select(null);
+    this.store.replace({ ...clone, camera: this.store.state.camera });
   }
 
   /** Room total in the top bar (sum of placed pieces, tabular figures). */
@@ -590,13 +674,22 @@ class FitRoomApp {
             this.positionHandle(live);
           }
           this.updateMeasure();
+          // Live fit feedback without stutter: debounced, and only the
+          // dragged item's neighbourhood is re-stamped by the engine.
+          this.scheduleLiveIssues(item.instanceId);
           this.requestRender();
         }
       }
     });
 
     el.addEventListener("pointerup", () => {
+      if (this.liveTimer !== null) {
+        clearTimeout(this.liveTimer);
+        this.liveTimer = null;
+      }
       if (this.drag !== null || this.rotating) {
+        // Commit: the store emits, which runs the full (non-incremental)
+        // fit check once.
         this.store.touch();
       }
       this.drag = null;
@@ -636,6 +729,13 @@ class FitRoomApp {
     on("tool-cart", () => this.downloadCart());
     on("tool-orbit", () => this.setMode("orbit"));
     on("tool-plan", () => this.setMode("plan"));
+    on("tool-clearance", () => this.toggleClearance());
+    const scenes = document.getElementById("tool-scenes");
+    if (scenes instanceof HTMLSelectElement) {
+      scenes.addEventListener("change", () => {
+        if (scenes.value !== "") this.loadTestScene(scenes.value);
+      });
+    }
     on("tool-rot-left", () => this.nudgeRotate(-15));
     on("tool-rot-right", () => this.nudgeRotate(15));
     on("tool-delete", () => {
@@ -651,6 +751,14 @@ class FitRoomApp {
       const dlg = document.getElementById("credits-dialog");
       if (dlg instanceof HTMLDialogElement) dlg.showModal();
     });
+  }
+
+  /** Clearance overlay toggle: shade the circulation-blocked 1 cm cells. */
+  private toggleClearance(): void {
+    const next = !this.fitOverlay.clearanceVisible;
+    this.fitOverlay.setClearanceVisible(next);
+    document.getElementById("tool-clearance")?.setAttribute("data-active", String(next));
+    this.requestRender();
   }
 
   private nudgeRotate(delta: number): void {
@@ -766,6 +874,11 @@ class FitRoomApp {
     }
     this.updateDollhouse();
     if (this.outline !== null) this.outline.update();
+    this.fitOverlay.update(
+      this.activeCamera(),
+      this.container.clientWidth,
+      this.container.clientHeight,
+    );
     if (this.selectedId !== null) {
       const entry = this.instances.get(this.selectedId);
       if (entry !== undefined) this.positionHandle(entry);

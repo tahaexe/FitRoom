@@ -471,6 +471,63 @@ button.danger {
   cursor: pointer;
 }
 
+.fit-list button[data-severity="error"] {
+  color: var(--red);
+  border: 1.5px solid var(--red);
+}
+
+.fit-list button[data-severity="warning"] {
+  color: var(--amber);
+  border: 1.5px solid var(--amber);
+}
+
+/* ---- fit issue labels floating over the room view ---- */
+
+.fit-issue-labels {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.fit-issue-label {
+  position: absolute;
+  transform: translate(-50%, -130%);
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+}
+
+.fit-issue-label[data-severity="error"] {
+  color: var(--red);
+  border: 1.5px solid var(--red);
+}
+
+.fit-issue-label[data-severity="warning"] {
+  color: var(--amber);
+  border: 1.5px solid var(--amber);
+}
+
+/* ---- dev scene menu in the bottom toolbar ---- */
+
+.dev-scenes {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--shadow);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  max-width: 160px;
+}
+
 /* ---- bottom toolbar: white pills floating centred over the view ---- */
 
 .bottom-toolbar {

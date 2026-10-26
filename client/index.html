@@ -30,6 +30,26 @@
       <div class="bottom-toolbar" aria-label="View tools">
         <button id="tool-orbit" type="button" data-active="true">Orbit</button>
         <button id="tool-plan" type="button" data-active="false">Plan</button>
+        <button
+          id="tool-clearance"
+          type="button"
+          data-active="false"
+          title="Shade the blocked walkway cells"
+        >
+          Clearance
+        </button>
+        <select id="tool-scenes" class="dev-scenes" aria-label="Load a fit-test scene">
+          <option value="">Dev scene…</option>
+          <option value="valid">valid</option>
+          <option value="overlap">overlap</option>
+          <option value="outside">outside</option>
+          <option value="door-swing">door-swing</option>
+          <option value="walkway-70">walkway-70</option>
+          <option value="walkway-78">walkway-78</option>
+          <option value="walkway-82">walkway-82</option>
+          <option value="shallow-wall">shallow-wall</option>
+          <option value="shallow-boxed">shallow-boxed</option>
+        </select>
         <button id="tool-rot-left" type="button" title="Rotate −15°">⟲ 15°</button>
         <button id="tool-rot-right" type="button" title="Rotate +15° (Shift+R: 1°)">⟳ 15°</button>
         <button id="tool-delete" type="button" title="Delete selection (Del)">Delete</button>
