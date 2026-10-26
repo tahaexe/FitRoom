@@ -1,0 +1,82 @@
+{
+  "id": "living-420x360",
+  "name": "Living room 420 × 360",
+  "units": "cm",
+  "walls": [
+    {
+      "id": "wall-1",
+      "start": { "x": 0, "z": 0 },
+      "end": { "x": 420, "z": 0 },
+      "height": 260,
+      "thickness": 12
+    },
+    {
+      "id": "wall-2",
+      "start": { "x": 420, "z": 0 },
+      "end": { "x": 420, "z": 360 },
+      "height": 260,
+      "thickness": 12
+    },
+    {
+      "id": "wall-3",
+      "start": { "x": 420, "z": 360 },
+      "end": { "x": 0, "z": 360 },
+      "height": 260,
+      "thickness": 12
+    },
+    {
+      "id": "wall-4",
+      "start": { "x": 0, "z": 360 },
+      "end": { "x": 0, "z": 0 },
+      "height": 260,
+      "thickness": 12
+    }
+  ],
+  "openings": [
+    {
+      "id": "door-1",
+      "wallId": "wall-1",
+      "type": "door",
+      "offset": 30,
+      "width": 90,
+      "height": 210,
+      "sillHeight": 0,
+      "hinge": "left",
+      "swing": "in"
+    },
+    {
+      "id": "window-1",
+      "wallId": "wall-3",
+      "type": "window",
+      "offset": 80,
+      "width": 160,
+      "height": 140,
+      "sillHeight": 90
+    },
+    {
+      "id": "window-2",
+      "wallId": "wall-2",
+      "type": "window",
+      "offset": 120,
+      "width": 120,
+      "height": 140,
+      "sillHeight": 90
+    }
+  ],
+  "fixtures": [
+    {
+      "id": "radiator-1",
+      "type": "radiator",
+      "wallId": "wall-3",
+      "offset": 90,
+      "width": 140,
+      "height": 60,
+      "depth": 10
+    }
+  ],
+  "existing": [],
+  "surfaces": { "floor": "oak-light", "wall": "warm-white" },
+  "style": { "tags": ["modern", "neutral"], "dominantColors": ["#E8E2D9", "#A8A29E"] },
+  "source": "sample",
+  "confidence": 1
+}
