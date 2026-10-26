@@ -28,6 +28,7 @@ import shallowBoxedScene from "../../shared/samples/fit-tests/shallow-boxed.json
 import rotatedOverlapScene from "../../shared/samples/fit-tests/rotated-overlap.json";
 import rotatedOutsideScene from "../../shared/samples/fit-tests/rotated-outside.json";
 import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.json";
+import { initLiveSwitch } from "./api";
 import { CatalogPanel } from "./catalog-ui";
 import { applyVariant, loadModel } from "./models";
 import { PlanOverlay } from "./plan";
@@ -942,3 +943,4 @@ if (container !== null) {
   new FitRoomApp(container);
 }
 void refreshApiStatus();
+initLiveSwitch();
