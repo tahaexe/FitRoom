@@ -6,7 +6,7 @@ export const fitIssueSchema = {
   description: "A placement problem found in a scene, located in plan centimetres.",
   type: "object",
   properties: {
-    type: { enum: ["overlap", "outside", "door-swing", "walkway", "window"] },
+    type: { enum: ["overlap", "outside", "door-swing", "walkway", "walkway-entrance", "window"] },
     severity: { enum: ["error", "warning"] },
     itemIds: { type: "array", items: { type: "string" } },
     message: { type: "string", minLength: 1 },

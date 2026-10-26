@@ -216,7 +216,8 @@ export interface SceneState {
   camera: SceneCamera;
 }
 
-export type FitIssueType = "overlap" | "outside" | "door-swing" | "walkway" | "window";
+export type FitIssueType =
+  "overlap" | "outside" | "door-swing" | "walkway" | "walkway-entrance" | "window";
 export type FitIssueSeverity = "error" | "warning";
 
 export interface FitIssue {
