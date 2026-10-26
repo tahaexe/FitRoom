@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import type { RoomLayout } from "@fitroom/shared";
-import { cmToMeters, wallLengthCm } from "@fitroom/shared";
+import { cmToMeters, planWallLabel } from "@fitroom/shared";
 import { pointAlongWall } from "./room";
 
 /**
@@ -22,7 +22,7 @@ export class PlanOverlay {
     for (const wall of room.walls) {
       const t = document.createElementNS(NS, "text");
       t.setAttribute("class", "plan-wall-label");
-      t.textContent = `${wall.id}: ${Math.round(wallLengthCm(wall.start, wall.end))}cm`;
+      t.textContent = planWallLabel(room, wall.id);
       this.svg.appendChild(t);
       this.wallTexts.push(t);
     }

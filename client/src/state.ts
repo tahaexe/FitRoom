@@ -138,7 +138,7 @@ export function itemCorners(item: SceneItem, catalog: Map<string, CatalogItem>):
   }));
 }
 
-function cornersOverlap(a: PlanPoint[], b: PlanPoint[]): boolean {
+export function cornersOverlap(a: PlanPoint[], b: PlanPoint[]): boolean {
   // Separating-axis test on the two rectangles' edge normals. Touching
   // edges (within a micrometre) count as separated, so exact-pitch wall
   // slots are not rejected by float noise; the 5cm placement gap dwarfs this.

@@ -40,7 +40,9 @@ import { buildRoom, WALL_MATERIAL } from "./room";
 import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
 import {
   catalogProducts,
+  cornersOverlap,
   distanceToWallM,
+  itemCorners,
   makeInstanceId,
   nearestFreeSpot,
   roomBounds,
@@ -276,6 +278,9 @@ class FitRoomApp {
         checkItems: (items) => this.fitEngine.check({ ...this.store.state, items }),
         placeItem: (productId, x, z, rotationY) =>
           this.placeRecommendation(productId, x, z, rotationY),
+        swapItem: (oldInstanceId, productId, x, z, rotationY) =>
+          this.swapRecommendation(oldInstanceId, productId, x, z, rotationY),
+        selectItem: (id) => this.select(id),
         resetDemoRoom: () => this.resetDemoRoom(),
         hoverRun: (run) => this.hoverRun(run),
       });
@@ -362,7 +367,46 @@ class FitRoomApp {
       rotationY,
       variant: entry.variants[0]?.name ?? "",
     };
+    // Seat accessories (coffee-table, ottoman, side-table) are sited
+    // ignoring same-category pieces: placing one replaces a conflicting
+    // same-category piece, so "Place it" never stacks two tables in one
+    // slot. Still a single undo step.
+    const replacesSameCategory =
+      entry.category === "coffee-table" ||
+      entry.category === "ottoman" ||
+      entry.category === "side-table";
     this.store.commit((draft) => {
+      if (replacesSameCategory) {
+        const corners = itemCorners(instance, CATALOG_MAP);
+        draft.items = draft.items.filter((other) => {
+          if (CATALOG_MAP.get(other.productId)?.category !== entry.category) return true;
+          return !cornersOverlap(corners, itemCorners(other, CATALOG_MAP));
+        });
+      }
+      draft.items.push(instance);
+    });
+    this.select(instance.instanceId);
+  }
+
+  /** Swap the selected piece for a replacement, as one undo step. */
+  private swapRecommendation(
+    oldInstanceId: string,
+    productId: string,
+    x: number,
+    z: number,
+    rotationY: number,
+  ): void {
+    const entry = CATALOG_MAP.get(productId);
+    if (entry === undefined) return;
+    const instance: SceneItem = {
+      instanceId: makeInstanceId(productId),
+      productId,
+      position: { x: Math.round(x), z: Math.round(z) },
+      rotationY,
+      variant: entry.variants[0]?.name ?? "",
+    };
+    this.store.commit((draft) => {
+      draft.items = draft.items.filter((i) => i.instanceId !== oldInstanceId);
       draft.items.push(instance);
     });
     this.select(instance.instanceId);
@@ -467,6 +511,7 @@ class FitRoomApp {
     const current =
       id === null ? null : (this.store.state.items.find((i) => i.instanceId === id) ?? null);
     this.inspector.setSelection(current);
+    this.recommendPanel?.setSelected(current);
     this.updateMeasure();
     this.requestRender();
   }

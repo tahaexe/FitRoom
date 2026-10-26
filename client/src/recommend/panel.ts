@@ -1,11 +1,15 @@
 /**
- * Recommendation panel: category advice or "What fits here?" for a free
- * wall run, powered by `POST /api/recommend`.
+ * Recommendation panel: category advice, "What fits here?" for a free
+ * wall run, or "Find a replacement" for the selected piece, powered by
+ * `POST /api/recommend`.
  *
  * Flow: free-space analysis of the current scene → size-fitting candidates
- * with proposed spots (shared code) → the request goes to `/api/recommend`
- * → each ranked item is placed virtually at its spot and checked; failing
- * items are dropped. "Place it" commits the spot as one undo step.
+ * with proposed spots (shared code) → when no candidate fits, a local
+ * message with sizes and no model call → otherwise the request goes to
+ * `/api/recommend` → each ranked item is placed virtually at its spot and
+ * checked; failing items are dropped. "Place it" commits the spot as one
+ * undo step (replacing a conflicting same-category accessory);
+ * "Swap it" replaces the selected piece as one undo step.
  */
 
 import type {
@@ -21,7 +25,16 @@ import type {
   SceneItem,
   SceneState,
 } from "@fitroom/shared";
-import { analyzeFreeSpace, buildRecommendRequest, isRecommendAnswer } from "@fitroom/shared";
+import {
+  analyzeFreeSpace,
+  buildRecommendRequest,
+  isRecommendAnswer,
+  nothingFitsMessage,
+  recommendIgnoreIds,
+  replacementOfferFor,
+  runDisplayLabel,
+  type CandidateQuery,
+} from "@fitroom/shared";
 import { isLive, postRecommend, setLive, type ApiResult } from "../api";
 
 const CATEGORIES: RecommendCategory[] = [
@@ -41,6 +54,14 @@ export interface RecommendDeps {
   getScene: () => SceneState;
   checkItems: (items: SceneItem[]) => FitIssue[];
   placeItem: (productId: string, x: number, z: number, rotationY: number) => void;
+  swapItem: (
+    oldInstanceId: string,
+    productId: string,
+    x: number,
+    z: number,
+    rotationY: number,
+  ) => void;
+  selectItem: (instanceId: string | null) => void;
   resetDemoRoom: () => void;
   hoverRun: (run: FreeRun | null) => void;
 }
@@ -67,6 +88,8 @@ export class RecommendPanel {
   private budget = "";
   private runs: FreeRun[] = [];
   private loading = false;
+  private selected: SceneItem | null = null;
+  private readonly placedIds = new Set<string>();
 
   constructor(host: HTMLElement, deps: RecommendDeps) {
     this.deps = deps;
@@ -84,15 +107,24 @@ export class RecommendPanel {
     this.renderRunList();
   }
 
+  /** Track the 3D selection, offering "Find a replacement" for it. */
+  setSelected(item: SceneItem | null): void {
+    this.selected = item === null ? null : { ...item, position: { ...item.position } };
+    this.renderSelection();
+  }
+
   /** True when adding the probe introduces no new fit error. */
   private passes(
+    query: CandidateQuery,
     productId: string,
     position: { x: number; z: number },
     rotationY: number,
   ): boolean {
     const scene = this.deps.getScene();
+    const ignore = new Set(recommendIgnoreIds(scene, this.deps.catalog, query));
     const base = new Set<string>();
-    for (const issue of this.deps.checkItems(scene.items)) {
+    const items = scene.items.filter((i) => !ignore.has(i.instanceId));
+    for (const issue of this.deps.checkItems(items)) {
       if (issue.severity === "error") base.add(issueKey(issue));
     }
     const probe: SceneItem = {
@@ -102,7 +134,7 @@ export class RecommendPanel {
       rotationY,
       variant: "",
     };
-    for (const issue of this.deps.checkItems([...scene.items, probe])) {
+    for (const issue of this.deps.checkItems([...items, probe])) {
       if (issue.severity !== "error") continue;
       if (!base.has(issueKey(issue))) return false;
     }
@@ -126,6 +158,10 @@ export class RecommendPanel {
     head.className = "recommend-head";
     head.append(title, close);
     this.root.appendChild(head);
+
+    const selection = document.createElement("div");
+    selection.className = "recommend-selection";
+    this.root.appendChild(selection);
 
     const chips = document.createElement("div");
     chips.className = "chips";
@@ -173,7 +209,25 @@ export class RecommendPanel {
     const out = document.createElement("div");
     out.className = "recommend-results";
     this.root.appendChild(out);
+    this.renderSelection();
     this.renderRunList();
+  }
+
+  private renderSelection(): void {
+    const host = this.root.querySelector(".recommend-selection");
+    if (host === null) return;
+    host.innerHTML = "";
+    if (this.selected === null) return;
+    const entry = this.catalogById.get(this.selected.productId);
+    const label = document.createElement("p");
+    label.className = "recommend-selected";
+    label.textContent = `Selected: ${entry?.name ?? this.selected.productId}`;
+    const find = document.createElement("button");
+    find.type = "button";
+    find.className = "recommend-go";
+    find.textContent = "Find a replacement";
+    find.addEventListener("click", () => void this.askReplacement());
+    host.append(label, find);
   }
 
   private renderRunList(): void {
@@ -188,11 +242,12 @@ export class RecommendPanel {
       return;
     }
     for (const run of this.runs.slice(0, 8)) {
+      const name = runDisplayLabel(this.deps.room, run.wall, run.length_cm);
       const b = document.createElement("button");
       b.type = "button";
       b.className = "recommend-run";
-      b.textContent = `${run.wall} · ${Math.round(run.length_cm)} cm`;
-      b.title = `What fits on ${run.wall} (${Math.round(run.length_cm)} cm)?`;
+      b.textContent = name;
+      b.title = `What fits on ${name}?`;
       b.addEventListener("mouseenter", () => this.deps.hoverRun(run));
       b.addEventListener("mouseleave", () => this.deps.hoverRun(null));
       b.addEventListener("focus", () => this.deps.hoverRun(run));
@@ -225,42 +280,94 @@ export class RecommendPanel {
     return Number.isFinite(value) && value >= 0 ? value : undefined;
   }
 
+  private buildRequest(query: CandidateQuery): RecommendRequest {
+    return buildRecommendRequest(
+      this.deps.room,
+      this.deps.getScene(),
+      this.deps.catalog,
+      query,
+      (id, pos, rot) => this.passes(query, id, pos, rot),
+    );
+  }
+
   private async askCategory(): Promise<void> {
     if (this.loading) return;
-    const scene = this.deps.getScene();
-    const request = buildRecommendRequest(
-      this.deps.room,
-      scene,
-      this.deps.catalog,
-      {
-        category: this.category,
-        budget_usd: this.budgetValue(),
-      },
-      (id, pos, rot) => this.passes(id, pos, rot),
-    );
-    await this.ask(request, `No fitting ${this.category} right now.`);
+    const query: CandidateQuery = {
+      category: this.category,
+      budget_usd: this.budgetValue(),
+    };
+    const request = this.buildRequest(query);
+    if (request.candidates.length === 0) {
+      this.showNothingFits(this.category, true);
+      return;
+    }
+    await this.ask(request, `No fitting ${this.category} right now.`, { kind: "place" });
   }
 
   private async askSpot(run: FreeRun): Promise<void> {
     if (this.loading) return;
     this.deps.hoverRun(run);
-    const scene = this.deps.getScene();
-    const request = buildRecommendRequest(
-      this.deps.room,
-      scene,
-      this.deps.catalog,
-      {
-        category: "any",
-        budget_usd: this.budgetValue(),
-        spot: { wall: run.wall, start_cm: run.start_cm, end_cm: run.end_cm },
-      },
-      (id, pos, rot) => this.passes(id, pos, rot),
-    );
-    await this.ask(request, "Nothing fits this run right now.");
+    const query: CandidateQuery = {
+      category: "any",
+      budget_usd: this.budgetValue(),
+      spot: { wall: run.wall, start_cm: run.start_cm, end_cm: run.end_cm },
+    };
+    const request = this.buildRequest(query);
+    if (request.candidates.length === 0) {
+      this.deps.hoverRun(null);
+      this.showSpotEmpty(run);
+      return;
+    }
+    await this.ask(request, "Nothing fits this run right now.", { kind: "place" });
     this.deps.hoverRun(null);
   }
 
-  private async ask(request: RecommendRequest, emptyText: string): Promise<void> {
+  private async askReplacement(): Promise<void> {
+    if (this.loading || this.selected === null) return;
+    const scene = this.deps.getScene();
+    const live = scene.items.find((i) => i.instanceId === this.selected?.instanceId);
+    if (live === undefined) {
+      this.setSelected(null);
+      return;
+    }
+    const entry = this.catalogById.get(live.productId);
+    if (entry === undefined) return;
+    const query: CandidateQuery = {
+      category: entry.category,
+      budget_usd: this.budgetValue(),
+      replace: {
+        productId: live.productId,
+        position: { ...live.position },
+        rotationY: live.rotationY,
+      },
+    };
+    const request = this.buildRequest(query);
+    if (request.candidates.length === 0) {
+      this.showNothingFits(entry.category, false);
+      return;
+    }
+    await this.ask(request, `No fitting ${entry.category} right now.`, {
+      kind: "swap",
+      oldInstanceId: live.instanceId,
+    });
+  }
+
+  /** Replace-flow entry for the "Replace the <name>" offer. */
+  private async askReplacementFor(instanceId: string): Promise<void> {
+    if (this.loading) return;
+    const scene = this.deps.getScene();
+    const live = scene.items.find((i) => i.instanceId === instanceId);
+    if (live === undefined) return;
+    this.deps.selectItem(instanceId);
+    this.setSelected(live);
+    await this.askReplacement();
+  }
+
+  private async ask(
+    request: RecommendRequest,
+    emptyText: string,
+    mode: { kind: "place" } | { kind: "swap"; oldInstanceId: string },
+  ): Promise<void> {
     this.setLoading(true);
     let result: ApiResult;
     try {
@@ -270,7 +377,7 @@ export class RecommendPanel {
     }
     this.setLoading(false);
     if (result.status === "ok") {
-      this.showAnswer(result.data, result.model, emptyText, request);
+      this.showAnswer(result.data, result.model, emptyText, request, mode);
     } else if (result.status === "demo-miss" || result.status === "capped") {
       this.showNotice(result.message, true);
     } else if (result.status === "not-ready") {
@@ -283,11 +390,47 @@ export class RecommendPanel {
     }
   }
 
+  /** No candidates: local message with sizes, no model call. */
+  private showNothingFits(category: string, offerReplace: boolean): void {
+    const out = this.root.querySelector(".recommend-results");
+    if (out === null) return;
+    out.innerHTML = "";
+    const scene = this.deps.getScene();
+    const free = analyzeFreeSpace(this.deps.room, scene, this.catalogById);
+    const p = document.createElement("p");
+    p.className = "recommend-empty";
+    p.textContent = nothingFitsMessage(category, this.deps.room, free, this.deps.catalog);
+    out.appendChild(p);
+    if (!offerReplace) return;
+    const offer = replacementOfferFor(category, scene, this.deps.catalog);
+    if (offer === null) return;
+    const replace = document.createElement("button");
+    replace.type = "button";
+    replace.className = "recommend-go";
+    replace.textContent = `Replace the ${offer.name}`;
+    replace.addEventListener("click", () => void this.askReplacementFor(offer.instanceId));
+    out.appendChild(replace);
+  }
+
+  /** A "What fits here?" run with no candidates: local message, no model call. */
+  private showSpotEmpty(run: FreeRun): void {
+    const out = this.root.querySelector(".recommend-results");
+    if (out === null) return;
+    out.innerHTML = "";
+    const p = document.createElement("p");
+    p.className = "recommend-empty";
+    p.textContent =
+      `Nothing fits this run right now. ${runDisplayLabel(this.deps.room, run.wall, run.length_cm)} ` +
+      `is ${String(Math.round(run.length_cm))} cm long and ${String(Math.round(run.depth_cm))} cm deep.`;
+    out.appendChild(p);
+  }
+
   private showAnswer(
     data: unknown,
     model: string,
     emptyText: string,
     request: RecommendRequest,
+    mode: { kind: "place" } | { kind: "swap"; oldInstanceId: string },
   ): void {
     const out = this.root.querySelector(".recommend-results");
     if (out === null) return;
@@ -309,28 +452,56 @@ export class RecommendPanel {
       return;
     }
     for (const item of shown) {
-      out.appendChild(this.card(item));
+      out.appendChild(this.card(item, mode));
     }
   }
 
   /** Ranked items, re-checked at their spots; failing items are dropped. */
   private toShown(answer: RecommendAnswer, request: RecommendRequest): ShownItem[] {
     const spots = new Map(request.candidates.map((c) => [c.productId, c] as const));
+    // The re-check must leave out exactly what the candidate check left out.
+    const wireReplace = request.request.replace;
+    const query: CandidateQuery = {
+      category: request.request.category,
+      ...(request.request.budget_usd !== undefined
+        ? { budget_usd: request.request.budget_usd }
+        : {}),
+      ...(wireReplace !== undefined
+        ? {
+            replace: {
+              productId: wireReplace.productId,
+              position: { x: wireReplace.centre_cm[0] ?? 0, z: wireReplace.centre_cm[1] ?? 0 },
+              rotationY: wireReplace.rotationY,
+            },
+          }
+        : {}),
+    };
     const out: ShownItem[] = [];
     for (const rec of answer.recommendations.slice(0, 3)) {
       const candidate = spots.get(rec.productId);
       const entry = this.catalogById.get(rec.productId);
       if (candidate === undefined || entry === undefined) continue;
       const [x, z] = candidate.spot.centre_cm;
-      if (!this.passes(rec.productId, { x, z }, candidate.spot.rotationY)) continue;
+      if (
+        x === undefined ||
+        z === undefined ||
+        !this.passes(query, rec.productId, { x, z }, candidate.spot.rotationY)
+      ) {
+        continue;
+      }
       out.push({ candidate, entry, reason: rec.reason });
     }
     return out;
   }
 
-  private card(item: ShownItem): HTMLElement {
+  private card(
+    item: ShownItem,
+    mode: { kind: "place" } | { kind: "swap"; oldInstanceId: string },
+  ): HTMLElement {
     const card = document.createElement("div");
     card.className = "recommend-card";
+    const top = document.createElement("div");
+    top.className = "recommend-card-top";
     const thumb = document.createElement("img");
     thumb.src = item.entry.thumbnail;
     thumb.alt = item.entry.name;
@@ -346,19 +517,39 @@ export class RecommendPanel {
     const price = document.createElement("span");
     price.className = "catalog-price";
     price.textContent = `$${item.entry.price}`;
-    const reason = document.createElement("span");
-    reason.className = "recommend-reason";
-    reason.textContent = item.reason;
-    meta.append(name, dims, price, reason);
+    meta.append(name, dims, price);
     const go = document.createElement("button");
     go.type = "button";
     go.className = "recommend-go";
-    go.textContent = "Place it";
-    go.addEventListener("click", () => {
-      const [x, z] = item.candidate.spot.centre_cm;
-      this.deps.placeItem(item.candidate.productId, x, z, item.candidate.spot.rotationY);
-    });
-    card.append(thumb, meta, go);
+    if (this.placedIds.has(item.candidate.productId)) {
+      go.textContent = "Placed";
+      go.toggleAttribute("disabled", true);
+    } else {
+      go.textContent = mode.kind === "swap" ? "Swap it" : "Place it";
+      go.addEventListener("click", () => {
+        const [x, z] = item.candidate.spot.centre_cm;
+        if (x === undefined || z === undefined) return;
+        if (mode.kind === "swap") {
+          this.deps.swapItem(
+            mode.oldInstanceId,
+            item.candidate.productId,
+            x,
+            z,
+            item.candidate.spot.rotationY,
+          );
+        } else {
+          this.deps.placeItem(item.candidate.productId, x, z, item.candidate.spot.rotationY);
+        }
+        this.placedIds.add(item.candidate.productId);
+        go.textContent = "Placed";
+        go.toggleAttribute("disabled", true);
+      });
+    }
+    top.append(thumb, meta, go);
+    const reason = document.createElement("p");
+    reason.className = "recommend-reason";
+    reason.textContent = item.reason;
+    card.append(top, reason);
     return card;
   }
 

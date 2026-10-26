@@ -630,7 +630,7 @@ button.danger {
   position: absolute;
   top: 16px;
   left: 16px;
-  width: 300px;
+  width: 360px;
   max-height: calc(100% - 96px);
   overflow-y: auto;
   background: #ffffff;
@@ -769,13 +769,19 @@ button.danger {
 
 .recommend-card {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  align-items: center;
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   background: #ffffff;
   box-shadow: var(--shadow);
   padding: 8px;
+}
+
+.recommend-card-top {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
 .recommend-card img {
@@ -792,8 +798,28 @@ button.danger {
   flex: 0 0 auto;
 }
 
+.recommend-card .catalog-name {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
 .recommend-reason {
   font-size: 14px;
   font-weight: 400;
   color: var(--ink);
+  margin: 0;
+}
+
+.recommend-selection {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recommend-selected {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  margin: 0;
 }
