@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite --port 5173 --strictPort",
     "build": "vite build",
+    "check:footprints": "node scripts/check-model-footprints.mjs",
     "preview": "vite preview --port 5173 --strictPort",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

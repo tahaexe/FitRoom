@@ -72,14 +72,26 @@ function stripLights(root: THREE.Object3D): void {
 }
 
 function normalise(root: THREE.Object3D, productId: string): void {
+  // Bake the yaw fix and the centring into an inner alignment group. The
+  // scene sync overwrites the outer root's position/rotation with the item
+  // transform on every change, so anything stored on the root itself is
+  // lost — which is how the coffee table and the shelf ended up 90° off
+  // their footprints. The outer root stays at identity here, so callers can
+  // freely set position/rotation from the item.
   const fixDeg = MODEL_YAW_FIX_DEG[productId] ?? 0;
-  if (fixDeg !== 0) root.rotation.y = (fixDeg * Math.PI) / 180;
+  const align = new THREE.Group();
+  align.name = "fitroom-align";
+  align.rotation.y = (fixDeg * Math.PI) / 180;
+  for (const child of [...root.children]) align.add(child);
+  root.add(align);
+  root.rotation.set(0, 0, 0);
+  root.position.set(0, 0, 0);
   root.updateMatrixWorld(true);
   const box = new THREE.Box3().setFromObject(root);
   const center = box.getCenter(new THREE.Vector3());
-  root.position.x -= center.x;
-  root.position.z -= center.z;
-  root.position.y -= box.min.y;
+  align.position.x -= center.x;
+  align.position.z -= center.z;
+  align.position.y -= box.min.y;
   root.updateMatrixWorld(true);
 }
 
