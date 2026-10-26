@@ -260,7 +260,7 @@ async function main(): Promise<void> {
       check(
         `${tag} replays from the store to a text answer`,
         replay.ok,
-        `rounds=${String(replay.rounds)}`,
+        replay.rounds === 0 ? "turn not recorded yet" : `rounds=${String(replay.rounds)}`,
       );
       if (!replay.ok) continue;
       check(

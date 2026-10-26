@@ -183,14 +183,8 @@
         "wall": "warm-white"
       },
       "style": {
-        "tags": [
-          "modern",
-          "neutral"
-        ],
-        "dominantColors": [
-          "#E8E2D9",
-          "#A8A29E"
-        ]
+        "tags": ["modern", "neutral"],
+        "dominantColors": ["#E8E2D9", "#A8A29E"]
       },
       "source": "sample",
       "confidence": 1
