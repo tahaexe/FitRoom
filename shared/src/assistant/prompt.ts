@@ -91,23 +91,47 @@ export function describeRoomForAssistant(
   );
   for (const wall of room.walls) {
     const len = wallLengthCm(wall.start, wall.end);
-    const mounts: Array<[number, number]> = [];
+    const mounts: Array<{ from: number; to: number; label: string }> = [];
     for (const opening of room.openings) {
-      if (opening.wallId === wall.id) mounts.push([opening.offset, opening.offset + opening.width]);
+      if (opening.wallId === wall.id) {
+        mounts.push({
+          from: opening.offset,
+          to: opening.offset + opening.width,
+          label: opening.type === "door" ? `the door ${opening.id}` : `window ${opening.id}`,
+        });
+      }
     }
     for (const fixture of room.fixtures) {
-      if (fixture.wallId === wall.id) mounts.push([fixture.offset, fixture.offset + fixture.width]);
+      if (fixture.wallId === wall.id) {
+        mounts.push({
+          from: fixture.offset,
+          to: fixture.offset + fixture.width,
+          label: `the ${fixture.type} ${fixture.id}`,
+        });
+      }
     }
-    mounts.sort((a, b) => a[0] - b[0]);
+    mounts.sort((a, b) => a.from - b.from);
     const gaps: string[] = [];
     let cursor = 0;
-    for (const [from, to] of mounts) {
-      if (from > cursor) gaps.push(`${String(round1(cursor))}-${String(round1(from))}`);
-      cursor = Math.max(cursor, to);
+    let cursorLabel = "the corner";
+    for (const mount of mounts) {
+      if (mount.from > cursor) {
+        gaps.push(
+          `${String(round1(cursor))}-${String(round1(mount.from))} cm (between ${cursorLabel} and ${mount.label})`,
+        );
+      }
+      if (mount.to > cursor) {
+        cursor = mount.to;
+        cursorLabel = mount.label;
+      }
     }
-    if (len > cursor) gaps.push(`${String(round1(cursor))}-${String(round1(len))}`);
+    if (len > cursor) {
+      gaps.push(
+        `${String(round1(cursor))}-${String(round1(len))} cm (between ${cursorLabel} and the corner)`,
+      );
+    }
     lines.push(
-      `- ${wall.id} "${wallDisplayName(room, wall.id)}": ${gaps.length === 0 ? "no free stretch" : gaps.join(", ")} cm`,
+      `- ${wall.id} "${wallDisplayName(room, wall.id)}": ${gaps.length === 0 ? "no free stretch" : gaps.join("; ")}`,
     );
   }
   const names = new Map(catalog.map((c) => [c.id, c]));

@@ -135,7 +135,7 @@ function hintFor(ctx: AssistantContext, draft: SceneState, instanceId: string): 
       hints.push("Inside a door swing: move the piece clear of the swing area.");
     } else if (issue.type === "walkway" || issue.type === "walkway-entrance") {
       hints.push(
-        "A seat needs 45 cm of clear approach from the room: move the blocking seat aside.",
+        "No walkway access to this seat: move this seat, or move the seat nearest the door aside, then check again.",
       );
     } else if (issue.type === "overlap") {
       hints.push("Pieces overlap: move the piece a few centimetres clear.");
