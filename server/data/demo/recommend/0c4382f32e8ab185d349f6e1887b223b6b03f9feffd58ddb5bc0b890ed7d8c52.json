@@ -1,0 +1,21 @@
+{
+  "route": "recommend",
+  "model": "muse-spark-1.3",
+  "input": {
+    "prompt": "Demo room starter recommendations"
+  },
+  "response": {
+    "recommendations": [
+      {
+        "productId": "sofa-3seat-linen",
+        "note": "Anchors the demo room at true scale; keep 80 cm of walkway in front."
+      },
+      {
+        "productId": "oak-coffee-table",
+        "note": "Pairs with the linen sofa; clears the door swing."
+      }
+    ],
+    "note": "Mock recommendation (META_MOCK=1). The real prompt lands in the next task."
+  },
+  "time": "2026-10-26T20:22:18.551Z"
+}

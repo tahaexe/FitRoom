@@ -1,0 +1,13 @@
+{
+  "route": "assistant",
+  "model": "muse-spark-1.3",
+  "input": {
+    "prompt": "How does the demo room fit together?"
+  },
+  "response": {
+    "answer": "The demo room fits: every piece clears the door swing and the entrance walkway stays open.",
+    "followUps": ["What fits beside the oak coffee table?", "Show a daylight render."],
+    "note": "Mock assistant answer (META_MOCK=1). The real prompt lands in the next task."
+  },
+  "time": "2026-10-26T20:22:18.557Z"
+}

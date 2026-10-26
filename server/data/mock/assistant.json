@@ -1,0 +1,12 @@
+{
+  "data": {
+    "answer": "The demo room fits: every piece clears the door swing and the entrance walkway stays open.",
+    "followUps": ["What fits beside the oak coffee table?", "Show a daylight render."],
+    "note": "Mock assistant answer (META_MOCK=1). The real prompt lands in the next task."
+  },
+  "usage": {
+    "prompt_tokens": 590,
+    "completion_tokens": 8050,
+    "prompt_tokens_details": { "cached_tokens": 96 }
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "data": {
+    "recommendations": [
+      {
+        "productId": "sofa-3seat-linen",
+        "note": "Anchors the demo room at true scale; keep 80 cm of walkway in front."
+      },
+      {
+        "productId": "oak-coffee-table",
+        "note": "Pairs with the linen sofa; clears the door swing."
+      }
+    ],
+    "note": "Mock recommendation (META_MOCK=1). The real prompt lands in the next task."
+  },
+  "usage": {
+    "prompt_tokens": 640,
+    "completion_tokens": 8120,
+    "prompt_tokens_details": { "cached_tokens": 128 }
+  }
+}
