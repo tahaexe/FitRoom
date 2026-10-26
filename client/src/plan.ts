@@ -5,7 +5,9 @@ import { pointAlongWall } from "./room";
 
 /**
  * Top plan overlay: SVG labels drawn from JSON values (±1cm rounding).
- * Wall lengths in cm at each wall midpoint; opening labels (id + width).
+ * Wall lengths in cm sit OUTSIDE their wall; opening labels (id + width) sit
+ * INSIDE the room beside their opening. A screen-space declutter pass then
+ * pushes any overlapping labels apart, so no label overlaps another.
  */
 export class PlanOverlay {
   readonly svg: SVGSVGElement;
@@ -41,27 +43,120 @@ export class PlanOverlay {
     this.svg.setAttribute("width", String(width));
     this.svg.setAttribute("height", String(height));
     const v = new THREE.Vector3();
-    const place = (el: SVGTextElement, xM: number, yM: number, zM: number): void => {
+    const project = (xM: number, yM: number, zM: number): { x: number; y: number } => {
       v.set(xM, yM, zM).project(camera);
-      const sx = ((v.x + 1) / 2) * width;
-      const sy = ((1 - v.y) / 2) * height;
-      el.setAttribute("x", String(sx.toFixed(1)));
-      el.setAttribute("y", String(sy.toFixed(1)));
+      return { x: ((v.x + 1) / 2) * width, y: ((1 - v.y) / 2) * height };
     };
+
+    // Room centre for outward/inward sides (robust for any winding).
+    let cx = 0;
+    let cz = 0;
+    for (const wall of room.walls) {
+      cx += (wall.start.x + wall.end.x) / 2;
+      cz += (wall.start.z + wall.end.z) / 2;
+    }
+    cx /= Math.max(1, room.walls.length);
+    cz /= Math.max(1, room.walls.length);
+
+    const WALL_OUT_CM = 32;
+    const OPENING_IN_CM = 38;
+    const spots: Array<{ el: SVGTextElement; x: number; y: number }> = [];
+
     room.walls.forEach((wall, i) => {
       const el = this.wallTexts[i];
       if (el === undefined) return;
       const mx = (wall.start.x + wall.end.x) / 2;
       const mz = (wall.start.z + wall.end.z) / 2;
-      place(el, cmToMeters(mx), 0.05, cmToMeters(mz));
+      let ox = mx - cx;
+      let oz = mz - cz;
+      const len = Math.hypot(ox, oz) || 1;
+      ox /= len;
+      oz /= len;
+      const p = project(cmToMeters(mx + ox * WALL_OUT_CM), 0.05, cmToMeters(mz + oz * WALL_OUT_CM));
+      spots.push({ el, x: p.x, y: p.y });
     });
     room.openings.forEach((o, i) => {
       const el = this.openingTexts[i];
       if (el === undefined) return;
       const wall = room.walls.find((w) => w.id === o.wallId);
       if (wall === undefined) return;
-      const p = pointAlongWall(wall, o.offset + o.width / 2);
-      place(el, cmToMeters(p.x), 0.05, cmToMeters(p.z));
+      const p0 = pointAlongWall(wall, o.offset + o.width / 2);
+      const mx = (wall.start.x + wall.end.x) / 2;
+      const mz = (wall.start.z + wall.end.z) / 2;
+      let ox = mx - cx;
+      let oz = mz - cz;
+      const len = Math.hypot(ox, oz) || 1;
+      ox /= len;
+      oz /= len;
+      const p = project(
+        cmToMeters(p0.x - ox * OPENING_IN_CM),
+        0.05,
+        cmToMeters(p0.z - oz * OPENING_IN_CM),
+      );
+      spots.push({ el, x: p.x, y: p.y });
     });
+
+    // Screen-space declutter: no label box may overlap another.
+    this.separate(spots);
+    for (const s of spots) {
+      s.el.setAttribute("x", s.x.toFixed(1));
+      s.el.setAttribute("y", s.y.toFixed(1));
+    }
+  }
+
+  private labelBox(
+    s: { el: SVGTextElement; x: number; y: number },
+    boxes: Map<SVGTextElement, { w: number; h: number }>,
+  ): { x0: number; y0: number; x1: number; y1: number } {
+    let size = boxes.get(s.el);
+    if (size === undefined) {
+      let w: number;
+      try {
+        w = s.el.getComputedTextLength();
+      } catch {
+        w = Number.NaN;
+      }
+      if (!(w > 0)) w = (s.el.textContent?.length ?? 8) * 7;
+      size = { w, h: 13 };
+      boxes.set(s.el, size);
+    }
+    return {
+      x0: s.x - size.w / 2,
+      y0: s.y - size.h / 2,
+      x1: s.x + size.w / 2,
+      y1: s.y + size.h / 2,
+    };
+  }
+
+  /** Iterative repulsion until no two label boxes overlap (or it converges). */
+  private separate(spots: Array<{ el: SVGTextElement; x: number; y: number }>): void {
+    const boxes = new Map<SVGTextElement, { w: number; h: number }>();
+    const GAP = 5;
+    for (let round = 0; round < 80; round += 1) {
+      let moved = false;
+      for (let i = 0; i < spots.length; i += 1) {
+        for (let j = i + 1; j < spots.length; j += 1) {
+          const a = spots[i];
+          const b = spots[j];
+          if (a === undefined || b === undefined) continue;
+          const ba = this.labelBox(a, boxes);
+          const bb = this.labelBox(b, boxes);
+          const overlapX = Math.min(ba.x1, bb.x1) - Math.max(ba.x0, bb.x0) + GAP;
+          const overlapY = Math.min(ba.y1, bb.y1) - Math.max(ba.y0, bb.y0) + GAP;
+          if (overlapX <= 0 || overlapY <= 0) continue;
+          moved = true;
+          if (overlapX < overlapY) {
+            const dir = a.x <= b.x ? -1 : 1;
+            a.x += (dir * overlapX) / 2;
+            b.x -= (dir * overlapX) / 2;
+          } else {
+            const dir = a.y <= b.y ? -1 : 1;
+            a.y += (dir * overlapY) / 2;
+            b.y -= (dir * overlapY) / 2;
+          }
+        }
+      }
+      if (!moved) return;
+    }
   }
 }
