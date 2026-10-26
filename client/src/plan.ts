@@ -71,11 +71,7 @@ export class PlanOverlay {
       // East/west walls: anchor the text edge at the wall so the label
       // extends outward and can never straddle the wall line.
       const anchor =
-        Math.abs(outward.x) >= Math.abs(outward.z)
-          ? outward.x > 0
-            ? "start"
-            : "end"
-          : "middle";
+        Math.abs(outward.x) >= Math.abs(outward.z) ? (outward.x > 0 ? "start" : "end") : "middle";
       el.setAttribute("text-anchor", anchor);
       const p = project(
         cmToMeters(mx + outward.x * WALL_OUT_CM),
@@ -95,11 +91,7 @@ export class PlanOverlay {
       const outward = this.outwardOf(mx, mz, cx, cz);
       // Mirror of the walls: opening labels extend inward from their anchor.
       const anchor =
-        Math.abs(outward.x) >= Math.abs(outward.z)
-          ? outward.x > 0
-            ? "end"
-            : "start"
-          : "middle";
+        Math.abs(outward.x) >= Math.abs(outward.z) ? (outward.x > 0 ? "end" : "start") : "middle";
       el.setAttribute("text-anchor", anchor);
       const p = project(
         cmToMeters(p0.x - outward.x * OPENING_IN_CM),
