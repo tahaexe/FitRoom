@@ -16,6 +16,7 @@
     "build": "npm run build -w @fitroom/shared && npm run build -w @fitroom/server && npm run build -w @fitroom/client",
     "typecheck": "npm run build -w @fitroom/shared && npm run typecheck -w @fitroom/shared && npm run typecheck -w @fitroom/server && npm run typecheck -w @fitroom/client",
     "lint": "eslint . && prettier --check .",
+    "validate": "npm run validate -w @fitroom/shared",
     "start": "npm run start -w @fitroom/server"
   },
   "devDependencies": {
