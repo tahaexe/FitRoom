@@ -8,8 +8,8 @@
  * has errors). A draft with fit errors is never applied.
  */
 
-import { checkFit } from "../fit.js";
-import type { CatalogItem, FitIssue, RoomLayout, SceneState } from "../types.js";
+import { checkFit, footprintOf } from "../fit.js";
+import type { CatalogItem, FitIssue, RoomLayout, SceneItem, SceneState } from "../types.js";
 import { wallDisplayName } from "../recommend/walls.js";
 import { executeAssistantTool, type AssistantContext } from "./executor.js";
 import type { AssistantMessage, AssistantToolCall } from "./types.js";
@@ -77,13 +77,121 @@ export function assistantFitVerdict(errors: FitIssue[]): string {
   return `${String(errors.length)} problems left.`;
 }
 
-function itemName(catalog: CatalogItem[], productId: string): string {
-  return catalog.find((c) => c.id === productId)?.name ?? productId;
+function itemName(byId: Map<string, CatalogItem>, productId: string): string {
+  return byId.get(productId)?.name ?? productId;
+}
+
+/** Compass word for a rotationY (0 faces north, 90 east, 180 south, 270 west). */
+function compassFacing(degrees: number): string {
+  const q = ((Math.round(degrees) % 360) + 360) % 360;
+  if (q < 45 || q >= 315) return "north";
+  if (q < 135) return "east";
+  if (q < 225) return "south";
+  return "west";
+}
+
+function pointSegmentDistance(
+  px: number,
+  pz: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+): number {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const lenSq = dx * dx + dz * dz || 1;
+  const t = Math.min(1, Math.max(0, ((px - ax) * dx + (pz - az) * dz) / lenSq));
+  return Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
+}
+
+/**
+ * Shopper-words place for one item: against a wall, under a window, beside
+ * the nearest piece, or in the middle of the room. Never coordinates.
+ */
+function describePlace(
+  room: RoomLayout,
+  scene: SceneState,
+  item: SceneItem,
+  byId: Map<string, CatalogItem>,
+): string {
+  const entry = byId.get(item.productId);
+  const size = entry === undefined ? { w: 60, d: 60, h: 60 } : entry.size;
+  const box = footprintOf(size, item.position, item.rotationY);
+  const corners = [
+    { x: box.x0, z: box.z0 },
+    { x: box.x1, z: box.z0 },
+    { x: box.x1, z: box.z1 },
+    { x: box.x0, z: box.z1 },
+  ];
+  let snap: { wallId: string; offset: number } | null = null;
+  let snapDist = 8;
+  for (const wall of room.walls) {
+    let dist = Infinity;
+    for (const corner of corners) {
+      dist = Math.min(
+        dist,
+        pointSegmentDistance(
+          corner.x,
+          corner.z,
+          wall.start.x,
+          wall.start.z,
+          wall.end.x,
+          wall.end.z,
+        ),
+      );
+    }
+    if (dist < snapDist) {
+      snapDist = dist;
+      const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z) || 1;
+      snap = {
+        wallId: wall.id,
+        offset:
+          ((item.position.x - wall.start.x) * (wall.end.x - wall.start.x) +
+            (item.position.z - wall.start.z) * (wall.end.z - wall.start.z)) /
+          len,
+      };
+    }
+  }
+  if (snap !== null) {
+    const wallId: string = snap.wallId;
+    const offset: number = snap.offset;
+    const name = wallDisplayName(room, wallId);
+    const opening = room.openings.find(
+      (candidate) =>
+        candidate.wallId === wallId &&
+        candidate.type === "window" &&
+        offset >= candidate.offset &&
+        offset <= candidate.offset + candidate.width,
+    );
+    if (opening !== undefined && opening.type === "window") {
+      if (entry !== undefined && entry.size.h < opening.sillHeight) {
+        return name.includes("window") ? "under the window" : `under the window on the ${name}`;
+      }
+      return `in front of the window on the ${name}`;
+    }
+    return `against the ${name}`;
+  }
+  let nearest: CatalogItem | null = null;
+  let nearestDist = 170;
+  for (const other of scene.items) {
+    if (other.instanceId === item.instanceId) continue;
+    const candidate = byId.get(other.productId);
+    if (candidate === undefined) continue;
+    const dist = Math.hypot(other.position.x - item.position.x, other.position.z - item.position.z);
+    if (dist < nearestDist) {
+      nearestDist = dist;
+      nearest = candidate;
+    }
+  }
+  if (nearest !== null) return `beside the ${nearest.name}`;
+  return "in the middle of the room";
 }
 
 /**
  * One-line summary of what changed between two scenes, plus the fit verdict.
- * Positions stay numeric; walls (when named) use shopper names.
+ * Places are shopper words (walls, windows, neighbouring pieces) — never
+ * coordinates. The collapsible "What I did" list keeps the exact tool calls.
  */
 export function summarizeAssistantTurn(
   start: SceneState,
@@ -91,7 +199,7 @@ export function summarizeAssistantTurn(
   room: RoomLayout,
   catalog: CatalogItem[],
 ): string {
-  void room;
+  const byId = new Map(catalog.map((c) => [c.id, c]));
   const parts: string[] = [];
   const before = new Map(start.items.map((i) => [i.instanceId, i]));
   const after = new Map(end.items.map((i) => [i.instanceId, i]));
@@ -99,40 +207,33 @@ export function summarizeAssistantTurn(
     const prev = before.get(item.instanceId);
     if (prev === undefined) {
       parts.push(
-        `Added ${itemName(catalog, item.productId)} at (${String(Math.round(item.position.x))}, ${String(Math.round(item.position.z))})`,
+        `Added ${itemName(byId, item.productId)} ${describePlace(room, end, item, byId)} facing ${compassFacing(item.rotationY)}`,
       );
-    } else if (
-      prev.position.x !== item.position.x ||
-      prev.position.z !== item.position.z ||
-      prev.rotationY !== item.rotationY
-    ) {
-      const moved = prev.position.x !== item.position.x || prev.position.z !== item.position.z;
-      const turned = prev.rotationY !== item.rotationY;
-      if (moved && turned) {
-        parts.push(
-          `Moved ${itemName(catalog, item.productId)} to (${String(Math.round(item.position.x))}, ${String(Math.round(item.position.z))}) facing ${String(Math.round(item.rotationY))}°`,
-        );
-      } else if (moved) {
-        parts.push(
-          `Moved ${itemName(catalog, item.productId)} to (${String(Math.round(item.position.x))}, ${String(Math.round(item.position.z))})`,
-        );
-      } else {
-        parts.push(
-          `Turned ${itemName(catalog, item.productId)} to ${String(Math.round(item.rotationY))}°`,
-        );
-      }
-    } else if (prev.variant !== item.variant) {
-      parts.push(`Set ${itemName(catalog, item.productId)} to ${item.variant}`);
+      continue;
     }
-    if (prev !== undefined && prev.productId !== item.productId) {
+    const moved = prev.position.x !== item.position.x || prev.position.z !== item.position.z;
+    const turned = prev.rotationY !== item.rotationY;
+    if (prev.productId !== item.productId) {
       parts.push(
-        `Swapped ${itemName(catalog, prev.productId)} for ${itemName(catalog, item.productId)}`,
+        `Swapped ${itemName(byId, prev.productId)} for ${itemName(byId, item.productId)} ${describePlace(room, end, item, byId)}`,
       );
+    } else if (moved && turned) {
+      parts.push(
+        `Moved ${itemName(byId, item.productId)} ${describePlace(room, end, item, byId)}, facing ${compassFacing(item.rotationY)}`,
+      );
+    } else if (moved) {
+      parts.push(`Moved ${itemName(byId, item.productId)} ${describePlace(room, end, item, byId)}`);
+    } else if (turned) {
+      parts.push(
+        `Turned ${itemName(byId, item.productId)} to face ${compassFacing(item.rotationY)}`,
+      );
+    } else if (prev.variant !== item.variant) {
+      parts.push(`Changed ${itemName(byId, item.productId)} to ${item.variant}`);
     }
   }
   for (const item of start.items) {
     if (!after.has(item.instanceId)) {
-      parts.push(`Removed ${itemName(catalog, item.productId)}`);
+      parts.push(`Removed ${itemName(byId, item.productId)}`);
     }
   }
   if (parts.length === 0)

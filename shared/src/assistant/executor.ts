@@ -71,8 +71,26 @@ function openingWallName(ctx: AssistantContext, wallId: string): string {
   return wallDisplayName(ctx.room, wallId);
 }
 
-/** Fit issue in shopper words: display wall names, never opening ids. */
-export function describeIssueForAssistant(ctx: AssistantContext, issue: FitIssue): string {
+/**
+ * Short line ending every modifying tool result once the draft is fit-clean
+ * (warnings are fine): the model's cue to answer when the request is done.
+ * Advisory only — the gateway key strips it, so older demo-store entries
+ * still match.
+ */
+export const ASSISTANT_READY_LINE =
+  "No fit errors. If the request is done, answer the customer now.";
+
+/**
+ * Fit issue in shopper words: display wall names, never opening ids. Walkway
+ * issues name the item blocking the way plus the push that frees it (found by
+ * trying the check without each item); pass the draft for that detail, or
+ * omit it for the generic text.
+ */
+export function describeIssueForAssistant(
+  ctx: AssistantContext,
+  issue: FitIssue,
+  draft?: SceneState,
+): string {
   if (issue.type === "door-swing") {
     const doorId = issue.message.match(/swing of (\S+)/)?.[1];
     const door = ctx.room.openings.find((o) => o.id === doorId);
@@ -86,6 +104,15 @@ export function describeIssueForAssistant(ctx: AssistantContext, issue: FitIssue
       opening === undefined ? "a window wall" : `the ${openingWallName(ctx, opening.wallId)}`;
     return `Too close to the window on ${wall}`;
   }
+  if ((issue.type === "walkway" || issue.type === "walkway-entrance") && draft !== undefined) {
+    const view: AssistantIssueView = {
+      type: issue.type,
+      severity: issue.severity,
+      itemIds: [...issue.itemIds],
+      message: issue.message,
+    };
+    return walkwayDetail(ctx, draft, view) ?? issue.message;
+  }
   return issue.message;
 }
 
@@ -96,36 +123,39 @@ export interface AssistantIssueView {
   message: string;
 }
 
-function issueView(ctx: AssistantContext, issue: FitIssue): AssistantIssueView {
+function issueView(ctx: AssistantContext, draft: SceneState, issue: FitIssue): AssistantIssueView {
   return {
     type: issue.type,
     severity: issue.severity,
     itemIds: [...issue.itemIds],
-    message: describeIssueForAssistant(ctx, issue),
+    message: describeIssueForAssistant(ctx, issue, draft),
   };
 }
 
 function draftIssues(ctx: AssistantContext, draft: SceneState): AssistantIssueView[] {
-  return checkFit(ctx.room, draft, productsOf(ctx)).map((issue) => issueView(ctx, issue));
+  return checkFit(ctx.room, draft, productsOf(ctx)).map((issue) => issueView(ctx, draft, issue));
 }
 
-function touching(
-  ctx: AssistantContext,
-  draft: SceneState,
-  instanceId: string,
-): AssistantIssueView[] {
-  return draftIssues(ctx, draft).filter((issue) => issue.itemIds.includes(instanceId));
+/** True when the draft has no fit error (warnings are fine). */
+function isDraftClean(ctx: AssistantContext, draft: SceneState): boolean {
+  return checkFit(ctx.room, draft, productsOf(ctx)).every((issue) => issue.severity !== "error");
 }
 
 /**
  * One-line recovery hint per error touching the item, so the model can fix
- * the draft instead of stalling: fixture depth, door swing, seat approach.
+ * the draft instead of stalling: fixture depth, door swing, seat approach
+ * (walkway hints reuse the enriched issue text: blocker, push direction and
+ * distance).
  */
-function hintFor(ctx: AssistantContext, draft: SceneState, instanceId: string): string | null {
-  const issues = draftIssues(ctx, draft).filter((issue) => issue.itemIds.includes(instanceId));
+function hintFor(
+  ctx: AssistantContext,
+  draft: SceneState,
+  fit: FitIssue[],
+  instanceId: string,
+): string | null {
   const hints: string[] = [];
-  for (const issue of issues) {
-    if (issue.severity !== "error") continue;
+  for (const issue of fit) {
+    if (issue.severity !== "error" || !issue.itemIds.includes(instanceId)) continue;
     if (issue.type === "overlap" && issue.message.includes("fixture")) {
       const depths = ctx.room.fixtures.map((f) => `${f.id} ${String(f.depth)} cm deep`).join(", ");
       hints.push(
@@ -134,9 +164,7 @@ function hintFor(ctx: AssistantContext, draft: SceneState, instanceId: string): 
     } else if (issue.type === "door-swing") {
       hints.push("Inside a door swing: move the piece clear of the swing area.");
     } else if (issue.type === "walkway" || issue.type === "walkway-entrance") {
-      hints.push(
-        "No walkway access to this seat: move this seat, or move the seat nearest the door aside, then check again.",
-      );
+      hints.push(describeIssueForAssistant(ctx, issue, draft));
     } else if (issue.type === "overlap") {
       hints.push("Pieces overlap: move the piece a few centimetres clear.");
     } else if (issue.type === "outside") {
@@ -146,27 +174,30 @@ function hintFor(ctx: AssistantContext, draft: SceneState, instanceId: string): 
   return hints.length === 0 ? null : [...new Set(hints)].join(" ");
 }
 
-function withHint(
-  ctx: AssistantContext,
-  draft: SceneState,
-  instanceId: string,
-  result: Record<string, unknown>,
-): Record<string, unknown> {
-  const hint = hintFor(ctx, draft, instanceId);
-  return hint === null ? result : { ...result, hint };
-}
-
-/** Item view plus the issues touching it (and a recovery hint on errors). */
+/**
+ * Item view plus the issues touching it: a recovery hint on errors, and the
+ * ready line once the draft is fit-clean (a draft with errors never reports
+ * ready).
+ */
 function touchedResult(
   ctx: AssistantContext,
   draft: SceneState,
   item: SceneItem,
 ): Record<string, unknown> {
-  return withHint(ctx, draft, item.instanceId, {
+  const fit = checkFit(ctx.room, draft, productsOf(ctx));
+  const mine = fit
+    .map((issue) => issueView(ctx, draft, issue))
+    .filter((view) => view.itemIds.includes(item.instanceId));
+  const base: Record<string, unknown> = {
     ok: true,
     ...itemView(ctx, item),
-    issues: touching(ctx, draft, item.instanceId),
-  });
+    issues: mine,
+  };
+  const hint = hintFor(ctx, draft, fit, item.instanceId);
+  const result = hint === null ? base : { ...base, hint };
+  return fit.every((issue) => issue.severity !== "error")
+    ? { ...result, ready: ASSISTANT_READY_LINE }
+    : result;
 }
 
 function itemView(ctx: AssistantContext, item: SceneItem): Record<string, unknown> {
@@ -182,6 +213,331 @@ function itemView(ctx: AssistantContext, item: SceneItem): Record<string, unknow
     footprint: { x0: round1(box.x0), z0: round1(box.z0), x1: round1(box.x1), z1: round1(box.z1) },
     variant: item.variant,
   };
+}
+
+// ---- walkway blocker detail -----------------------------------------------
+
+function fitSignature(issue: FitIssue): string {
+  return `${issue.type}|${[...issue.itemIds].sort().join(",")}`;
+}
+
+/** True when the walkway issue is gone from a re-check (seat or entrance). */
+function walkwayGone(issues: FitIssue[], issue: AssistantIssueView): boolean {
+  if (issue.type === "walkway-entrance") {
+    return !issues.some((checked) => checked.type === "walkway-entrance");
+  }
+  const target = issue.itemIds[0];
+  if (target === undefined) return true;
+  return !issues.some((checked) => checked.type === "walkway" && checked.itemIds.includes(target));
+}
+
+function distPointSegment(
+  px: number,
+  pz: number,
+  ax: number,
+  az: number,
+  bx: number,
+  bz: number,
+): number {
+  const dx = bx - ax;
+  const dz = bz - az;
+  const lenSq = dx * dx + dz * dz || 1;
+  const t = Math.min(1, Math.max(0, ((px - ax) * dx + (pz - az) * dz) / lenSq));
+  return Math.hypot(px - (ax + dx * t), pz - (az + dz * t));
+}
+
+/** Shopper-words name of the nearest wall ("door wall", ...). */
+function nearestWallName(ctx: AssistantContext, x: number, z: number): string {
+  let best: string | null = null;
+  let bestDist = Infinity;
+  for (const wall of ctx.room.walls) {
+    const dist = distPointSegment(x, z, wall.start.x, wall.start.z, wall.end.x, wall.end.z);
+    if (dist < bestDist) {
+      bestDist = dist;
+      best = wall.id;
+    }
+  }
+  if (best === null) return "wall";
+  const name = wallDisplayName(ctx.room, best);
+  return `${name.charAt(0).toLowerCase()}${name.slice(1)}`;
+}
+
+const BLOCKER_PUSH_DIRECTIONS = [
+  { dx: 1, dz: 0, label: "east" },
+  { dx: -1, dz: 0, label: "west" },
+  { dx: 0, dz: 1, label: "north" },
+  { dx: 0, dz: -1, label: "south" },
+] as const;
+
+function blockerName(ctx: AssistantContext, draft: SceneState, instanceId: string): string {
+  const item = draft.items.find((i) => i.instanceId === instanceId);
+  if (item === undefined) return instanceId;
+  return ctx.byId.get(item.productId)?.name ?? instanceId;
+}
+
+/**
+ * Walkway detail for one issue: the item blocking the way (found by trying
+ * the check without each item) plus the shortest cardinal push, in 20 cm
+ * steps, that frees it without breaking anything else. Null when no single
+ * item's removal restores the walkway.
+ */
+function walkwayDetail(
+  ctx: AssistantContext,
+  draft: SceneState,
+  issue: AssistantIssueView,
+): string | null {
+  const target = issue.type === "walkway" ? (issue.itemIds[0] ?? null) : null;
+  if (issue.type === "walkway" && target === null) return null;
+  const products = productsOf(ctx);
+  const baseSignatures = new Set(
+    checkFit(ctx.room, draft, products).map((checked) => fitSignature(checked)),
+  );
+  const named = issue.itemIds.filter((id) => id !== target);
+  const rest = draft.items
+    .map((item) => item.instanceId)
+    .filter((id) => id !== target && !named.includes(id));
+  let blocker: string | null = null;
+  for (const candidate of [...named, ...rest]) {
+    const trial: SceneState = {
+      ...draft,
+      items: draft.items.filter((item) => item.instanceId !== candidate),
+    };
+    if (walkwayGone(checkFit(ctx.room, trial, products), issue)) {
+      blocker = candidate;
+      break;
+    }
+  }
+  if (blocker === null) return null;
+  const blockerId: string = blocker;
+  const placed = draft.items.find((item) => item.instanceId === blockerId);
+  if (placed === undefined) return null;
+  const name = blockerName(ctx, draft, blockerId);
+  const wall = nearestWallName(ctx, placed.position.x, placed.position.z);
+  for (let dist = 20; dist <= 300; dist += 20) {
+    for (const dir of BLOCKER_PUSH_DIRECTIONS) {
+      const trial: SceneState = {
+        ...draft,
+        items: draft.items.map((item) =>
+          item.instanceId === blockerId
+            ? {
+                ...item,
+                position: {
+                  x: round1(item.position.x + dir.dx * dist),
+                  z: round1(item.position.z + dir.dz * dist),
+                },
+              }
+            : item,
+        ),
+      };
+      const issues = checkFit(ctx.room, trial, products);
+      if (!walkwayGone(issues, issue)) continue;
+      if (!issues.every((checked) => baseSignatures.has(fitSignature(checked)))) continue;
+      if (target === null) {
+        return (
+          `The entrance is blocked: the ${name} by the ${wall} blocks the way in; ` +
+          `moving it about ${String(dist)} cm ${dir.label} clears it.`
+        );
+      }
+      return (
+        `No walkway access to the ${blockerName(ctx, draft, target)}: ` +
+        `the ${name} by the ${wall} blocks the way; ` +
+        `moving it about ${String(dist)} cm ${dir.label} clears it.`
+      );
+    }
+  }
+  return null;
+}
+
+// ---- wall-stretch fit -------------------------------------------------------
+
+interface StretchMount {
+  from: number;
+  to: number;
+  label: string;
+}
+
+interface FreeStretch {
+  start: number;
+  end: number;
+  length: number;
+  before: string;
+  after: string;
+}
+
+/**
+ * Floor-blocking mounts on a wall: doors and fixtures. Windows never block
+ * the floor (a low piece under a window is placed with centred_on; the fit
+ * engine checks sill height).
+ */
+function stretchMounts(ctx: AssistantContext, wallId: string): StretchMount[] {
+  const mounts: StretchMount[] = [];
+  for (const opening of ctx.room.openings) {
+    if (opening.wallId !== wallId || opening.type !== "door") continue;
+    mounts.push({
+      from: opening.offset,
+      to: opening.offset + opening.width,
+      label: `the door ${opening.id}`,
+    });
+  }
+  for (const fixture of ctx.room.fixtures) {
+    if (fixture.wallId !== wallId) continue;
+    mounts.push({
+      from: fixture.offset,
+      to: fixture.offset + fixture.width,
+      label: `the ${fixture.type} ${fixture.id}`,
+    });
+  }
+  mounts.sort((a, b) => a.from - b.from);
+  return mounts;
+}
+
+/** Free wall stretches between openings, fixtures and corners, in order. */
+function freeStretches(ctx: AssistantContext, wallId: string, wallLen: number): FreeStretch[] {
+  const gaps: FreeStretch[] = [];
+  let cursor = 0;
+  let cursorLabel = "the corner";
+  for (const mount of stretchMounts(ctx, wallId)) {
+    if (mount.from > cursor) {
+      gaps.push({
+        start: cursor,
+        end: mount.from,
+        length: mount.from - cursor,
+        before: cursorLabel,
+        after: mount.label,
+      });
+    }
+    if (mount.to > cursor) {
+      cursor = mount.to;
+      cursorLabel = mount.label;
+    }
+  }
+  if (wallLen > cursor) {
+    gaps.push({
+      start: cursor,
+      end: wallLen,
+      length: wallLen - cursor,
+      before: cursorLabel,
+      after: "the corner",
+    });
+  }
+  return gaps;
+}
+
+function stretchContaining(stretches: FreeStretch[], offset: number): FreeStretch | null {
+  for (const stretch of stretches) {
+    if (offset >= stretch.start && offset <= stretch.end) return stretch;
+  }
+  return null;
+}
+
+function mountAtOffset(mounts: StretchMount[], offset: number): StretchMount | null {
+  for (const mount of mounts) {
+    if (offset >= mount.from && offset < mount.to) return mount;
+  }
+  return null;
+}
+
+/** Item extent along a wall unit vector at a rotation (exact on axis walls). */
+function alongWallLength(
+  size: { w: number; d: number; h: number },
+  rotationY: number,
+  ux: number,
+  uz: number,
+): number {
+  const { cos, sin } = angleTrig(rotationY);
+  return size.w * Math.abs(cos * ux + -sin * uz) + size.d * Math.abs(sin * ux + cos * uz);
+}
+
+/**
+ * Refusal when a piece cannot fit the requested wall stretch: both lengths
+ * plus the stretch's ends, and an instruction to explain and propose an
+ * alternative in words instead of placing anything else. Nothing is placed.
+ */
+function tooLongRefusal(
+  ctx: AssistantContext,
+  productName: string,
+  needCm: number,
+  stretch: FreeStretch,
+  wallId: string,
+): Record<string, unknown> {
+  const wall = wallDisplayName(ctx.room, wallId);
+  return {
+    ok: false,
+    error:
+      `The ${productName} is ${String(round1(needCm))} cm; the free stretch between ` +
+      `${stretch.before} and ${stretch.after} on the ${wall} is only ` +
+      `${String(round1(stretch.length))} cm ` +
+      `(${String(round1(stretch.start))}–${String(round1(stretch.end))} cm from the wall start). ` +
+      `It cannot fit there. Explain why it cannot fit, with both lengths, and propose the ` +
+      `closest alternative in words; do not place anything else in this turn.`,
+  };
+}
+
+/** Refusal when the requested offset lands on a door or fixture, not a free stretch. */
+function mountRefusal(
+  ctx: AssistantContext,
+  productName: string,
+  offsetCm: number,
+  mount: StretchMount,
+  wallId: string,
+  stretches: FreeStretch[],
+): Record<string, unknown> {
+  const wall = wallDisplayName(ctx.room, wallId);
+  const free =
+    stretches
+      .map((stretch) => `${String(round1(stretch.start))}–${String(round1(stretch.end))} cm`)
+      .join(", ") || "none";
+  return {
+    ok: false,
+    error:
+      `Offset ${String(round1(offsetCm))} cm on the ${wall} is on ${mount.label} ` +
+      `(${String(round1(mount.from))}–${String(round1(mount.to))} cm), not a free stretch, ` +
+      `so the ${productName} was not placed. Pick an offset inside a free stretch ` +
+      `(${free}), or centre under a window with centred_on.`,
+  };
+}
+
+/**
+ * Wall-stretch guard for a new piece at a centre with a rotation: every wall
+ * the piece sits against must offer a free stretch its along-wall extent
+ * fits, or the placement is refused before anything changes. Returns the
+ * refusal, or null when placement may proceed.
+ */
+function wallStretchRefusal(
+  ctx: AssistantContext,
+  productName: string,
+  size: { w: number; d: number; h: number },
+  x: number,
+  z: number,
+  rotationY: number,
+): Record<string, unknown> | null {
+  const { cos, sin } = angleTrig(rotationY);
+  let mountHit: Record<string, unknown> | null = null;
+  for (const wall of ctx.room.walls) {
+    const frame = frameOfWall(ctx.room, wall.id);
+    if (frame === null) continue;
+    const along = (x - frame.start.x) * frame.ux + (z - frame.start.z) * frame.uz;
+    const perp = (x - frame.start.x) * frame.nx + (z - frame.start.z) * frame.nz;
+    if (along < 0 || along > frame.len || perp < 0) continue;
+    const perpExtent =
+      (size.w / 2) * Math.abs(cos * frame.nx + -sin * frame.nz) +
+      (size.d / 2) * Math.abs(sin * frame.nx + cos * frame.nz);
+    if (perp > perpExtent + 1) continue;
+    const mounts = stretchMounts(ctx, wall.id);
+    const stretches = freeStretches(ctx, wall.id, frame.len);
+    const mount = mountAtOffset(mounts, along);
+    if (mount !== null) {
+      mountHit ??= mountRefusal(ctx, productName, along, mount, wall.id, stretches);
+      continue;
+    }
+    const stretch = stretchContaining(stretches, along);
+    if (stretch === null) continue;
+    const need = alongWallLength(size, rotationY, frame.ux, frame.uz);
+    if (need > stretch.length + 1e-9) {
+      return tooLongRefusal(ctx, productName, need, stretch, wall.id);
+    }
+  }
+  return mountHit;
 }
 
 /** Deterministic instance id: productId, then productId-2, ... */
@@ -361,6 +717,15 @@ export function executeAssistantTool(
         }
         variant = matched;
       }
+      const refusal = wallStretchRefusal(
+        ctx,
+        entry.name,
+        entry.size,
+        x,
+        z,
+        normalizeRotation(rotationY),
+      );
+      if (refusal !== null) return refusal;
       const item: SceneItem = {
         instanceId: nextInstanceId(draft, productId),
         productId,
@@ -418,7 +783,8 @@ export function executeAssistantTool(
           placed: draft.items.map((i) => i.instanceId),
         };
       }
-      return { ok: true, removed: instanceId };
+      const removed: Record<string, unknown> = { ok: true, removed: instanceId };
+      return isDraftClean(ctx, draft) ? { ...removed, ready: ASSISTANT_READY_LINE } : removed;
     }
     case "check_fit": {
       const issues = draftIssues(ctx, draft);
@@ -446,8 +812,10 @@ export function executeAssistantTool(
       if (entry === undefined)
         return { ok: false, error: `Unknown productId "${item.productId}".` };
       if (entry.variants.length === 0) {
-        if (variant === "default" || variant === "")
-          return { ok: true, instanceId, variant: item.variant };
+        if (variant === "default" || variant === "") {
+          const kept: Record<string, unknown> = { ok: true, instanceId, variant: item.variant };
+          return isDraftClean(ctx, draft) ? { ...kept, ready: ASSISTANT_READY_LINE } : kept;
+        }
         return { ok: false, error: `${entry.name} has no variants.` };
       }
       const matched = matchVariant(entry, variant);
@@ -459,7 +827,8 @@ export function executeAssistantTool(
         };
       }
       item.variant = matched;
-      return { ok: true, instanceId, variant: matched };
+      const varied: Record<string, unknown> = { ok: true, instanceId, variant: matched };
+      return isDraftClean(ctx, draft) ? { ...varied, ready: ASSISTANT_READY_LINE } : varied;
     }
     case "place_against_wall": {
       const wallId = needString(args, "wallId");
@@ -519,6 +888,27 @@ export function executeAssistantTool(
         dist = opening.offset + opening.width / 2;
       }
       const rotationY = backToWallRotationY(-frame.nx, -frame.nz);
+      if (centredOn === null && offset !== null) {
+        const mounts = stretchMounts(ctx, wallId);
+        const stretches = freeStretches(ctx, wallId, frame.len);
+        const productName =
+          item !== null
+            ? (ctx.byId.get(item.productId)?.name ?? item.productId)
+            : productId !== null
+              ? (ctx.byId.get(productId)?.name ?? productId)
+              : "the piece";
+        const mount = mountAtOffset(mounts, offset);
+        if (mount !== null) {
+          return mountRefusal(ctx, productName, offset, mount, wallId, stretches);
+        }
+        const stretch = stretchContaining(stretches, offset);
+        if (stretch !== null) {
+          const need = alongWallLength(size, rotationY, frame.ux, frame.uz);
+          if (need > stretch.length + 1e-9) {
+            return tooLongRefusal(ctx, productName, need, stretch, wallId);
+          }
+        }
+      }
       const { cos, sin } = angleTrig(rotationY);
       // Local axes in world plan (matches the fit engine mapping).
       const lxX = cos;
