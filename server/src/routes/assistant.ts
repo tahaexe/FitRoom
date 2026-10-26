@@ -10,17 +10,26 @@ import { MAX_TEXT_PROMPT_CHARS } from "@fitroom/shared";
 import { Hono } from "hono";
 import { META_MODELS } from "../config.js";
 import { callSpark, type UpstreamResult } from "../meta/client.js";
-import { serveGatewayRequest, type PipelineDeps, type RouteDef } from "../meta/pipeline.js";
+import {
+  parsePrompt,
+  serveGatewayRequest,
+  type PipelineDeps,
+  type RouteDef,
+} from "../meta/pipeline.js";
 
 export const assistantDef: RouteDef = {
   route: "assistant",
   model: META_MODELS.spark,
-  maxPromptChars: MAX_TEXT_PROMPT_CHARS,
   liveReady: false,
-  keyInput: (prompt: string) => ({ prompt }),
-  upstream: async (apiKey: string, prompt: string): Promise<UpstreamResult> =>
+  parseBody: (body: unknown) => {
+    const parsed = parsePrompt(body, MAX_TEXT_PROMPT_CHARS);
+    if ("error" in parsed) return parsed;
+    return { input: { prompt: parsed.prompt } };
+  },
+  keyInput: (input: unknown) => input,
+  upstream: async (apiKey: string, input: unknown): Promise<UpstreamResult> =>
     callSpark(apiKey, {
-      messages: [{ role: "user", content: prompt }],
+      messages: [{ role: "user", content: (input as { prompt: string }).prompt }],
     }),
 };
 

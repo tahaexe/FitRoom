@@ -28,3 +28,4 @@ export * from "./units.js";
 export * from "./fit.js";
 export * from "./schemas/index.js";
 export * from "./validate.js";
+export * from "./recommend/index.js";

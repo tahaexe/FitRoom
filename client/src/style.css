@@ -623,3 +623,177 @@ button.danger {
   font-weight: 700;
   margin: 0 0 8px;
 }
+
+/* ---- recommend panel: white card floating left over the room view ---- */
+
+#recommend-panel {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 300px;
+  max-height: calc(100% - 96px);
+  overflow-y: auto;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 16px;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+#recommend-panel[hidden] {
+  display: none;
+}
+
+.recommend-panel h2 {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--ink);
+}
+
+.recommend-panel h3 {
+  font-size: 15px;
+  font-weight: 600;
+  margin: 8px 0 0;
+  color: var(--ink);
+}
+
+.recommend-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.recommend-close {
+  background: #ffffff;
+  color: var(--muted);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  width: 28px;
+  height: 28px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.recommend-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.recommend-row input[type="number"] {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  background: #ffffff;
+}
+
+.recommend-go {
+  background: var(--coral);
+  color: var(--on-coral);
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.recommend-go:hover {
+  background: var(--coral-hover);
+}
+
+.recommend-go:active {
+  background: var(--coral-pressed);
+}
+
+.recommend-go[disabled] {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.recommend-runs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recommend-run {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.recommend-run:hover {
+  background: var(--panel-bg);
+}
+
+.recommend-results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.recommend-model {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0;
+}
+
+.recommend-empty {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0;
+}
+
+.recommend-card {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  background: #ffffff;
+  box-shadow: var(--shadow);
+  padding: 8px;
+}
+
+.recommend-card img {
+  width: 64px;
+  height: 64px;
+  flex: 0 0 64px;
+  object-fit: cover;
+  border-radius: 8px;
+  background: var(--panel-bg);
+}
+
+.recommend-card .recommend-go {
+  margin-left: auto;
+  flex: 0 0 auto;
+}
+
+.recommend-reason {
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--ink);
+}

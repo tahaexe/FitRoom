@@ -281,13 +281,23 @@ async function main(): Promise<void> {
         demoOk === 3,
         `demo=${String(demoOk)}`,
       );
+      const missBody = (route: string): unknown =>
+        route === "recommend"
+          ? {
+              room: {
+                name: "No such room",
+                size_cm: [1, 1],
+                style: { tags: [], colors: [] },
+              },
+              placed: [],
+              request: { category: "no such demo answer 000000" },
+              freeSpace: { runs: [], openAreas: [] },
+              candidates: [],
+            }
+          : { prompt: "no such demo answer 000000" };
       let missOk = 0;
       for (const route of ROUTES) {
-        const res = await jar.post(
-          route,
-          { prompt: "no such demo answer 000000" },
-          { ip: "10.8.8.3" },
-        );
+        const res = await jar.post(route, missBody(route), { ip: "10.8.8.3" });
         if (
           res.status === 200 &&
           isRecord(res.json) &&

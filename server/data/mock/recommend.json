@@ -2,15 +2,17 @@
   "data": {
     "recommendations": [
       {
-        "productId": "sofa-3seat-linen",
-        "note": "Anchors the demo room at true scale; keep 80 cm of walkway in front."
+        "productId": "Sofa_01",
+        "reason": "Fits your 185 cm wall run with 28 cm to spare; warm fabric suits the room.",
+        "styleMatch": 0.8
       },
       {
-        "productId": "oak-coffee-table",
-        "note": "Pairs with the linen sofa; clears the door swing."
+        "productId": "modern_coffee_table_01",
+        "reason": "Its 120 cm top fits the 185 cm run; modern wood matches the TV unit.",
+        "styleMatch": 0.85
       }
     ],
-    "note": "Mock recommendation (META_MOCK=1). The real prompt lands in the next task."
+    "note": "Mock recommendation (META_MOCK=1)."
   },
   "usage": {
     "prompt_tokens": 640,

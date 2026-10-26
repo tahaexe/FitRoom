@@ -8,12 +8,13 @@ import type {
   CatalogItem,
   FitAnalysis,
   FitIssue,
+  FreeRun,
   PlanPoint,
   RoomLayout,
   SceneItem,
   SceneState,
 } from "@fitroom/shared";
-import { FitEngine, cmToMeters, isHealthResponse } from "@fitroom/shared";
+import { FitEngine, cmToMeters, describeRun, isHealthResponse } from "@fitroom/shared";
 import roomJson from "../../shared/samples/living-420x360.json";
 import catalogJson from "../../shared/catalog/catalog.json";
 import validScene from "../../shared/samples/fit-tests/valid.json";
@@ -30,6 +31,7 @@ import rotatedOutsideScene from "../../shared/samples/fit-tests/rotated-outside.
 import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.json";
 import { initLiveSwitch } from "./api";
 import { CatalogPanel } from "./catalog-ui";
+import { RecommendPanel } from "./recommend/panel";
 import { applyVariant, loadModel } from "./models";
 import { PlanOverlay } from "./plan";
 import { FitOverlay } from "./fit-overlay";
@@ -141,6 +143,8 @@ class FitRoomApp {
   private planOverlay: PlanOverlay;
   private fitOverlay: FitOverlay;
   private inspector: Inspector;
+  private recommendPanel: RecommendPanel | null = null;
+  private runHighlight: THREE.Mesh | null = null;
   private fitEngine: FitEngine;
   private analysis: FitAnalysis | null = null;
   private issues: FitIssue[] = [];
@@ -263,6 +267,21 @@ class FitRoomApp {
       new CatalogPanel(catalogHost, CATALOG, (item) => void this.addItem(item));
     }
 
+    const recommendHost = document.getElementById("recommend-panel");
+    if (recommendHost !== null) {
+      this.recommendPanel = new RecommendPanel(recommendHost, {
+        room: ROOM,
+        catalog: CATALOG,
+        getScene: () => this.store.state,
+        checkItems: (items) => this.fitEngine.check({ ...this.store.state, items }),
+        placeItem: (productId, x, z, rotationY) =>
+          this.placeRecommendation(productId, x, z, rotationY),
+        resetDemoRoom: () => this.resetDemoRoom(),
+        hoverRun: (run) => this.hoverRun(run),
+      });
+      this.recommendPanel.refresh();
+    }
+
     this.bindToolbar();
     this.bindPointer();
     this.bindKeys();
@@ -270,6 +289,7 @@ class FitRoomApp {
     this.store.subscribe(() => {
       void this.syncInstances();
       this.refreshIssues();
+      this.recommendPanel?.refresh();
       this.markSceneChanged();
     });
 
@@ -329,6 +349,70 @@ class FitRoomApp {
       draft.items.push(instance);
     });
     this.select(instance.instanceId);
+  }
+
+  /** Place a recommendation at its checked spot, as one undo step. */
+  private placeRecommendation(productId: string, x: number, z: number, rotationY: number): void {
+    const entry = CATALOG_MAP.get(productId);
+    if (entry === undefined) return;
+    const instance: SceneItem = {
+      instanceId: makeInstanceId(productId),
+      productId,
+      position: { x: Math.round(x), z: Math.round(z) },
+      rotationY,
+      variant: entry.variants[0]?.name ?? "",
+    };
+    this.store.commit((draft) => {
+      draft.items.push(instance);
+    });
+    this.select(instance.instanceId);
+  }
+
+  /** Reset to the demo room scene, as one undo step. */
+  private resetDemoRoom(): void {
+    const clone = JSON.parse(JSON.stringify(validScene)) as SceneState;
+    this.select(null);
+    this.store.commit((draft) => {
+      draft.items = clone.items;
+    });
+  }
+
+  /** Highlight a free wall run on the floor while it is hovered. */
+  private hoverRun(run: FreeRun | null): void {
+    if (this.runHighlight !== null) {
+      this.scene.remove(this.runHighlight);
+      this.runHighlight.geometry.dispose();
+      (this.runHighlight.material as THREE.Material).dispose();
+      this.runHighlight = null;
+    }
+    if (run === null) {
+      this.requestRender();
+      return;
+    }
+    const desc = describeRun(ROOM, run);
+    if (desc === null) return;
+    const geometry = new THREE.PlaneGeometry(cmToMeters(desc.length_cm), cmToMeters(desc.depth_cm));
+    geometry.rotateX(-Math.PI / 2);
+    const wall = ROOM.walls.find((w) => w.id === run.wall);
+    let yaw = 0;
+    if (wall !== undefined) {
+      const dx = wall.end.x - wall.start.x;
+      const dz = wall.end.z - wall.start.z;
+      yaw = Math.atan2(-dz, dx);
+    }
+    const material = new THREE.MeshBasicMaterial({
+      color: 0x0e9f7e,
+      transparent: true,
+      opacity: 0.3,
+      depthWrite: false,
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.rotation.y = yaw;
+    mesh.position.set(cmToMeters(desc.x), 0.02, cmToMeters(desc.z));
+    mesh.renderOrder = 5;
+    this.scene.add(mesh);
+    this.runHighlight = mesh;
+    this.requestRender();
   }
 
   private commitMove(id: string, x: number, z: number): void {
@@ -746,6 +830,12 @@ class FitRoomApp {
       document.getElementById(id)?.addEventListener("click", fn);
     };
     on("tool-cart", () => this.downloadCart());
+    on("tool-recommend", () => {
+      const panel = document.getElementById("recommend-panel");
+      if (panel === null) return;
+      const hidden = panel.toggleAttribute("hidden");
+      document.getElementById("tool-recommend")?.setAttribute("data-active", String(!hidden));
+    });
     on("tool-orbit", () => this.setMode("orbit"));
     on("tool-plan", () => this.setMode("plan"));
     on("tool-clearance", () => this.toggleClearance());

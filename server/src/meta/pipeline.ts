@@ -34,16 +34,34 @@ import { appendCostLine } from "./metering.js";
 import { costUsd } from "./pricing.js";
 import type { CapsState } from "./caps.js";
 
+/**
+ * Thrown by a route's upstream call when the model answer is unusable after
+ * its retry: the pipeline answers HTTP 200 `{ status: "error", ... }` with
+ * this friendly message instead of the generic "unavailable" 502.
+ */
+export class UpstreamFriendlyError extends Error {
+  override name = "UpstreamFriendlyError";
+}
+
+export interface ParsedBody {
+  /** The route's typed input (the live flag already stripped). */
+  input: unknown;
+}
+
 export interface RouteDef {
   route: GatewayRoute;
   model: string;
-  maxPromptChars: number;
   /** False until the route gets its real prompt: live answers 501. */
   liveReady: boolean;
-  /** Route-specific key input (render will use scene + camera, never bytes). */
-  keyInput(prompt: string): unknown;
+  /**
+   * Validate the raw JSON body: an error string, or the route's typed input
+   * (without the `live` flag, so demo/live share one key).
+   */
+  parseBody(body: unknown): ParsedBody | { error: string };
+  /** Route-specific key input (never image bytes). */
+  keyInput(input: unknown): unknown;
   /** Real upstream call (never used in mock mode). */
-  upstream(apiKey: string, prompt: string): Promise<UpstreamResult>;
+  upstream(apiKey: string, input: unknown): Promise<UpstreamResult>;
 }
 
 export interface PipelineDeps {
@@ -88,7 +106,10 @@ function capped(): GatewayResponse {
   return { status: "capped", message: GATEWAY_CAPPED_MESSAGE };
 }
 
-function parsePrompt(body: unknown, maxChars: number): { prompt: string } | { error: string } {
+export function parsePrompt(
+  body: unknown,
+  maxChars: number,
+): { prompt: string } | { error: string } {
   if (typeof body !== "object" || body === null || Array.isArray(body)) {
     return { error: "Expected a JSON object with a prompt string." };
   }
@@ -123,13 +144,13 @@ export async function serveGatewayRequest(
     return c.json(capped(), 429);
   }
 
-  const parsed = parsePrompt(body, def.maxPromptChars);
+  const live = isLiveRequest(c, body);
+  const parsed = def.parseBody(body);
   if ("error" in parsed) {
     return c.json({ status: "error", message: parsed.error } satisfies GatewayResponse, 400);
   }
-  const keyInput = def.keyInput(parsed.prompt);
+  const keyInput = def.keyInput(parsed.input);
   const key = gatewayKey(def.route, def.model, keyInput);
-  const live = isLiveRequest(c, body);
 
   // 1. Demo store (free in both modes).
   const demo = readDemoStore(config.dataDir, def.route, def.model, key);
@@ -220,8 +241,11 @@ export async function serveGatewayRequest(
       );
     }
     try {
-      result = await def.upstream(config.apiKey, parsed.prompt);
-    } catch {
+      result = await def.upstream(config.apiKey, parsed.input);
+    } catch (error) {
+      if (error instanceof UpstreamFriendlyError) {
+        return c.json({ status: "error", message: error.message } satisfies GatewayResponse, 200);
+      }
       return c.json(
         { status: "error", message: "The live AI is unavailable." } satisfies GatewayResponse,
         502,
