@@ -192,7 +192,7 @@ All assets below are CC0-1.0. Credits are a courtesy.
 
 ## SheenChair
 
-- Credit: Sheen Chair: Everything: Eric Chadwick (Wayfair, LLC, 2020), CC0-1.0, via Khronos glTF-Sample-Assets
+- Credit: Sheen Chair by Eric Chadwick (Wayfair, LLC), via Khronos glTF-Sample-Assets (CC0)
 - Source: Khronos glTF-Sample-Assets (https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/SheenChair)
 - License: CC0-1.0
 - Files:

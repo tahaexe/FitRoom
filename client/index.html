@@ -8,33 +8,41 @@
   </head>
   <body>
     <header class="top-bar">
-      <span class="top-bar-title">FitRoom</span>
+      <div class="top-bar-left">
+        <span class="wordmark">FitRoom</span>
+        <span id="room-name" class="room-name">Living room</span>
+      </div>
       <div class="top-bar-actions">
-        <button id="tool-undo" type="button" title="Undo (Ctrl+Z)">Undo</button>
-        <button id="tool-credits" type="button">Credits</button>
+        <span id="cart-total" class="cart-total" aria-live="polite">$0</span>
+        <button id="tool-cart" class="btn-cart" type="button">Add to cart</button>
+        <button id="tool-undo" class="btn-quiet" type="button" title="Undo (Ctrl+Z)">Undo</button>
+        <button id="tool-credits" class="btn-quiet" type="button">Credits</button>
         <span id="api-status" class="api-status" data-state="checking">API: checking…</span>
       </div>
     </header>
     <aside id="catalog" aria-label="Furniture catalog"></aside>
     <main id="scene-container" aria-label="True-scale 3D fitting room">
       <div id="size-tag" class="size-tag" style="display: none"></div>
+      <button id="fit-badge" class="fit-badge" type="button" data-state="good">
+        ✓ Everything fits
+      </button>
+      <div id="fit-list" class="fit-list" hidden></div>
+      <div class="bottom-toolbar" aria-label="View tools">
+        <button id="tool-orbit" type="button" data-active="true">Orbit</button>
+        <button id="tool-plan" type="button" data-active="false">Plan</button>
+        <button id="tool-rot-left" type="button" title="Rotate −15°">⟲ 15°</button>
+        <button id="tool-rot-right" type="button" title="Rotate +15° (Shift+R: 1°)">⟳ 15°</button>
+        <button id="tool-delete" type="button" title="Delete selection (Del)">Delete</button>
+        <span id="measure-readout" class="measure" aria-live="polite"></span>
+      </div>
     </main>
     <aside id="inspector" aria-label="Selection inspector"></aside>
-    <footer class="bottom-toolbar">
-      <button id="tool-orbit" type="button" data-active="true">Orbit</button>
-      <button id="tool-plan" type="button" data-active="false">Plan</button>
-      <button id="tool-rot-left" type="button" title="Rotate −15°">⟲ 15°</button>
-      <button id="tool-rot-right" type="button" title="Rotate +15° (Shift+R: 1°)">⟳ 15°</button>
-      <button id="tool-delete" type="button" title="Delete selection (Del)">Delete</button>
-      <span id="measure-readout" class="measure" aria-live="polite"></span>
-      <span id="fit-status" class="fit-status" data-state="good">Fit: all clear</span>
-    </footer>
     <dialog id="credits-dialog" aria-label="Asset credits">
       <h2>Credits</h2>
       <p>All 3D and texture assets are CC0-1.0 (public domain, courtesy credit):</p>
       <ul>
         <li>Furniture models: Poly Haven contributors (CC0).</li>
-        <li>SheenChair sample model: Khronos Group (CC0).</li>
+        <li>Sheen Chair by Eric Chadwick (Wayfair, LLC), via Khronos glTF-Sample-Assets (CC0).</li>
         <li>PBR surfaces: ambientCG (CC0).</li>
         <li>Studio HDRI “lebombo”: Poly Haven (CC0).</li>
       </ul>

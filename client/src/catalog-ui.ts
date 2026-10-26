@@ -85,7 +85,16 @@ export class CatalogPanel {
       const meta = document.createElement("span");
       meta.className = "catalog-meta";
       const dims = `${Math.round(item.size.w)}×${Math.round(item.size.d)}×${Math.round(item.size.h)}cm`;
-      meta.textContent = `${item.name} · $${item.price} · ${dims}`;
+      const name = document.createElement("span");
+      name.className = "catalog-name";
+      name.textContent = item.name;
+      const dimsEl = document.createElement("span");
+      dimsEl.className = "catalog-dims";
+      dimsEl.textContent = dims;
+      const price = document.createElement("span");
+      price.className = "catalog-price";
+      price.textContent = `$${item.price}`;
+      meta.append(name, dimsEl, price);
       card.appendChild(thumb);
       card.appendChild(meta);
       card.title = `Add ${item.name} (${dims})`;
