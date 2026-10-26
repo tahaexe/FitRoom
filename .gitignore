@@ -1,3 +1,7 @@
 node_modules/
 dist/
 .env
+.tmp/
+server/data/cache/
+server/data/recorded/
+server/logs/
