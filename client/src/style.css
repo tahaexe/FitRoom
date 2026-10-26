@@ -397,7 +397,6 @@ button.danger {
   font-size: 12px;
   font-weight: 600;
   fill: var(--ink);
-  text-anchor: middle;
   paint-order: stroke;
   stroke: #fff;
   stroke-width: 3px;

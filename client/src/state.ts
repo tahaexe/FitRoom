@@ -386,8 +386,7 @@ export function nearestFreeSpot(
    */
   const byEdgeThenView = [...grid].sort(
     (a, b) =>
-      edgeDist(a.x, a.z, bounds) - edgeDist(b.x, b.z, bounds) ||
-      dist2(a.x, a.z) - dist2(b.x, b.z),
+      edgeDist(a.x, a.z, bounds) - edgeDist(b.x, b.z, bounds) || dist2(a.x, a.z) - dist2(b.x, b.z),
   );
 
   // Phases 1-2: full 5cm gap. Wall-preferring pieces try the wall slots

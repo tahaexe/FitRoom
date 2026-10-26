@@ -58,8 +58,8 @@ export class PlanOverlay {
     cx /= Math.max(1, room.walls.length);
     cz /= Math.max(1, room.walls.length);
 
-    const WALL_OUT_CM = 32;
-    const OPENING_IN_CM = 38;
+    const WALL_OUT_CM = 15;
+    const OPENING_IN_CM = 15;
     const spots: Array<{ el: SVGTextElement; x: number; y: number }> = [];
 
     room.walls.forEach((wall, i) => {
@@ -67,12 +67,21 @@ export class PlanOverlay {
       if (el === undefined) return;
       const mx = (wall.start.x + wall.end.x) / 2;
       const mz = (wall.start.z + wall.end.z) / 2;
-      let ox = mx - cx;
-      let oz = mz - cz;
-      const len = Math.hypot(ox, oz) || 1;
-      ox /= len;
-      oz /= len;
-      const p = project(cmToMeters(mx + ox * WALL_OUT_CM), 0.05, cmToMeters(mz + oz * WALL_OUT_CM));
+      const outward = this.outwardOf(mx, mz, cx, cz);
+      // East/west walls: anchor the text edge at the wall so the label
+      // extends outward and can never straddle the wall line.
+      const anchor =
+        Math.abs(outward.x) >= Math.abs(outward.z)
+          ? outward.x > 0
+            ? "start"
+            : "end"
+          : "middle";
+      el.setAttribute("text-anchor", anchor);
+      const p = project(
+        cmToMeters(mx + outward.x * WALL_OUT_CM),
+        0.05,
+        cmToMeters(mz + outward.z * WALL_OUT_CM),
+      );
       spots.push({ el, x: p.x, y: p.y });
     });
     room.openings.forEach((o, i) => {
@@ -83,15 +92,19 @@ export class PlanOverlay {
       const p0 = pointAlongWall(wall, o.offset + o.width / 2);
       const mx = (wall.start.x + wall.end.x) / 2;
       const mz = (wall.start.z + wall.end.z) / 2;
-      let ox = mx - cx;
-      let oz = mz - cz;
-      const len = Math.hypot(ox, oz) || 1;
-      ox /= len;
-      oz /= len;
+      const outward = this.outwardOf(mx, mz, cx, cz);
+      // Mirror of the walls: opening labels extend inward from their anchor.
+      const anchor =
+        Math.abs(outward.x) >= Math.abs(outward.z)
+          ? outward.x > 0
+            ? "end"
+            : "start"
+          : "middle";
+      el.setAttribute("text-anchor", anchor);
       const p = project(
-        cmToMeters(p0.x - ox * OPENING_IN_CM),
+        cmToMeters(p0.x - outward.x * OPENING_IN_CM),
         0.05,
-        cmToMeters(p0.z - oz * OPENING_IN_CM),
+        cmToMeters(p0.z - outward.z * OPENING_IN_CM),
       );
       spots.push({ el, x: p.x, y: p.y });
     });
@@ -120,12 +133,20 @@ export class PlanOverlay {
       size = { w, h: 13 };
       boxes.set(s.el, size);
     }
-    return {
-      x0: s.x - size.w / 2,
-      y0: s.y - size.h / 2,
-      x1: s.x + size.w / 2,
-      y1: s.y + size.h / 2,
-    };
+    // Respect the per-label text anchor (east/west walls anchor an edge).
+    const anchor = s.el.getAttribute("text-anchor") ?? "middle";
+    const x0 = anchor === "start" ? s.x : anchor === "end" ? s.x - size.w : s.x - size.w / 2;
+    return { x0, y0: s.y - size.h / 2, x1: x0 + size.w, y1: s.y + size.h / 2 };
+  }
+
+  /** Centre-based outward side of a wall midpoint (robust for any winding). */
+  private outwardOf(mx: number, mz: number, cx: number, cz: number): { x: number; z: number } {
+    let ox = mx - cx;
+    let oz = mz - cz;
+    const len = Math.hypot(ox, oz) || 1;
+    ox /= len;
+    oz /= len;
+    return { x: ox, z: oz };
   }
 
   /** Iterative repulsion until no two label boxes overlap (or it converges). */
