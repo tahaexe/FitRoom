@@ -86,6 +86,30 @@ export function describeRoomForAssistant(
       );
     }
   }
+  lines.push(
+    "Wall stretches beside openings and fixtures (wall id and name, free spans in cm from the wall start):",
+  );
+  for (const wall of room.walls) {
+    const len = wallLengthCm(wall.start, wall.end);
+    const mounts: Array<[number, number]> = [];
+    for (const opening of room.openings) {
+      if (opening.wallId === wall.id) mounts.push([opening.offset, opening.offset + opening.width]);
+    }
+    for (const fixture of room.fixtures) {
+      if (fixture.wallId === wall.id) mounts.push([fixture.offset, fixture.offset + fixture.width]);
+    }
+    mounts.sort((a, b) => a[0] - b[0]);
+    const gaps: string[] = [];
+    let cursor = 0;
+    for (const [from, to] of mounts) {
+      if (from > cursor) gaps.push(`${String(round1(cursor))}-${String(round1(from))}`);
+      cursor = Math.max(cursor, to);
+    }
+    if (len > cursor) gaps.push(`${String(round1(cursor))}-${String(round1(len))}`);
+    lines.push(
+      `- ${wall.id} "${wallDisplayName(room, wall.id)}": ${gaps.length === 0 ? "no free stretch" : gaps.join(", ")} cm`,
+    );
+  }
   const names = new Map(catalog.map((c) => [c.id, c]));
   lines.push("Placed items (instanceId, product, centre, rotationY, variant):");
   if (scene.items.length === 0) {
@@ -109,7 +133,9 @@ export function describeRoomForAssistant(
   }
   lines.push(
     "Use place_against_wall to put a piece against a wall (it snaps the back to the wall and turns it " +
-      "correctly); pass centred_on with an opening id to centre under a window. " +
+      "correctly); pass centred_on with an opening id to centre under a window, or offset_cm for a " +
+      "distance along the wall. Make every move with the tools before you answer, then call check_fit; " +
+      "never describe a move you have not made. " +
       "Positions are item centres in plan cm. In your final answer use the shopper wall names " +
       "(door wall, back wall, left/right wall, with (window)), never ids like wall-1.",
   );

@@ -103,7 +103,7 @@ const SCHEMAS: Record<AssistantToolName, Record<string, unknown>> = {
   },
   place_against_wall: {
     type: "object",
-    required: ["wallId", "offset_cm"],
+    required: ["wallId"],
     properties: {
       productId: {
         type: "string",
@@ -116,7 +116,8 @@ const SCHEMAS: Record<AssistantToolName, Record<string, unknown>> = {
       wallId: { type: "string" },
       offset_cm: {
         type: "number",
-        description: "Distance of the item's centre from the wall start along the wall.",
+        description:
+          "Distance of the item's centre from the wall start along the wall (omit when centred_on is given).",
       },
       centred_on: {
         type: "string",

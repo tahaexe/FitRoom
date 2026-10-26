@@ -237,6 +237,9 @@ async function main(): Promise<void> {
       META_MOCK: "",
       META_RECORD: "",
       META_API_KEY: "",
+      // Six turns replay ~30 demo rounds from one address: keep the
+      // per-IP rate limit far above that (demo hits are free).
+      META_RATE_PER_MIN: "300",
       FITROOM_DATA_DIR: dataDir,
       FITROOM_LOGS_DIR: logsDir,
     },

@@ -161,7 +161,15 @@ async function main(): Promise<void> {
   const route = process.argv[2];
   const def = route === undefined ? undefined : DEFS[route];
   if (route === undefined || def === undefined) {
-    fail("usage: npm run demo:record -- <recommend|assistant|render>");
+    fail("usage: npm run demo:record -- <recommend|assistant|render> [1-based request numbers]");
+  }
+  const only = new Set<number>();
+  for (const arg of process.argv.slice(3)) {
+    const n = Number(arg);
+    if (!Number.isInteger(n) || n < 1) {
+      fail(`invalid request number "${arg}".`);
+    }
+    only.add(n);
   }
   const config = loadGatewayConfig();
   if (config.mock) {
@@ -177,7 +185,11 @@ async function main(): Promise<void> {
   }
   let recorded = 0;
   let totalUsd = 0;
-  for (const item of requests) {
+  const picked = requests.filter((_, index) => only.size === 0 || only.has(index + 1));
+  if (picked.length === 0) {
+    fail("no requests selected.");
+  }
+  for (const item of picked) {
     if (route === "assistant") {
       totalUsd =
         Math.round(

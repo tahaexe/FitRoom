@@ -464,8 +464,9 @@ export function executeAssistantTool(
     case "place_against_wall": {
       const wallId = needString(args, "wallId");
       const offset = needNumber(args, "offset_cm");
-      if (wallId === null || offset === null) {
-        return { ok: false, error: "place_against_wall needs wallId and offset_cm." };
+      const centredOn = needString(args, "centred_on");
+      if (wallId === null || (offset === null && centredOn === null)) {
+        return { ok: false, error: "place_against_wall needs wallId and offset_cm or centred_on." };
       }
       const frame = frameOfWall(ctx.room, wallId);
       if (frame === null) {
@@ -502,8 +503,7 @@ export function executeAssistantTool(
         if (entry === undefined) return { ok: false, error: `Unknown productId "${productId}".` };
         size = { ...entry.size };
       }
-      let dist = offset;
-      const centredOn = needString(args, "centred_on");
+      let dist = offset ?? 0;
       if (centredOn !== null) {
         const opening = ctx.room.openings.find((o) => o.id === centredOn);
         if (opening === undefined) {
