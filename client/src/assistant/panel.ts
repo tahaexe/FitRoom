@@ -130,19 +130,55 @@ export class AssistantPanel {
     }
   }
 
+  /** Demo-store request texts, once loaded (demo mode shows no unrecorded chip). */
+  private recordedChips: string[] | null = null;
+
+  private async loadRecordedChips(): Promise<string[] | null> {
+    if (this.recordedChips !== null) return this.recordedChips;
+    try {
+      const res = await fetch("/api/assistant/demo-chips");
+      const payload = (await res.json()) as unknown;
+      if (
+        typeof payload === "object" &&
+        payload !== null &&
+        Array.isArray((payload as Record<string, unknown>)["requests"])
+      ) {
+        const requests = (payload as Record<string, unknown>)["requests"] as unknown[];
+        this.recordedChips = requests.filter((entry): entry is string => typeof entry === "string");
+        return this.recordedChips;
+      }
+    } catch {
+      // Fall through to showing every chip below.
+    }
+    return null;
+  }
+
   private buildChips(): HTMLElement {
     const chips = document.createElement("div");
     chips.className = "assistant-chips";
-    for (const text of ASSISTANT_DEMO_CHIPS) {
+    void this.fillChips(chips);
+    return chips;
+  }
+
+  private async fillChips(host: HTMLElement): Promise<void> {
+    const recorded = await this.loadRecordedChips();
+    const texts =
+      recorded === null
+        ? ASSISTANT_DEMO_CHIPS
+        : ASSISTANT_DEMO_CHIPS.filter((text) => recorded.includes(text));
+    if (texts.length === 0) {
+      host.remove();
+      return;
+    }
+    for (const text of texts) {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.className = "assistant-chip";
       chip.textContent = text.length > 42 ? `${text.slice(0, 42)}…` : text;
       chip.title = text;
       chip.addEventListener("click", () => void this.sendDemo(text));
-      chips.appendChild(chip);
+      host.appendChild(chip);
     }
-    return chips;
   }
 
   private logEl(): HTMLElement | null {
@@ -259,7 +295,6 @@ export class AssistantPanel {
     const records: AssistantToolRecord[] = [];
     let cleanSnapshot: SceneState | null = null;
     let answer: string | null = null;
-    let reachedLimit = false;
 
     for (let round = 0; round < ASSISTANT_MAX_ROUNDS; round += 1) {
       const result = await this.round(request, messages, draft);
@@ -294,21 +329,24 @@ export class AssistantPanel {
       if (turnErrors(this.deps.room, draft, this.deps.catalog).length === 0) {
         cleanSnapshot = cloneScene(draft);
       }
-      if (round === ASSISTANT_MAX_ROUNDS - 1) reachedLimit = true;
     }
 
     if (answer === null) {
+      // Round cap: a fit-clean draft is applied with an answer composed from
+      // the tool records (what moved, where, the verdict); a draft with fit
+      // errors is never applied.
       if (cleanSnapshot !== null) {
         this.deps.applyTurn(cleanSnapshot);
-        this.addAnswer(
-          "I ran out of steps, so I kept the last clean draft.",
-          summarizeAssistantTurn(start, cleanSnapshot, this.deps.room, this.deps.catalog),
-          records,
+        const composed = summarizeAssistantTurn(
+          start,
+          cleanSnapshot,
+          this.deps.room,
+          this.deps.catalog,
         );
+        this.addAnswer(composed, composed, records);
       } else {
         this.addNotice("I ran out of steps without a clean draft, so nothing changed.");
       }
-      void reachedLimit;
       return;
     }
 

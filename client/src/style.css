@@ -508,6 +508,13 @@ button.danger {
   border: 1.5px solid var(--amber);
 }
 
+/* While the Arrange panel is open it owns the top-right corner, so the fit
+ * verdict badge (and its list) step left of it; both stay visible. */
+#assistant-panel:not([hidden]) ~ #fit-badge,
+#assistant-panel:not([hidden]) ~ #fit-list {
+  right: 392px;
+}
+
 /* ---- fit issue labels floating over the room view ---- */
 
 .fit-issue-labels {
