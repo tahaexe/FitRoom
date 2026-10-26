@@ -132,7 +132,10 @@ export function itemCorners(item: SceneItem, catalog: Map<string, CatalogItem>):
 }
 
 function cornersOverlap(a: PlanPoint[], b: PlanPoint[]): boolean {
-  // Separating-axis test on the two rectangles' edge normals.
+  // Separating-axis test on the two rectangles' edge normals. Touching
+  // edges (within a micrometre) count as separated, so exact-pitch wall
+  // slots are not rejected by float noise; the 5cm placement gap dwarfs this.
+  const EPS = 1e-6;
   const axes: PlanPoint[] = [];
   for (const poly of [a, b]) {
     for (let i = 0; i < poly.length; i += 1) {
@@ -160,7 +163,7 @@ function cornersOverlap(a: PlanPoint[], b: PlanPoint[]): boolean {
       if (v < minB) minB = v;
       if (v > maxB) maxB = v;
     }
-    if (maxA <= minB || maxB <= minA) return false;
+    if (maxA <= minB + EPS || maxB <= minA + EPS) return false;
   }
   return true;
 }
@@ -265,51 +268,262 @@ export function computeFitIssues(
   return issues;
 }
 
+/** Clearance kept between a new piece and every placed piece, centimetres. */
+export const PLACEMENT_GAP_CM = 5;
+
+export interface FreeSpot extends PlanPoint {
+  rotationY: number;
+}
+
+/** Distance from a plan point to the nearest room edge, centimetres. */
+function edgeDist(
+  x: number,
+  z: number,
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number },
+): number {
+  return Math.min(x - bounds.minX, bounds.maxX - x, z - bounds.minZ, bounds.maxZ - z);
+}
+
 /**
- * Nearest free placement: spiral search from the room centre for the first
- * spot where the footprint is inside the room and overlaps nothing.
+ * Nearest free placement for a new item.
+ *
+ * - Searches from `start` (the current view centre), nearest first.
+ * - The footprint must sit inside the room and overlap no placed item, with
+ *   a 5cm gap between footprints.
+ * - Wall-backed candidates come first: sofas, TV units and shelves prefer a
+ *   spot with their back to a wall (back facing the wall); other large
+ *   pieces (max side >= 120cm) join them, so big pieces pack to the edges
+ *   while small pieces appear near the view. Wall slots fill from the
+ *   corners (view breaks ties) so consecutive pieces pack instead of
+ *   stranding each other mid-wall.
+ * - When no spot keeps the full gap, exact-fit phases (no overlap, gap
+ *   dropped) run before the final non-stacking fallback, so items never stack
+ *   on one point.
  */
 export function nearestFreeSpot(
   productId: string,
   catalog: Map<string, CatalogItem>,
   room: RoomLayout,
   state: SceneState,
-): PlanPoint {
-  const entry = catalog.get(productId);
-  const w = entry?.size.w ?? 60;
-  const d = entry?.size.d ?? 60;
+  start?: PlanPoint,
+): FreeSpot {
   const bounds = roomBounds(room);
   const cx = (bounds.minX + bounds.maxX) / 2;
   const cz = (bounds.minZ + bounds.maxZ) / 2;
+  const origin = {
+    x: Math.min(bounds.maxX, Math.max(bounds.minX, start?.x ?? cx)),
+    z: Math.min(bounds.maxZ, Math.max(bounds.minZ, start?.z ?? cz)),
+  };
+  const entry = catalog.get(productId);
+
   const probe: SceneItem = {
     instanceId: "probe",
     productId,
-    position: { x: cx, z: cz },
+    position: { x: origin.x, z: origin.z },
     rotationY: 0,
     variant: "",
   };
-  const fits = (x: number, z: number): boolean => {
+  /**
+   * True when the footprint sits inside the room and overlaps no placed
+   * item; with `gapCm > 0` the probe footprint grows by the gap on every
+   * side, enforcing that clearance to every placed piece.
+   */
+  const fits = (x: number, z: number, rotationY: number, gapCm: number): boolean => {
     probe.position = { x, z };
+    probe.rotationY = rotationY;
     if (!isInsideRoom(probe, catalog, room)) return false;
-    const pc = itemCorners(probe, catalog);
+    const pc = gapCm > 0 ? inflatedCorners(probe, catalog, gapCm) : itemCorners(probe, catalog);
     for (const other of state.items) {
       if (cornersOverlap(pc, itemCorners(other, catalog))) return false;
     }
     return true;
   };
-  if (fits(cx, cz)) return { x: cx, z: cz };
-  const step = Math.max(w, d, 30);
-  for (let ring = 1; ring <= 12; ring += 1) {
-    const r = ring * step;
-    const n = ring * 8;
-    for (let k = 0; k < n; k += 1) {
-      const a = (k / n) * Math.PI * 2;
-      const x = cx + Math.cos(a) * r;
-      const z = cz + Math.sin(a) * r;
-      if (fits(x, z)) return { x, z };
+  const dist2 = (x: number, z: number): number =>
+    (x - origin.x) * (x - origin.x) + (z - origin.z) * (z - origin.z);
+
+  interface Candidate {
+    x: number;
+    z: number;
+    rotationY: number;
+    /** Distance along the wall to the nearer end (wall slots only). */
+    end: number;
+  }
+  const byView = (list: Candidate[]): Candidate[] =>
+    [...list].sort((a, b) => dist2(a.x, a.z) - dist2(b.x, b.z));
+  /**
+   * Wall slots, ends first: filling from the corners packs pieces along the
+   * wall instead of stranding one piece mid-wall where it blocks both sides.
+   * View distance breaks ties, so the nearest corner still wins.
+   */
+  const byEndThenView = (list: Candidate[]): Candidate[] =>
+    [...list].sort((a, b) => a.end - b.end || dist2(a.x, a.z) - dist2(b.x, b.z));
+
+  // Wall-adjacent candidates (back facing the wall). Sofas, TV units and
+  // shelves always try these first; other pieces join them only when they
+  // are large (max side >= 120cm), so big pieces pack to the edges while
+  // small pieces appear near the view.
+  const w = entry?.size.w ?? 60;
+  const d = entry?.size.d ?? 60;
+  const prefersWall =
+    entry?.category === "sofa" || entry?.category === "tv-unit" || entry?.category === "shelf"
+      ? true
+      : Math.max(w, d) >= 120;
+  const backed = wallBackedCandidates(room, bounds, w, d);
+  // Dense grid over the room interior.
+  const step = 10;
+  const grid: Candidate[] = [];
+  for (let x = bounds.minX; x <= bounds.maxX; x += step) {
+    for (let z = bounds.minZ; z <= bounds.maxZ; z += step) {
+      grid.push({ x, z, rotationY: 0, end: Number.POSITIVE_INFINITY });
     }
   }
-  return { x: cx, z: cz };
+  const orderedGrid = byView(grid);
+  const orderedAll = byView([...backed, ...grid]);
+  /**
+   * Interior cells, room edges first: once the walls are lined, the leftover
+   * middle packs best from its own edges inward (two 167cm sofas fit stacked
+   * at z≈108/252, never side by side). View distance breaks ties.
+   */
+  const byEdgeThenView = [...grid].sort(
+    (a, b) =>
+      edgeDist(a.x, a.z, bounds) - edgeDist(b.x, b.z, bounds) ||
+      dist2(a.x, a.z) - dist2(b.x, b.z),
+  );
+
+  // Phases 1-2: full 5cm gap. Wall-preferring pieces try the wall slots
+  // corners-first (view breaks ties) before the open floor, so consecutive
+  // pieces pack instead of stranding each other mid-wall; everything else
+  // scans nearest-first from the view.
+  const first = prefersWall ? byEndThenView(backed) : orderedAll;
+  for (const c of first) {
+    if (fits(c.x, c.z, c.rotationY, PLACEMENT_GAP_CM)) {
+      return { x: c.x, z: c.z, rotationY: c.rotationY };
+    }
+  }
+  if (prefersWall) {
+    for (const c of byEdgeThenView) {
+      if (fits(c.x, c.z, 0, PLACEMENT_GAP_CM)) return { x: c.x, z: c.z, rotationY: 0 };
+    }
+  }
+  // Phases 3-4: exact fit (gap dropped) before giving up on overlaps.
+  for (const c of byView(backed)) {
+    if (fits(c.x, c.z, c.rotationY, 0)) return { x: c.x, z: c.z, rotationY: c.rotationY };
+  }
+  for (const c of prefersWall ? byEdgeThenView : orderedGrid) {
+    if (fits(c.x, c.z, 0, 0)) return { x: c.x, z: c.z, rotationY: 0 };
+  }
+
+  // Phase 5 (room genuinely full): deterministic micro-spiral around the view
+  // centre so the new piece never lands exactly on another piece's point.
+  for (let ring = 1; ring <= 40; ring += 1) {
+    const r = ring * 5;
+    const n = 8;
+    for (let k = 0; k < n; k += 1) {
+      const a = (k / n) * Math.PI * 2 + ring;
+      const x = Math.round((origin.x + Math.cos(a) * r) * 10) / 10 + ring * 0.1;
+      const z = Math.round((origin.z + Math.sin(a) * r) * 10) / 10;
+      let stacked = false;
+      for (const other of state.items) {
+        if (Math.abs(other.position.x - x) < 0.05 && Math.abs(other.position.z - z) < 0.05) {
+          stacked = true;
+          break;
+        }
+      }
+      if (!stacked) return { x, z, rotationY: 0 };
+    }
+  }
+  return { x: origin.x + 0.5, z: origin.z, rotationY: 0 };
+}
+
+/** Footprint corners inflated by `gapCm` on every side (plan cm). */
+function inflatedCorners(
+  item: SceneItem,
+  catalog: Map<string, CatalogItem>,
+  gapCm: number,
+): PlanPoint[] {
+  const entry = catalog.get(item.productId);
+  const w = (entry?.size.w ?? 60) + gapCm * 2;
+  const d = (entry?.size.d ?? 60) + gapCm * 2;
+  const hw = w / 2;
+  const hd = d / 2;
+  const rad = (item.rotationY * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const local: PlanPoint[] = [
+    { x: -hw, z: -hd },
+    { x: hw, z: -hd },
+    { x: hw, z: hd },
+    { x: -hw, z: hd },
+  ];
+  return local.map((p) => ({
+    x: item.position.x + p.x * cos + p.z * sin,
+    z: item.position.z - p.x * sin + p.z * cos,
+  }));
+}
+
+/**
+ * Candidate spots with the piece's back against each wall: positions along
+ * every wall at 10cm spacing, rotated so local -Z (the back) faces the wall
+ * with a small stand-off. Each candidate carries `end`, its distance along
+ * the wall to the nearer end, so callers can fill from the corners.
+ */
+function wallBackedCandidates(
+  room: RoomLayout,
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number },
+  w: number,
+  d: number,
+): Array<{ x: number; z: number; rotationY: number; end: number }> {
+  const cx = (bounds.minX + bounds.maxX) / 2;
+  const cz = (bounds.minZ + bounds.maxZ) / 2;
+  const out: Array<{ x: number; z: number; rotationY: number; end: number }> = [];
+  for (const wall of room.walls) {
+    const len = wallLengthCm(wall.start, wall.end) || 1;
+    const dirX = (wall.end.x - wall.start.x) / len;
+    const dirZ = (wall.end.z - wall.start.z) / len;
+    // Outward side, centre-based (robust for any winding).
+    const midX = (wall.start.x + wall.end.x) / 2;
+    const midZ = (wall.start.z + wall.end.z) / 2;
+    let outX = midX - cx;
+    let outZ = midZ - cz;
+    const outLen = Math.hypot(outX, outZ) || 1;
+    outX /= outLen;
+    outZ /= outLen;
+    // Yaw whose local -Z (back) points along `outward`.
+    const rad = Math.atan2(-outX, -outZ);
+    const rotationY = (rad * 180) / Math.PI;
+    // Rotated half-extents, so the centre stands off the wall correctly.
+    const cos = Math.abs(Math.cos(rad));
+    const sin = Math.abs(Math.sin(rad));
+    const hx = (w / 2) * cos + (d / 2) * sin;
+    const hz = (w / 2) * sin + (d / 2) * cos;
+    const alongOut = hx * Math.abs(outX) + hz * Math.abs(outZ);
+    const alongWall = hx * Math.abs(dirX) + hz * Math.abs(dirZ);
+    const standOff = 4;
+    const place = (s: number): void => {
+      const px = wall.start.x + dirX * s - outX * (alongOut + standOff);
+      const pz = wall.start.z + dirZ * s - outZ * (alongOut + standOff);
+      out.push({
+        x: px,
+        z: pz,
+        rotationY: Math.round(rotationY * 10) / 10,
+        end: Math.min(s, len - s),
+      });
+    };
+    // Pitch-exact slots anchored to both ends: neighbours tile with exactly
+    // the placement gap between them (a 10cm grid cannot hit that pitch).
+    const pitch = alongWall * 2 + PLACEMENT_GAP_CM;
+    for (let s = alongWall + 2; s <= len - alongWall - 2 + 1e-6; s += pitch) {
+      place(s);
+    }
+    for (let s = len - alongWall - 2; s >= alongWall + 2 - 1e-6; s -= pitch) {
+      place(s);
+    }
+    // Fine 10cm spacing for leftover holes between pitched neighbours.
+    for (let s = alongWall + 2; s <= len - alongWall - 2; s += 10) {
+      place(s);
+    }
+  }
+  return out;
 }
 
 export function snapToGrid(valueCm: number, stepCm = SNAP_CM): number {
