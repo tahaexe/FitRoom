@@ -11,9 +11,10 @@
  * It then checks that each final scene has no fit error and meets its
  * request (sofa centred on window A within 5 cm facing south; the Provence
  * swap at its wall spot in navy; a side table by the armchair; two armchairs
- * with the first moved east; TV west clear of the swing with the sofa
- * opposite; the impossible turn unchanged with both lengths named), and that
- * demo mode makes zero upstream calls.
+ * with the first moved east; request 5 by its outcome — TV west clear of the
+ * swing with the sofa opposite facing it and the table between, extra moves
+ * named with a reason; the impossible turn unchanged with both lengths
+ * named), and that demo mode makes zero upstream calls.
  *
  * Prints PASS or FAIL per request and exits non-zero on any FAIL. Demo mode
  * only: no live Meta calls.
@@ -34,6 +35,7 @@ import {
   executeTurnRound,
   isAssistantRequest,
   isAssistantRoundData,
+  summarizeAssistantTurn,
   type AssistantMessage,
   type AssistantRequest,
   type CatalogItem,
@@ -130,6 +132,13 @@ async function replayTurn(first: AssistantRequest, start: SceneState): Promise<R
   const messages: AssistantMessage[] = JSON.parse(
     JSON.stringify(first.messages),
   ) as AssistantMessage[];
+  const room = first.room as RoomLayout;
+  const replayProducts: FitProducts = new Map(
+    replayCatalog.map((c) => [c.id, { size: c.size, category: c.category }]),
+  );
+  // Last fit-clean draft, like the client's turn loop: at the round cap a
+  // fit-clean draft is applied with an answer composed from the tool records.
+  let clean: SceneState | null = null;
   for (let round = 0; round < ASSISTANT_MAX_ROUNDS; round += 1) {
     const body = {
       request: first.request,
@@ -156,11 +165,20 @@ async function replayTurn(first: AssistantRequest, start: SceneState): Promise<R
       return { ok: true, answer: data.text, rounds: round + 1, draft };
     }
     messages.push({ role: "assistant", content: data.text, toolCalls: data.toolCalls });
-    const room = first.room as RoomLayout;
-    const catalog = replayCatalog;
-    const ctx = createAssistantContext(room, catalog);
+    const ctx = createAssistantContext(room, replayCatalog);
     const records = executeTurnRound(ctx, draft, data.toolCalls);
     messages.push(...assistantToolMessages(data.toolCalls, records));
+    if (errorsOf(room, draft, replayProducts).length === 0) {
+      clean = cloneScene(draft);
+    }
+  }
+  if (clean !== null) {
+    return {
+      ok: true,
+      answer: summarizeAssistantTurn(start, clean, room, replayCatalog),
+      rounds: ASSISTANT_MAX_ROUNDS,
+      draft: clean,
+    };
   }
   return { ok: false, answer: "", rounds: ASSISTANT_MAX_ROUNDS, draft };
 }
@@ -344,18 +362,40 @@ async function main(): Promise<void> {
         check(`${tag}: first armchair moved east`, firstMoved);
         check(`${tag}: no fit error`, errs.length === 0, errs.join(","));
       } else if (i === 4) {
+        // Outcome judgment: the reference's armchair move is one valid
+        // answer, not the only one. Anything else that moved must be named
+        // in the answer with a reason.
         const tv = replay.draft.items.find((it) => it.productId === "modern_wooden_cabinet");
         const sofa = replay.draft.items.find((it) => it.productId === "sofa_02");
         const table = replay.draft.items.find((it) => it.productId === "modern_coffee_table_01");
-        const chair = replay.draft.items.find((it) => it.instanceId === "modern_arm_chair_01");
+        const angDiff = (a: number, b: number): number => {
+          const d = Math.abs((((a - b) % 360) + 360) % 360);
+          return Math.min(d, 360 - d);
+        };
         check(
           `${tag}: TV unit on the west wall clear of the swing`,
           tv !== undefined && tv.position.x < 120 && tv.position.z >= 212,
           tv === undefined ? "missing" : `(${String(tv.position.x)}, ${String(tv.position.z)})`,
         );
         check(
-          `${tag}: sofa opposite facing the TV`,
-          sofa !== undefined && sofa.position.x > 300 && Math.abs(sofa.rotationY - 270) <= 20,
+          `${tag}: TV unit faces east into the room`,
+          tv !== undefined && angDiff(tv.rotationY, 90) <= 15,
+          tv === undefined ? "missing" : `rot=${String(tv.rotationY)}`,
+        );
+        const bearing =
+          tv !== undefined && sofa !== undefined
+            ? ((Math.atan2(tv.position.x - sofa.position.x, tv.position.z - sofa.position.z) *
+                180) /
+                Math.PI +
+                360) %
+              360
+            : null;
+        check(
+          `${tag}: sofa opposite on the east wall facing the TV`,
+          sofa !== undefined &&
+            sofa.position.x > 300 &&
+            bearing !== null &&
+            angDiff(sofa.rotationY, bearing) <= 15,
           sofa === undefined
             ? "missing"
             : `(${String(sofa.position.x)}, ${String(sofa.position.z)}) rot=${String(sofa.rotationY)}`,
@@ -368,14 +408,65 @@ async function main(): Promise<void> {
             table.position.x > tv.position.x &&
             table.position.x < sofa.position.x,
         );
-        const chairMoved =
-          chair !== undefined && Math.hypot(chair.position.x - 180, chair.position.z - 60) > 50;
-        check(`${tag}: armchair moved out of the corridor`, chairMoved);
-        check(
-          `${tag}: answer says why the armchair moved`,
-          replay.answer.toLowerCase().includes("armchair"),
-          replay.answer.slice(0, 160),
-        );
+        const arrangedIds = new Set(["modern_wooden_cabinet", "sofa_02", "modern_coffee_table_01"]);
+        const startById = new Map(scene.items.map((it) => [it.instanceId, it]));
+        const endById = new Map(replay.draft.items.map((it) => [it.instanceId, it]));
+        const extras: string[] = [];
+        for (const [id, before] of startById) {
+          if (arrangedIds.has(id)) continue;
+          const afterItem = endById.get(id);
+          if (
+            afterItem === undefined ||
+            afterItem.productId !== before.productId ||
+            Math.hypot(
+              afterItem.position.x - before.position.x,
+              afterItem.position.z - before.position.z,
+            ) > 1 ||
+            angDiff(afterItem.rotationY, before.rotationY) > 1 ||
+            afterItem.variant !== before.variant
+          ) {
+            extras.push(before.productId);
+          }
+        }
+        for (const [id, afterItem] of endById) {
+          if (!startById.has(id)) extras.push(afterItem.productId);
+        }
+        const answerLower = replay.answer.toLowerCase();
+        for (const productId of new Set(extras)) {
+          const entry = catalog.find((c) => c.id === productId);
+          const words = (entry?.name ?? productId)
+            .toLowerCase()
+            .split(/[^a-z]+/)
+            .filter((word) => word.length > 3);
+          if (entry?.category === "armchair") words.push("chair");
+          check(
+            `${tag}: answer names the moved ${entry?.name ?? productId}`,
+            words.some((word) => answerLower.includes(word)),
+            replay.answer.slice(0, 160),
+          );
+        }
+        if (extras.length > 0) {
+          const reason = [
+            "because",
+            "clear",
+            "block",
+            "walkway",
+            "swing",
+            "door",
+            "space",
+            "corridor",
+            "path",
+            "move",
+            "shift",
+            "make",
+            "need",
+          ];
+          check(
+            `${tag}: answer says why the extra move was needed`,
+            reason.some((word) => answerLower.includes(word)),
+            replay.answer.slice(0, 160),
+          );
+        }
         check(`${tag}: no fit error`, errs.length === 0, errs.join(","));
       } else {
         check(

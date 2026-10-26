@@ -37,6 +37,8 @@ export interface UpstreamResult {
   /** The route's response payload (stored in cache/demo/recorded files). */
   data: unknown;
   usage: TokenUsage;
+  /** The completion's finish reason (`length` when cut by `max_tokens`). */
+  finishReason?: string | null;
 }
 
 export interface SparkCallOptions {
@@ -137,7 +139,8 @@ export async function callSpark(
   const toolCalls = sparkToolCalls(message);
   const data: Record<string, unknown> = { text };
   if (toolCalls.length > 0) data["toolCalls"] = toolCalls;
-  return { data, usage: usageFromUpstream(record["usage"], 0) };
+  const finishReason = typeof first["finish_reason"] === "string" ? first["finish_reason"] : null;
+  return { data, usage: usageFromUpstream(record["usage"], 0), finishReason };
 }
 
 function dataUrlJpeg(bytes: Uint8Array): string {

@@ -10,8 +10,9 @@
  * Upstream: the pasted system prompt plus the room description go to Muse
  * Spark with the pasted `tools` and `max_tokens` 8000. The answer is one
  * round: `{ text, toolCalls }` — tool calls (if any) for the client to run
- * on its draft copy, else the final answer text. One retry on an empty
- * round, then a friendly error.
+ * on its draft copy, else the final answer text. A round cut by `max_tokens`
+ * (finish reason `length`) is retried once, as is an empty round, then a
+ * friendly error.
  */
 
 import {
@@ -27,7 +28,10 @@ import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
+import { buildAssistantDemoRequests } from "../assistant-demo.js";
 import { META_MODELS } from "../config.js";
+import { readDemoStore } from "../meta/demo.js";
+import { gatewayKey } from "../meta/keys.js";
 import {
   callSpark,
   type ChatMessage,
@@ -95,16 +99,24 @@ async function callAssistantRound(
   input: AssistantRequest,
 ): Promise<UpstreamResult> {
   const messages: ChatMessage[] = buildAssistantUpstreamMessages(input, loadCatalog());
-  for (let attempt = 0; attempt < 2; attempt += 1) {
+  let lengthRetried = false;
+  let emptyRetried = false;
+  for (;;) {
     const result = await callSpark(apiKey, {
       messages,
       tools: ASSISTANT_TOOLS,
       maxTokens: ASSISTANT_MAX_TOKENS,
     });
+    if (result.finishReason === "length" && !lengthRetried) {
+      lengthRetried = true;
+      continue;
+    }
     const round = parseRound(result.data);
     if (round !== null && (round.text.trim() !== "" || round.toolCalls.length > 0)) {
       return { data: round, usage: result.usage };
     }
+    if (emptyRetried) break;
+    emptyRetried = true;
   }
   throw new UpstreamFriendlyError(ASSISTANT_FRIENDLY_ERROR);
 }
@@ -120,12 +132,41 @@ function parseAssistantBody(body: unknown): ParsedBody | { error: string } {
   return { input };
 }
 
+/**
+ * Key input for the demo store, cache and caps: the canonical request with
+ * the advisory `ready` line stripped from tool results, so a turn recorded
+ * before that line existed still replays (the line never changes the draft).
+ */
+function assistantKeyInput(input: unknown): unknown {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) return input;
+  const record = input as Record<string, unknown>;
+  if (!Array.isArray(record["messages"])) return input;
+  const messages = (record["messages"] as unknown[]).map((entry) => {
+    if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return entry;
+    const message = entry as Record<string, unknown>;
+    if (message["role"] !== "tool" || typeof message["content"] !== "string") return entry;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(message["content"]) as unknown;
+    } catch {
+      return entry;
+    }
+    if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return entry;
+    const result = parsed as Record<string, unknown>;
+    if (!("ready" in result)) return entry;
+    const stripped = { ...result };
+    delete stripped["ready"];
+    return { ...message, content: JSON.stringify(stripped) };
+  });
+  return { ...record, messages };
+}
+
 export const assistantDef: RouteDef = {
   route: "assistant",
   model: META_MODELS.spark,
   liveReady: true,
   parseBody: parseAssistantBody,
-  keyInput: (input: unknown) => input,
+  keyInput: assistantKeyInput,
   upstream: async (apiKey: string, input: unknown): Promise<UpstreamResult> =>
     callAssistantRound(apiKey, input as AssistantRequest),
 };
@@ -133,5 +174,15 @@ export const assistantDef: RouteDef = {
 export function assistantRoutes(deps: PipelineDeps): Hono {
   const app = new Hono();
   app.post("/assistant", (c) => serveGatewayRequest(c, deps, assistantDef));
+  app.get("/assistant/demo-chips", (c) => {
+    const requests: string[] = [];
+    for (const first of buildAssistantDemoRequests()) {
+      const key = gatewayKey(assistantDef.route, assistantDef.model, assistantDef.keyInput(first));
+      if (readDemoStore(deps.config.dataDir, assistantDef.route, assistantDef.model, key)) {
+        requests.push(first.request);
+      }
+    }
+    return c.json({ status: "ok", requests });
+  });
   return app;
 }
