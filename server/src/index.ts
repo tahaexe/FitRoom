@@ -1,7 +1,7 @@
 import "dotenv/config";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { extname, resolve, sep } from "node:path";
+import { extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { isHealthResponse, type HealthResponse } from "@fitroom/shared";
@@ -43,15 +43,24 @@ function readPort(): number {
 }
 
 const MIME_TYPES: Record<string, string> = {
+  ".avif": "image/avif",
+  ".bin": "application/octet-stream",
   ".css": "text/css; charset=utf-8",
+  ".glb": "model/gltf-binary",
+  ".gltf": "model/gltf+json; charset=utf-8",
+  ".hdr": "application/octet-stream",
   ".html": "text/html; charset=utf-8",
   ".ico": "image/x-icon",
+  ".jpeg": "image/jpeg",
+  ".jpg": "image/jpeg",
   ".js": "text/javascript; charset=utf-8",
   ".json": "application/json; charset=utf-8",
   ".map": "application/json; charset=utf-8",
   ".png": "image/png",
   ".svg": "image/svg+xml",
   ".wasm": "application/wasm",
+  ".webp": "image/webp",
+  ".woff": "font/woff",
   ".woff2": "font/woff2",
 };
 
@@ -71,9 +80,10 @@ const clientIndexFile = resolve(clientDistDir, "index.html");
 if (existsSync(clientIndexFile)) {
   app.get("/*", async (c) => {
     const pathname = new URL(c.req.url).pathname;
-    const relative = decodeURIComponent(pathname).replace(/^\/+/, "");
-    const candidate = resolve(clientDistDir, relative);
-    const isInside = candidate === clientDistDir || candidate.startsWith(clientDistDir + sep);
+    const relativePath = decodeURIComponent(pathname).replace(/^\/+/, "");
+    const candidate = resolve(clientDistDir, relativePath);
+    const relToDist = relative(clientDistDir, candidate);
+    const isInside = relToDist !== "" && relToDist !== ".." && !relToDist.startsWith(`..${sep}`);
     const hasExtension = extname(candidate) !== "";
     let filePath: string | null = null;
     if (isInside && hasExtension && existsSync(candidate)) {
