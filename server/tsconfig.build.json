@@ -4,6 +4,8 @@
     "noEmit": false,
     "declaration": false,
     "declarationMap": false,
-    "sourceMap": false
-  }
+    "sourceMap": false,
+    "rootDir": "src"
+  },
+  "include": ["src"]
 }

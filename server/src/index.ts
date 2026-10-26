@@ -6,10 +6,12 @@ import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { isHealthResponse, type HealthResponse } from "@fitroom/shared";
 import { Hono } from "hono";
-
-const metaApiKey = process.env["META_API_KEY"] ?? "";
-// Reserved for later AI features. Never log or expose this value.
-void metaApiKey;
+import { loadGatewayConfig } from "./config.js";
+import { createCapsState } from "./meta/caps.js";
+import type { PipelineDeps } from "./meta/pipeline.js";
+import { assistantRoutes } from "./routes/assistant.js";
+import { recommendRoutes } from "./routes/recommend.js";
+import { renderRoutes } from "./routes/render.js";
 
 function readServerVersion(): string {
   const fromNpm = process.env["npm_package_version"];
@@ -73,6 +75,15 @@ app.get("/api/health", (c) => {
   }
   return c.json(payload);
 });
+
+// Small, safe Meta-model gateway: demo store, cache, caps, upstream, metering.
+const gatewayDeps: PipelineDeps = {
+  config: loadGatewayConfig(),
+  caps: createCapsState(),
+};
+app.route("/api", recommendRoutes(gatewayDeps));
+app.route("/api", assistantRoutes(gatewayDeps));
+app.route("/api", renderRoutes(gatewayDeps));
 
 const clientDistDir = fileURLToPath(new URL("../../client/dist/", import.meta.url));
 const clientIndexFile = resolve(clientDistDir, "index.html");
