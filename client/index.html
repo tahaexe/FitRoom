@@ -9,9 +9,38 @@
   <body>
     <header class="top-bar">
       <span class="top-bar-title">FitRoom</span>
-      <span id="api-status" class="api-status" data-state="checking">API: checking…</span>
+      <div class="top-bar-actions">
+        <button id="tool-undo" type="button" title="Undo (Ctrl+Z)">Undo</button>
+        <button id="tool-credits" type="button">Credits</button>
+        <span id="api-status" class="api-status" data-state="checking">API: checking…</span>
+      </div>
     </header>
-    <main id="scene-container" aria-label="True-scale 3D fitting room"></main>
+    <aside id="catalog" aria-label="Furniture catalog"></aside>
+    <main id="scene-container" aria-label="True-scale 3D fitting room">
+      <div id="size-tag" class="size-tag" style="display: none"></div>
+    </main>
+    <aside id="inspector" aria-label="Selection inspector"></aside>
+    <footer class="bottom-toolbar">
+      <button id="tool-orbit" type="button" data-active="true">Orbit</button>
+      <button id="tool-plan" type="button" data-active="false">Plan</button>
+      <button id="tool-rot-left" type="button" title="Rotate −15°">⟲ 15°</button>
+      <button id="tool-rot-right" type="button" title="Rotate +15° (Shift+R: 1°)">⟳ 15°</button>
+      <button id="tool-delete" type="button" title="Delete selection (Del)">Delete</button>
+      <span id="measure-readout" class="measure" aria-live="polite"></span>
+      <span id="fit-status" class="fit-status" data-state="good">Fit: all clear</span>
+    </footer>
+    <dialog id="credits-dialog" aria-label="Asset credits">
+      <h2>Credits</h2>
+      <p>All 3D and texture assets are CC0-1.0 (public domain, courtesy credit):</p>
+      <ul>
+        <li>Furniture models: Poly Haven contributors (CC0).</li>
+        <li>SheenChair sample model: Khronos Group (CC0).</li>
+        <li>PBR surfaces: ambientCG (CC0).</li>
+        <li>Studio HDRI “lebombo”: Poly Haven (CC0).</li>
+      </ul>
+      <p>Full per-file credits live in CREDITS.md at the repo root.</p>
+      <form method="dialog"><button type="submit">Close</button></form>
+    </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>
