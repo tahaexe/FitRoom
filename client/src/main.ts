@@ -33,6 +33,13 @@ const CATALOG_MAP = new Map<string, CatalogItem>(CATALOG.map((c) => [c.id, c]));
 const MAX_PIXEL_RATIO = 2;
 const MIN_POLAR = 0.12;
 const MAX_POLAR = Math.PI / 2 - 0.03;
+// Reduced-resolution orbit on fill-rate-limited GPUs: while the camera moves,
+// render at baseRatio * orbitScale, starting at 0.75 and adapting between
+// 0.5 and 1.0 so frames stay under budget. Settles with one full-res frame.
+const ORBIT_START_SCALE = 0.75;
+const ORBIT_MIN_SCALE = 0.5;
+const ORBIT_MAX_SCALE = 1.0;
+const ORBIT_FRAME_BUDGET_MS = 16;
 
 function apiPill(): HTMLElement | null {
   return document.getElementById("api-status");
@@ -104,13 +111,19 @@ class FitRoomApp {
   /** Render-on-demand: a queued rAF id (0 = none) plus a shadow refresh flag. */
   private rafId = 0;
   private shadowNeedsUpdate = true;
+  /** Adaptive orbit resolution: full pixel ratio, current scale, motion flag. */
+  private basePixelRatio = 1;
+  private orbitScale = ORBIT_MAX_SCALE;
+  private orbiting = false;
+  private orbitEmaMs = 0;
 
   constructor(container: HTMLElement) {
     this.container = container;
     this.store = new SceneStore(ROOM.id);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+    this.basePixelRatio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
+    this.renderer.setPixelRatio(this.basePixelRatio);
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(this.renderer.domElement);
 
@@ -671,9 +684,28 @@ class FitRoomApp {
     this.planCam.left = -this.planCam.top * (w / h);
     this.planCam.right = this.planCam.top * (w / h);
     this.planCam.updateProjectionMatrix();
-    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
+    this.basePixelRatio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
+    this.renderer.setPixelRatio(this.basePixelRatio * this.orbitScale);
     this.renderer.setSize(w, h);
     this.requestRender();
+  }
+
+  /** Apply a clamped orbit scale (no-op when unchanged). */
+  private setOrbitScale(scale: number): void {
+    const clamped = Math.min(ORBIT_MAX_SCALE, Math.max(ORBIT_MIN_SCALE, scale));
+    if (clamped === this.orbitScale) return;
+    this.orbitScale = clamped;
+    this.renderer.setPixelRatio(this.basePixelRatio * this.orbitScale);
+  }
+
+  /** Nudge the orbit scale so the frame cost stays under budget. */
+  private adaptOrbitScale(costMs: number): void {
+    this.orbitEmaMs = this.orbitEmaMs === 0 ? costMs : this.orbitEmaMs * 0.8 + costMs * 0.2;
+    if (this.orbitEmaMs > ORBIT_FRAME_BUDGET_MS + 0.5) {
+      this.setOrbitScale(this.orbitScale - 0.1);
+    } else if (this.orbitEmaMs < ORBIT_FRAME_BUDGET_MS - 4) {
+      this.setOrbitScale(this.orbitScale + 0.05);
+    }
   }
 
   /** Dollhouse: hide the 2 walls nearest the camera (orbit mode only). */
@@ -720,11 +752,18 @@ class FitRoomApp {
   }
 
   private frame(): void {
+    const t0 = performance.now();
     // Never below the floor.
     if (this.orbitCam.position.y < 0.1) this.orbitCam.position.y = 0.1;
     // OrbitControls.update() returns true while the camera is still moving
     // (including damping glide): keep drawing until it settles, then stop.
     const moved = this.controls.update();
+    if (moved && !this.orbiting) {
+      // Camera in motion: drop to a reduced pixel ratio first, then adapt.
+      this.orbiting = true;
+      this.orbitEmaMs = 0;
+      this.setOrbitScale(ORBIT_START_SCALE);
+    }
     this.updateDollhouse();
     if (this.outline !== null) this.outline.update();
     if (this.selectedId !== null) {
@@ -749,7 +788,15 @@ class FitRoomApp {
       this.shadowNeedsUpdate = false;
     }
     this.renderer.render(this.scene, this.activeCamera());
-    if (moved) this.requestRender();
+    if (this.orbiting) this.adaptOrbitScale(performance.now() - t0);
+    if (moved) {
+      this.requestRender();
+    } else if (this.orbiting) {
+      // Camera settled: one full-resolution frame, then idle draws nothing.
+      this.orbiting = false;
+      this.setOrbitScale(ORBIT_MAX_SCALE);
+      this.requestRender();
+    }
   }
 }
 
