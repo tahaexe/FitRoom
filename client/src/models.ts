@@ -53,7 +53,6 @@ interface VariantMapping {
 interface SheenEntry {
   parser: GLTFParser;
   variants: string[];
-  meshMappings: Map<string, VariantMapping[]>;
 }
 
 const sheenCache = new Map<string, SheenEntry>();
@@ -123,18 +122,18 @@ function indexSheenVariants(productId: string, parser: GLTFParser): void {
   const json = parser.json as VariantsJson;
   const variants =
     json.extensions?.KHR_materials_variants?.variants?.map((v) => v.name ?? "") ?? [];
-  const meshMappings = new Map<string, VariantMapping[]>();
-  for (const mesh of json.meshes ?? []) {
-    if (mesh.name === undefined) continue;
-    const mappings: VariantMapping[] = [];
-    for (const prim of mesh.primitives ?? []) {
-      for (const m of prim.extensions?.KHR_materials_variants?.mappings ?? []) {
-        mappings.push({ material: m.material, variants: [...m.variants] });
-      }
-    }
-    if (mappings.length > 0) meshMappings.set(mesh.name, mappings);
-  }
-  sheenCache.set(productId, { parser, variants, meshMappings });
+  sheenCache.set(productId, { parser, variants });
+}
+
+/** Variant mappings of one glTF primitive (empty when it has no switch). */
+function primitiveMappings(
+  parser: GLTFParser,
+  meshIndex: number,
+  primIndex: number,
+): VariantMapping[] {
+  const json = parser.json as VariantsJson;
+  const prim = json.meshes?.[meshIndex]?.primitives?.[primIndex];
+  return prim?.extensions?.KHR_materials_variants?.mappings ?? [];
 }
 
 export function loadModel(item: CatalogItem): Promise<THREE.Group> {
@@ -159,9 +158,12 @@ export function loadModel(item: CatalogItem): Promise<THREE.Group> {
 
 /**
  * SheenChair variant switch using the model's real KHR_materials_variants
- * materials (never a tint): each mesh's variant mapping selects a material
- * index, loaded via `parser.getDependency('material', index)` and assigned —
- * as in three's official `webgl_loader_gltf_variants` example.
+ * materials (never a tint): each primitive's variant mapping selects a
+ * material index, loaded via `parser.getDependency('material', index)` and
+ * assigned — as in three's official `webgl_loader_gltf_variants` example.
+ * Primitives are located through the loader's own `associations` (mesh and
+ * primitive index), zipped from the cached source root onto the instance, so
+ * multi-primitive meshes resolve to their own material.
  */
 export async function applySheenVariant(
   root: THREE.Object3D,
@@ -169,17 +171,33 @@ export async function applySheenVariant(
   variantName: string,
 ): Promise<void> {
   const entry = sheenCache.get(item.id);
-  if (entry === undefined) return;
+  const source = loadCache.get(item.id);
+  if (entry === undefined || source === undefined) return;
   const variantIndex = entry.variants.indexOf(variantName);
   if (variantIndex === -1) return;
-  const jobs: Array<Promise<void>> = [];
+  // Object3D.clone() preserves traversal order: zip source meshes with the
+  // instance's meshes to recover each primitive's identity.
+  const isMesh = (obj: THREE.Object3D): obj is THREE.Mesh =>
+    "material" in obj && obj.material !== undefined;
+  const sourceMeshes: THREE.Mesh[] = [];
+  source.traverse((obj) => {
+    if (isMesh(obj)) sourceMeshes.push(obj);
+  });
+  const cloneMeshes: THREE.Mesh[] = [];
   root.traverse((obj) => {
-    const mesh = obj as THREE.Mesh;
-    if (!("material" in mesh) || mesh.material === undefined) return;
-    const mappings = entry.meshMappings.get(mesh.name);
-    if (mappings === undefined) return;
+    if (isMesh(obj)) cloneMeshes.push(obj);
+  });
+  const jobs: Array<Promise<void>> = [];
+  for (let i = 0; i < cloneMeshes.length; i += 1) {
+    const mesh = cloneMeshes[i];
+    const srcMesh = sourceMeshes[i];
+    if (mesh === undefined || srcMesh === undefined) continue;
+    const ref = entry.parser.associations.get(srcMesh) as
+      { meshes?: number; primitives?: number } | undefined;
+    if (ref?.meshes === undefined || ref?.primitives === undefined) continue;
+    const mappings = primitiveMappings(entry.parser, ref.meshes, ref.primitives);
     const hit = mappings.find((m) => m.variants.includes(variantIndex));
-    if (hit === undefined) return;
+    if (hit === undefined) continue;
     jobs.push(
       entry.parser.getDependency("material", hit.material).then((resolved: unknown) => {
         const material = resolved as THREE.Material;
@@ -191,7 +209,7 @@ export async function applySheenVariant(
         material.needsUpdate = true;
       }),
     );
-  });
+  }
   await Promise.all(jobs);
 }
 
