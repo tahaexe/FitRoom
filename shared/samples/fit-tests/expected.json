@@ -1,0 +1,14 @@
+{
+  "door-swing": [
+    { "itemIds": ["side_table_01"], "type": "door-swing" },
+    { "itemIds": ["side_table_01"], "type": "walkway-entrance" }
+  ],
+  "outside": [{ "itemIds": ["wooden_display_shelves_01"], "type": "outside" }],
+  "overlap": [{ "itemIds": ["modern_coffee_table_01", "sofa_02"], "type": "overlap" }],
+  "shallow-boxed": [{ "itemIds": ["Sofa_01"], "type": "walkway" }],
+  "shallow-wall": [],
+  "valid": [],
+  "walkway-70": [{ "itemIds": ["sofa_02"], "type": "walkway" }],
+  "walkway-78": [{ "itemIds": ["sofa_02"], "type": "walkway" }],
+  "walkway-82": []
+}

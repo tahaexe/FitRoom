@@ -1,0 +1,52 @@
+{
+  "camera": {
+    "mode": "orbit",
+    "position": { "x": 3.4, "y": 3.1, "z": 4.2 },
+    "target": { "x": 2.1, "y": 0, "z": 1.8 }
+  },
+  "items": [
+    {
+      "instanceId": "Sofa_01",
+      "position": { "x": 32.9, "z": 225 },
+      "productId": "Sofa_01",
+      "rotationY": 90,
+      "variant": "Stone"
+    },
+    {
+      "instanceId": "modern_arm_chair_01",
+      "position": { "x": 180, "z": 60 },
+      "productId": "modern_arm_chair_01",
+      "rotationY": 0,
+      "variant": "default"
+    },
+    {
+      "instanceId": "modern_coffee_table_01",
+      "position": { "x": 126, "z": 225 },
+      "productId": "modern_coffee_table_01",
+      "rotationY": 90,
+      "variant": "default"
+    },
+    {
+      "instanceId": "modern_wooden_cabinet",
+      "position": { "x": 394, "z": 200 },
+      "productId": "modern_wooden_cabinet",
+      "rotationY": 270,
+      "variant": "default"
+    },
+    {
+      "instanceId": "side_table_01_1",
+      "position": { "x": 27.5, "z": 123.95 },
+      "productId": "side_table_01",
+      "rotationY": 0,
+      "variant": "default"
+    },
+    {
+      "instanceId": "side_table_01_2",
+      "position": { "x": 27.5, "z": 326.05 },
+      "productId": "side_table_01",
+      "rotationY": 0,
+      "variant": "default"
+    }
+  ],
+  "roomId": "living-420x360"
+}

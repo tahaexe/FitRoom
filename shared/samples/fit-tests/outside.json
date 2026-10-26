@@ -1,0 +1,45 @@
+{
+  "camera": {
+    "mode": "orbit",
+    "position": { "x": 3.4, "y": 3.1, "z": 4.2 },
+    "target": { "x": 2.1, "y": 0, "z": 1.8 }
+  },
+  "items": [
+    {
+      "instanceId": "modern_arm_chair_01",
+      "position": { "x": 180, "z": 60 },
+      "productId": "modern_arm_chair_01",
+      "rotationY": 0,
+      "variant": "default"
+    },
+    {
+      "instanceId": "modern_coffee_table_01",
+      "position": { "x": 150, "z": 200 },
+      "productId": "modern_coffee_table_01",
+      "rotationY": 90,
+      "variant": "default"
+    },
+    {
+      "instanceId": "modern_wooden_cabinet",
+      "position": { "x": 394, "z": 200 },
+      "productId": "modern_wooden_cabinet",
+      "rotationY": 270,
+      "variant": "default"
+    },
+    {
+      "instanceId": "sofa_02",
+      "position": { "x": 41, "z": 200 },
+      "productId": "sofa_02",
+      "rotationY": 90,
+      "variant": "default"
+    },
+    {
+      "instanceId": "wooden_display_shelves_01",
+      "position": { "x": 300, "z": 13.5 },
+      "productId": "wooden_display_shelves_01",
+      "rotationY": 0,
+      "variant": "default"
+    }
+  ],
+  "roomId": "living-420x360"
+}

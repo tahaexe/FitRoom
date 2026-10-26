@@ -1,0 +1,24 @@
+{
+  "camera": {
+    "mode": "orbit",
+    "position": { "x": 3.4, "y": 3.1, "z": 4.2 },
+    "target": { "x": 2.1, "y": 0, "z": 1.8 }
+  },
+  "items": [
+    {
+      "instanceId": "modern_wooden_cabinet",
+      "position": { "x": 150, "z": 200 },
+      "productId": "modern_wooden_cabinet",
+      "rotationY": 90,
+      "variant": "default"
+    },
+    {
+      "instanceId": "sofa_02",
+      "position": { "x": 379, "z": 180 },
+      "productId": "sofa_02",
+      "rotationY": 270,
+      "variant": "default"
+    }
+  ],
+  "roomId": "living-420x360"
+}
