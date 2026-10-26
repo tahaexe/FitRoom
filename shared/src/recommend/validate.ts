@@ -79,6 +79,17 @@ export function recommendRequestError(body: unknown): string | null {
       return "The spot needs a wall, start_cm and end_cm.";
     }
   }
+  if (query["replace"] !== undefined) {
+    const replace = query["replace"];
+    if (
+      !isRecord(replace) ||
+      typeof replace["productId"] !== "string" ||
+      !isNumberPair(replace["centre_cm"]) ||
+      typeof replace["rotationY"] !== "number"
+    ) {
+      return "The replacement needs a productId, centre_cm and rotationY.";
+    }
+  }
   const freeSpace = body["freeSpace"];
   if (
     !isRecord(freeSpace) ||

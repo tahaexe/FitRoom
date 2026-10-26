@@ -53,9 +53,14 @@ export type CandidateSpot =
       kind: "area";
       areaId: string;
       area_cm: [number, number];
+      /** For seat spots ("seat-front", "seat-side"): the tried gap in cm. */
       spare_cm: number;
       centre_cm: [number, number];
       rotationY: number;
+      /** Seat spots only: the gap tried in front of / beside the seat, cm. */
+      gap_cm?: number;
+      /** Seat spots only: the anchor seat's product name. */
+      seat?: string;
     };
 
 /** A product whose footprint fits at least one run or area, by size. */
@@ -76,10 +81,22 @@ export interface RecommendQuery {
   category: RecommendCategory;
   budget_usd?: number;
   /**
-   * "What fits here?": restrict candidates to this free wall run (wall id
-   * plus start/end in cm, as listed by the free-space analysis).
+   * "What fits here?": restrict candidates to this free wall run
+   * (people-friendly wall name plus start/end in cm, as listed by the
+   * free-space analysis).
    */
   spot?: { wall: string; start_cm: number; end_cm: number };
+  /**
+   * "Find a replacement": same-category products (minus the selected one)
+   * that fit where the selected item stands — same centre and orientation,
+   * or slid along its wall run — with the selected instance left out of
+   * the fit check.
+   */
+  replace?: {
+    productId: string;
+    centre_cm: [number, number];
+    rotationY: number;
+  };
 }
 
 /** Canonical structured body of `POST /api/recommend` (plus `live`). */
@@ -200,6 +217,21 @@ export const recommendRequestSchema = {
           required: ["wall", "start_cm", "end_cm"],
           additionalProperties: false,
         },
+        replace: {
+          type: "object",
+          properties: {
+            productId: { type: "string", minLength: 1 },
+            centre_cm: {
+              type: "array",
+              minItems: 2,
+              maxItems: 2,
+              items: { type: "number" },
+            },
+            rotationY: { type: "number" },
+          },
+          required: ["productId", "centre_cm", "rotationY"],
+          additionalProperties: false,
+        },
       },
       required: ["category"],
       additionalProperties: false,
@@ -286,6 +318,8 @@ export const recommendRequestSchema = {
                 items: { type: "number" },
               },
               rotationY: { type: "number" },
+              gap_cm: { type: "number", minimum: 0 },
+              seat: { type: "string", minLength: 1 },
             },
             required: ["kind", "spare_cm", "centre_cm", "rotationY"],
             additionalProperties: false,
