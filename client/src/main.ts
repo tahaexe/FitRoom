@@ -25,6 +25,9 @@ import walkway78Scene from "../../shared/samples/fit-tests/walkway-78.json";
 import walkway82Scene from "../../shared/samples/fit-tests/walkway-82.json";
 import shallowWallScene from "../../shared/samples/fit-tests/shallow-wall.json";
 import shallowBoxedScene from "../../shared/samples/fit-tests/shallow-boxed.json";
+import rotatedOverlapScene from "../../shared/samples/fit-tests/rotated-overlap.json";
+import rotatedOutsideScene from "../../shared/samples/fit-tests/rotated-outside.json";
+import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.json";
 import { CatalogPanel } from "./catalog-ui";
 import { applyVariant, loadModel } from "./models";
 import { PlanOverlay } from "./plan";
@@ -43,7 +46,7 @@ import {
 } from "./state";
 import "./style.css";
 
-/** Dev menu: the nine fit-test scenes, loadable from the bottom toolbar. */
+/** Dev menu: the twelve fit-test scenes, loadable from the bottom toolbar. */
 const TEST_SCENES: Record<string, SceneState> = {
   valid: validScene as unknown as SceneState,
   overlap: overlapScene as unknown as SceneState,
@@ -54,6 +57,9 @@ const TEST_SCENES: Record<string, SceneState> = {
   "walkway-82": walkway82Scene as unknown as SceneState,
   "shallow-wall": shallowWallScene as unknown as SceneState,
   "shallow-boxed": shallowBoxedScene as unknown as SceneState,
+  "rotated-overlap": rotatedOverlapScene as unknown as SceneState,
+  "rotated-outside": rotatedOutsideScene as unknown as SceneState,
+  "rotated-inside": rotatedInsideScene as unknown as SceneState,
 };
 
 const ROOM = roomJson as unknown as RoomLayout;
@@ -157,12 +163,20 @@ class FitRoomApp {
     this.store = new SceneStore(ROOM.id);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    // The app uses only built-in materials, so there are no custom shaders
+    // to validate: skip reading the GL program info log, which software
+    // renderers fill with benign driver notes (precision remarks) that would
+    // otherwise surface as console warnings.
+    this.renderer.debug.checkShaderErrors = false;
     this.basePixelRatio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
     this.renderer.setPixelRatio(this.basePixelRatio);
     this.renderer.setSize(container.clientWidth, container.clientHeight);
     container.appendChild(this.renderer.domElement);
 
-    const aspect = container.clientWidth / Math.max(1, container.clientHeight);
+    // Guarded: a zero-width container (narrow viewport) must never yield a
+    // degenerate plan frustum (left == right collapses the projection to
+    // NaN and every plan label along with it).
+    const aspect = Math.max(1, container.clientWidth) / Math.max(1, container.clientHeight);
     this.orbitCam = new THREE.PerspectiveCamera(50, aspect, 0.05, 200);
     this.orbitCam.position.set(3.4, 3.1, 4.2);
 
@@ -298,7 +312,11 @@ class FitRoomApp {
   private async addItem(item: CatalogItem): Promise<void> {
     // Start the search where the user is looking (camera target on the floor).
     const start = { x: this.controls.target.x * 100, z: this.controls.target.z * 100 };
-    const spot = nearestFreeSpot(item.id, CATALOG_MAP, ROOM, this.store.state, start);
+    // The spot must also pass the fit engine, so nothing lands in the
+    // door's swing or the entrance; otherwise the fewest-errors spot wins.
+    const spot = nearestFreeSpot(item.id, CATALOG_MAP, ROOM, this.store.state, start, (items) =>
+      this.fitEngine.check({ ...this.store.state, items }),
+    );
     const instance: SceneItem = {
       instanceId: makeInstanceId(item.id),
       productId: item.id,
@@ -785,7 +803,7 @@ class FitRoomApp {
   // ---- frame ----
 
   private resize(): void {
-    const w = this.container.clientWidth;
+    const w = Math.max(1, this.container.clientWidth);
     const h = Math.max(1, this.container.clientHeight);
     this.orbitCam.aspect = w / h;
     this.orbitCam.updateProjectionMatrix();
@@ -853,9 +871,15 @@ class FitRoomApp {
     const v = new THREE.Vector3(c.x, box.max.y + 0.12, c.z).project(this.activeCamera());
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
+    const sx = ((v.x + 1) / 2) * w;
+    const sy = ((1 - v.y) / 2) * h;
+    if (!Number.isFinite(sx) || !Number.isFinite(sy)) {
+      this.sizeTag.style.display = "none";
+      return;
+    }
     this.sizeTag.style.display = "block";
-    this.sizeTag.style.left = `${((v.x + 1) / 2) * w}px`;
-    this.sizeTag.style.top = `${((1 - v.y) / 2) * h}px`;
+    this.sizeTag.style.left = `${sx}px`;
+    this.sizeTag.style.top = `${sy}px`;
     this.sizeTag.textContent = `${Math.round(catalogEntry.size.w)}×${Math.round(catalogEntry.size.d)}cm`;
   }
 

@@ -4,6 +4,8 @@ import { cmToMeters } from "@fitroom/shared";
 
 const RED = 0xb3261e;
 const AMBER = 0xe59500;
+/** Vertical pitch between stacked labels sharing one anchor (px). */
+const LABEL_PITCH_PX = 26;
 
 function shortLabel(issue: FitIssue): string {
   switch (issue.type) {
@@ -36,7 +38,7 @@ export class FitOverlay {
   private clearanceNz = 0;
   private boxes = new Map<string, THREE.BoxHelper>();
   private labelLayer: HTMLDivElement;
-  private labels: Array<{ el: HTMLDivElement; at: PlanPoint }> = [];
+  private labels: Array<{ el: HTMLDivElement; at: PlanPoint; stack: number }> = [];
   private groupOf: (id: string) => THREE.Object3D | undefined = () => undefined;
 
   constructor(
@@ -193,16 +195,31 @@ export class FitOverlay {
     }
   }
 
+  /**
+   * One floating label per issue. Issues on the same piece share an anchor
+   * and stack upward (a door-swing + entrance pair shows two labels, never
+   * one); `update` then separates every visible label so none overlap.
+   */
   private rebuildLabels(issues: FitIssue[]): void {
     this.labelLayer.innerHTML = "";
     this.labels = [];
+    const groups = new Map<string, FitIssue[]>();
     for (const issue of issues) {
-      const el = document.createElement("div");
-      el.className = "fit-issue-label";
-      el.dataset["severity"] = issue.severity;
-      el.textContent = `${issue.severity === "error" ? "✕" : "!"} ${shortLabel(issue)}`;
-      this.labelLayer.appendChild(el);
-      this.labels.push({ el, at: { ...issue.location } });
+      const key = issue.itemIds[0] ?? `${issue.location.x},${issue.location.z}`;
+      const list = groups.get(key);
+      if (list === undefined) groups.set(key, [issue]);
+      else list.push(issue);
+    }
+    for (const list of groups.values()) {
+      const anchor = list[0]?.location ?? { x: 0, z: 0 };
+      list.forEach((issue, stack) => {
+        const el = document.createElement("div");
+        el.className = "fit-issue-label";
+        el.dataset["severity"] = issue.severity;
+        el.textContent = `${issue.severity === "error" ? "✕" : "!"} ${shortLabel(issue)}`;
+        this.labelLayer.appendChild(el);
+        this.labels.push({ el, at: { ...anchor }, stack });
+      });
     }
   }
 
@@ -210,15 +227,79 @@ export class FitOverlay {
   update(camera: THREE.Camera, width: number, height: number): void {
     for (const box of this.boxes.values()) box.update();
     const v = new THREE.Vector3();
-    for (const { el, at } of this.labels) {
+    interface Placed {
+      el: HTMLDivElement;
+      x: number;
+      y: number;
+    }
+    const visible: Placed[] = [];
+    for (const { el, at, stack } of this.labels) {
       v.set(cmToMeters(at.x), 0.05, cmToMeters(at.z)).project(camera);
-      if (v.z > 1) {
+      const sx = ((v.x + 1) / 2) * width;
+      const sy = ((1 - v.y) / 2) * height;
+      if (v.z > 1 || !Number.isFinite(sx) || !Number.isFinite(sy)) {
         el.style.display = "none";
         continue;
       }
       el.style.display = "block";
-      el.style.left = `${(((v.x + 1) / 2) * width).toFixed(1)}px`;
-      el.style.top = `${(((1 - v.y) / 2) * height).toFixed(1)}px`;
+      // Stack mates upward so same-anchor labels never cover each other.
+      visible.push({ el, x: sx, y: sy - stack * LABEL_PITCH_PX });
+    }
+    this.separate(visible);
+    for (const p of visible) {
+      p.el.style.left = `${p.x.toFixed(1)}px`;
+      p.el.style.top = `${p.y.toFixed(1)}px`;
+    }
+  }
+
+  /**
+   * Screen-space separation until no two label boxes overlap. Boxes account
+   * for the CSS translate(-50%, -130%) that lifts pills above their anchor.
+   */
+  private separate(placed: Array<{ el: HTMLDivElement; x: number; y: number }>): void {
+    const boxes = new Map<HTMLDivElement, { w: number; h: number }>();
+    const boxOf = (p: {
+      el: HTMLDivElement;
+      x: number;
+      y: number;
+    }): {
+      x0: number;
+      y0: number;
+      x1: number;
+      y1: number;
+    } => {
+      let size = boxes.get(p.el);
+      if (size === undefined) {
+        size = { w: p.el.offsetWidth || 120, h: p.el.offsetHeight || 22 };
+        boxes.set(p.el, size);
+      }
+      return {
+        x0: p.x - size.w / 2,
+        y0: p.y - size.h * 1.3,
+        x1: p.x + size.w / 2,
+        y1: p.y - size.h * 0.3,
+      };
+    };
+    const GAP = 4;
+    for (let round = 0; round < 10; round += 1) {
+      let moved = false;
+      for (let i = 0; i < placed.length; i += 1) {
+        for (let j = i + 1; j < placed.length; j += 1) {
+          const a = placed[i];
+          const b = placed[j];
+          if (a === undefined || b === undefined) continue;
+          const ba = boxOf(a);
+          const bb = boxOf(b);
+          const overlapX = Math.min(ba.x1, bb.x1) - Math.max(ba.x0, bb.x0) + GAP;
+          const overlapY = Math.min(ba.y1, bb.y1) - Math.max(ba.y0, bb.y0) + GAP;
+          if (overlapX <= 0 || overlapY <= 0) continue;
+          moved = true;
+          // Push the lower label down; ties go by document order.
+          if (a.y <= b.y) b.y += overlapY / 2;
+          else a.y += overlapY / 2;
+        }
+      }
+      if (!moved) return;
     }
   }
 }

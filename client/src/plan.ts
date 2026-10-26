@@ -104,6 +104,9 @@ export class PlanOverlay {
     // Screen-space declutter: no label box may overlap another.
     this.separate(spots);
     for (const s of spots) {
+      // Never write NaN coordinates: a failed projection keeps its last good
+      // spot instead of logging an SVG attribute error.
+      if (!Number.isFinite(s.x) || !Number.isFinite(s.y)) continue;
       s.el.setAttribute("x", s.x.toFixed(1));
       s.el.setAttribute("y", s.y.toFixed(1));
     }

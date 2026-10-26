@@ -1,5 +1,6 @@
 import type {
   CatalogItem,
+  FitIssue,
   FitProducts,
   PlanPoint,
   RoomLayout,
@@ -242,12 +243,18 @@ function edgeDist(
  *   dropped) run before the final non-stacking fallback, so items never stack
  *   on one point.
  */
+/** Stable key for comparing fit issues across candidate placements. */
+function issueKey(issue: FitIssue): string {
+  return `${issue.type}|${[...issue.itemIds].sort().join(",")}`;
+}
+
 export function nearestFreeSpot(
   productId: string,
   catalog: Map<string, CatalogItem>,
   room: RoomLayout,
   state: SceneState,
   start?: PlanPoint,
+  fitCheck?: (items: SceneItem[]) => FitIssue[],
 ): FreeSpot {
   const bounds = roomBounds(room);
   const cx = (bounds.minX + bounds.maxX) / 2;
@@ -331,6 +338,65 @@ export function nearestFreeSpot(
       edgeDist(a.x, a.z, bounds) - edgeDist(b.x, b.z, bounds) || dist2(a.x, a.z) - dist2(b.x, b.z),
   );
 
+  // Fit-engine gate: a candidate passes when it introduces no new error
+  // (no overlap, outside, door-swing, entrance or walkway error), so nothing
+  // lands in the door's swing or the entrance. Errors already in the scene
+  // do not block placement; when no spot passes, the spot with the fewest
+  // new errors wins so the problem stays visible.
+  const baseKeys = new Set<string>();
+  if (fitCheck !== undefined) {
+    for (const issue of fitCheck(state.items)) {
+      if (issue.severity === "error") baseKeys.add(issueKey(issue));
+    }
+  }
+  interface Score {
+    fresh: number;
+    swing: number;
+    total: number;
+  }
+  const bestHolder: { current: { spot: FreeSpot; score: Score } | null } = { current: null };
+  const evaluated = new Map<string, Score>();
+  const isBetter = (a: Score, b: Score): boolean =>
+    a.fresh < b.fresh ||
+    (a.fresh === b.fresh && a.swing < b.swing) ||
+    (a.fresh === b.fresh && a.swing === b.swing && a.total < b.total);
+  const consider = (rawX: number, rawZ: number, rotationY: number): FreeSpot | null => {
+    // The item lands on rounded centimetres (see addItem), so the engine
+    // must judge the rounded spot.
+    const x = Math.round(rawX);
+    const z = Math.round(rawZ);
+    if (fitCheck === undefined) return { x, z, rotationY };
+    const cacheKey = `${x}|${z}|${rotationY}`;
+    let score = evaluated.get(cacheKey);
+    if (score === undefined) {
+      const probe: SceneItem = {
+        instanceId: "placement-probe",
+        productId,
+        position: { x, z },
+        rotationY,
+        variant: "",
+      };
+      const errors = fitCheck([...state.items, probe]).filter((i) => i.severity === "error");
+      score = { fresh: 0, swing: 0, total: errors.length };
+      for (const issue of errors) {
+        if (baseKeys.has(issueKey(issue))) continue;
+        score.fresh += 1;
+        // Fresh probe issues always involve the probe (its id is unique), so
+        // these are exactly the spots landing in the swing or the entrance.
+        if (issue.type === "door-swing" || issue.type === "walkway-entrance") {
+          score.swing += 1;
+        }
+      }
+      evaluated.set(cacheKey, score);
+    }
+    if (score.fresh === 0) return { x, z, rotationY };
+    const prev = bestHolder.current;
+    if (prev === null || isBetter(score, prev.score)) {
+      bestHolder.current = { spot: { x, z, rotationY }, score };
+    }
+    return null;
+  };
+
   // Phases 1-2: full 5cm gap. Wall-preferring pieces try the wall slots
   // corners-first (view breaks ties) before the open floor, so consecutive
   // pieces pack instead of stranding each other mid-wall; everything else
@@ -338,20 +404,30 @@ export function nearestFreeSpot(
   const first = prefersWall ? byEndThenView(backed) : orderedAll;
   for (const c of first) {
     if (fits(c.x, c.z, c.rotationY, PLACEMENT_GAP_CM)) {
-      return { x: c.x, z: c.z, rotationY: c.rotationY };
+      const spot = consider(c.x, c.z, c.rotationY);
+      if (spot !== null) return spot;
     }
   }
   if (prefersWall) {
     for (const c of byEdgeThenView) {
-      if (fits(c.x, c.z, 0, PLACEMENT_GAP_CM)) return { x: c.x, z: c.z, rotationY: 0 };
+      if (fits(c.x, c.z, 0, PLACEMENT_GAP_CM)) {
+        const spot = consider(c.x, c.z, 0);
+        if (spot !== null) return spot;
+      }
     }
   }
   // Phases 3-4: exact fit (gap dropped) before giving up on overlaps.
   for (const c of byView(backed)) {
-    if (fits(c.x, c.z, c.rotationY, 0)) return { x: c.x, z: c.z, rotationY: c.rotationY };
+    if (fits(c.x, c.z, c.rotationY, 0)) {
+      const spot = consider(c.x, c.z, c.rotationY);
+      if (spot !== null) return spot;
+    }
   }
   for (const c of prefersWall ? byEdgeThenView : orderedGrid) {
-    if (fits(c.x, c.z, 0, 0)) return { x: c.x, z: c.z, rotationY: 0 };
+    if (fits(c.x, c.z, 0, 0)) {
+      const spot = consider(c.x, c.z, 0);
+      if (spot !== null) return spot;
+    }
   }
 
   // Phase 5 (room genuinely full): deterministic micro-spiral around the view
@@ -370,10 +446,13 @@ export function nearestFreeSpot(
           break;
         }
       }
-      if (!stacked) return { x, z, rotationY: 0 };
+      if (!stacked) {
+        const spot = consider(x, z, 0);
+        if (spot !== null) return spot;
+      }
     }
   }
-  return { x: origin.x + 0.5, z: origin.z, rotationY: 0 };
+  return bestHolder.current?.spot ?? { x: origin.x + 0.5, z: origin.z, rotationY: 0 };
 }
 
 /** Footprint corners inflated by `gapCm` on every side (plan cm). */
