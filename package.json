@@ -1,0 +1,29 @@
+{
+  "name": "fitroom",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "workspaces": [
+    "client",
+    "server",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "npm run build -w @fitroom/shared && concurrently -n client,server -c blue,green \"npm run dev -w @fitroom/client\" \"npm run dev -w @fitroom/server\"",
+    "build": "npm run build -w @fitroom/shared && npm run build -w @fitroom/server && npm run build -w @fitroom/client",
+    "typecheck": "npm run build -w @fitroom/shared && npm run typecheck -w @fitroom/shared && npm run typecheck -w @fitroom/server && npm run typecheck -w @fitroom/client",
+    "lint": "eslint . && prettier --check .",
+    "start": "npm run start -w @fitroom/server"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^10.0.6",
+    "eslint": "^10.13.0",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.10",
+    "typescript-eslint": "^8.72.0"
+  }
+}
