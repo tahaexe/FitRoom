@@ -35,7 +35,7 @@
     "request": {
       "category": "any",
       "spot": {
-        "wall": "wall-3",
+        "wall": "Back wall (window)",
         "start_cm": 240,
         "end_cm": 415
       }
@@ -43,35 +43,35 @@
     "freeSpace": {
       "runs": [
         {
-          "wall": "wall-1",
+          "wall": "Door wall",
           "start_cm": 230,
           "end_cm": 415,
           "length_cm": 185,
           "depth_cm": 78
         },
         {
-          "wall": "wall-2",
+          "wall": "Right wall (window)",
           "start_cm": 5,
           "end_cm": 75,
           "length_cm": 70,
           "depth_cm": 150
         },
         {
-          "wall": "wall-3",
+          "wall": "Back wall (window)",
           "start_cm": 10,
           "end_cm": 85,
           "length_cm": 75,
           "depth_cm": 38
         },
         {
-          "wall": "wall-3",
+          "wall": "Back wall (window)",
           "start_cm": 240,
           "end_cm": 415,
           "length_cm": 175,
           "depth_cm": 70
         },
         {
-          "wall": "wall-4",
+          "wall": "Left wall",
           "start_cm": 10,
           "end_cm": 65,
           "length_cm": 55,
@@ -100,7 +100,7 @@
         "colors": ["black leather"],
         "spot": {
           "kind": "run",
-          "wall": "wall-3",
+          "wall": "Back wall (window)",
           "run_cm": [240, 415],
           "runLength_cm": 175,
           "spare_cm": 86.5,
@@ -117,7 +117,7 @@
         "colors": ["warm wood frame", "stone top"],
         "spot": {
           "kind": "run",
-          "wall": "wall-3",
+          "wall": "Back wall (window)",
           "run_cm": [240, 415],
           "runLength_cm": 175,
           "spare_cm": 54.8,
@@ -134,7 +134,7 @@
         "colors": ["light wood"],
         "spot": {
           "kind": "run",
-          "wall": "wall-3",
+          "wall": "Back wall (window)",
           "run_cm": [240, 415],
           "runLength_cm": 175,
           "spare_cm": 120,
@@ -151,7 +151,7 @@
         "colors": ["light wood", "grey fabric boxes"],
         "spot": {
           "kind": "run",
-          "wall": "wall-3",
+          "wall": "Back wall (window)",
           "run_cm": [240, 415],
           "runLength_cm": 175,
           "spare_cm": 67.2,
@@ -164,21 +164,21 @@
   "response": {
     "recommendations": [
       {
-        "productId": "Ottoman_01",
-        "reason": "Fits your 175 cm run with 86.5 cm to spare; black leather matches sofa for modern mix.",
-        "styleMatch": 0.9
+        "productId": "modern_coffee_table_01",
+        "reason": "Fits Back wall (window) 175 cm run with 54.8 cm to spare; modern match to room and table.",
+        "styleMatch": 1
       },
       {
-        "productId": "modern_coffee_table_01",
-        "reason": "Fits 175 cm run with 54.8 cm to spare; modern style and stone top match existing table.",
-        "styleMatch": 0.85
+        "productId": "Ottoman_01",
+        "reason": "Fits Back wall (window) 175 cm run with 86.5 cm to spare; black leather matches sofa.",
+        "styleMatch": 0.8
       },
       {
         "productId": "wooden_display_shelves_01",
-        "reason": "Fits 175 cm run with 67.2 cm to spare; grey fabric boxes suit neutral modern room.",
+        "reason": "Fits Back wall (window) 175 cm run with 67.2 cm to spare; neutral grey boxes suit room.",
         "styleMatch": 0.6
       }
     ]
   },
-  "time": "2026-10-26T20:49:53.458Z"
+  "time": "2026-10-26T21:09:58.104Z"
 }

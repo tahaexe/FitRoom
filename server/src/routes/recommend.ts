@@ -52,6 +52,10 @@ function userMessage(request: RecommendRequest): string {
     "Rank candidates for this customer request. " +
     "Every figure ending in 'cm' in a reason must match a number from the input JSON " +
     "(copy sizes, run lengths and spare centimetres exactly, up to whole-cm rounding). " +
+    "Walls are named as seen from the doorway (door wall, back wall, left wall, " +
+    "right wall, with ' (window)' when a window is on that wall): cite those exact " +
+    "names in reasons and never write ids like 'wall-1'. " +
+    "Seat-front and seat-side spots name their seat: mention it with the gap. " +
     'When candidates is empty, answer {"recommendations": []} with a short note.\n' +
     JSON.stringify(request)
   );

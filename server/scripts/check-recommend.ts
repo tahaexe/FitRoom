@@ -1,13 +1,21 @@
 /**
  * `npm run check:recommend` — headless recommend check for the demo room.
  *
- * For the demo room and the four demo requests (sofas, coffee tables,
- * shelves, "What fits here?") it builds each request with the shared code,
- * answers it from the demo store through the gateway pipeline in demo mode,
- * places every recommended item at its spot and runs the fit engine
- * (0 errors expected), and checks that every "N cm" in a reason equals a
- * number in the request within 1 cm. Prints PASS or FAIL per item and exits
- * non-zero on any FAIL. Demo mode only: no live Meta calls.
+ * For the demo room and the four demo requests (coffee tables in front of
+ * the sofa, shelves, "What fits here?" on the longest free run of the back
+ * wall, "Find a replacement" for the Chester Leather Sofa) it builds each
+ * request with the shared code, answers it from the demo store through the
+ * gateway pipeline in demo mode, places every recommended item at its spot
+ * and runs the fit engine (0 errors expected; seat accessories and the
+ * replacement leave the same instances out of the check as the builder),
+ * and checks that every "N cm" in a reason equals a number in the request
+ * within 1 cm and that no reason mentions a `wall-` id. It also checks the
+ * nothing-fits path for the demo room: a sofa request has no candidates,
+ * so the panel answers locally with sizes (longest free wall run and depth,
+ * smallest sofa footprint, the 45 cm a seat needs in front) plus the
+ * "Replace the Chester Leather Sofa" offer — with no model call.
+ * Prints PASS or FAIL per item and exits non-zero on any FAIL. Demo mode
+ * only: no live Meta calls.
  */
 
 /* global console, process */
@@ -17,8 +25,16 @@ import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  analyzeFreeSpace,
+  buildRecommendRequest,
   checkFit,
   isRecommendAnswer,
+  longestRun,
+  nothingFitsMessage,
+  recommendIgnoreIds,
+  replacementOfferFor,
+  smallestOfCategory,
+  type CandidateQuery,
   type CatalogItem,
   type FitProducts,
   type RecommendRequest,
@@ -111,6 +127,13 @@ function stopServer(child: ChildProcess): Promise<void> {
   });
 }
 
+function queryFromRequest(request: RecommendRequest): CandidateQuery {
+  const wire = request.request;
+  const query: CandidateQuery = { category: wire.category };
+  if (wire.budget_usd !== undefined) query.budget_usd = wire.budget_usd;
+  return query;
+}
+
 async function main(): Promise<void> {
   const builtServer = join(serverDir, "dist", "index.js");
   if (!existsSync(builtServer)) {
@@ -150,6 +173,79 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
+
+  // The replacement demo request names Chester and keeps a same-spot candidate.
+  const replacement = rebuilt.find((r) => r.request.replace !== undefined);
+  check("demo list holds the Chester replacement request", replacement !== undefined);
+  check(
+    "replacement request targets the Chester Leather Sofa",
+    replacement?.request.replace?.productId === "sofa_02",
+  );
+  check(
+    "replacement request keeps at least one fitting sofa",
+    (replacement?.candidates.length ?? 0) >= 1,
+    `candidates=${String(replacement?.candidates.length ?? 0)}`,
+  );
+
+  // Nothing fits: a sofa request for the demo room has no candidates, so the
+  // panel answers locally with sizes plus the replacement offer — no model
+  // call. The check builds the same message and offer the panel shows.
+  const sofaQuery: CandidateQuery = { category: "sofa" };
+  const sofaCandidates = buildRecommendRequest(
+    room,
+    scene,
+    catalog,
+    sofaQuery,
+    (productId, position, rotationY) => {
+      const ignore = new Set(recommendIgnoreIds(scene, catalog, sofaQuery));
+      const items = scene.items.filter((i) => !ignore.has(i.instanceId));
+      const probe: SceneState = {
+        ...scene,
+        items: [
+          ...items,
+          {
+            instanceId: "check-probe",
+            productId,
+            position,
+            rotationY,
+            variant: "default",
+          },
+        ],
+      };
+      return checkFit(room, probe, products).filter((i) => i.severity === "error").length === 0;
+    },
+  );
+  check("demo room sofa request has no candidates", sofaCandidates.candidates.length === 0);
+  check(
+    "demo room sofa request needs no model call",
+    sofaCandidates.candidates.length === 0,
+    "the panel answers locally when candidates is empty",
+  );
+  const free = analyzeFreeSpace(room, scene, new Map(catalog.map((c) => [c.id, c])));
+  const message = nothingFitsMessage("sofa", room, free, catalog);
+  const run = longestRun(free);
+  const smallest = smallestOfCategory(catalog, "sofa");
+  check(
+    "nothing-fits message names the longest free wall run and depth",
+    run !== null &&
+      message.includes(String(Math.round(run.length_cm))) &&
+      message.includes(String(Math.round(run.depth_cm))),
+  );
+  check(
+    "nothing-fits message names the smallest sofa footprint",
+    smallest !== null &&
+      message.includes(smallest.name) &&
+      message.includes(String(Math.round(smallest.size.w))) &&
+      message.includes(String(Math.round(smallest.size.d))),
+  );
+  check("nothing-fits message names the 45 cm a seat needs", message.includes("45 cm"));
+  check("nothing-fits message hides wall ids", !message.includes("wall-"));
+  const offer = replacementOfferFor("sofa", scene, catalog);
+  check(
+    "nothing-fits sofa request offers Replace the Chester Leather Sofa",
+    offer?.name === "Chester Leather Sofa",
+    offer === null ? "no offer" : `Replace the ${offer.name}`,
+  );
 
   const baseErrors = checkFit(room, scene, products).filter((i) => i.severity === "error");
   check("demo room scene has no fit errors", baseErrors.length === 0);
@@ -212,8 +308,26 @@ async function main(): Promise<void> {
         data.recommendations.length <= 3,
         String(data.recommendations.length),
       );
+      if (request.request.replace !== undefined) {
+        check(
+          `replacement answer ${String(i)} ranks at least one sofa`,
+          data.recommendations.length >= 1,
+        );
+      }
       const numbers: number[] = [];
       collectNumbers(request, numbers);
+      const query = queryFromRequest(request);
+      const wireReplace = request.request.replace;
+      const ignore = new Set(
+        recommendIgnoreIds(
+          scene,
+          catalog,
+          wireReplace === undefined
+            ? query
+            : { category: query.category, replace: { productId: wireReplace.productId } },
+        ),
+      );
+      const items = scene.items.filter((item) => !ignore.has(item.instanceId));
       for (const rec of data.recommendations) {
         const candidate = request.candidates.find((c) => c.productId === rec.productId);
         check(
@@ -221,15 +335,20 @@ async function main(): Promise<void> {
           candidate !== undefined,
         );
         if (candidate === undefined) continue;
+        check(
+          `answer ${String(i)} reason hides wall ids`,
+          !rec.reason.includes("wall-"),
+          rec.reason.slice(0, 80),
+        );
         const [x, z] = candidate.spot.centre_cm;
         const probe: SceneState = {
           ...scene,
           items: [
-            ...scene.items,
+            ...items,
             {
               instanceId: `check-${rec.productId}`,
               productId: rec.productId,
-              position: { x, z },
+              position: { x: x ?? 0, z: z ?? 0 },
               rotationY: candidate.spot.rotationY,
               variant: "default",
             },

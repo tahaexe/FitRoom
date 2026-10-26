@@ -38,35 +38,35 @@
     "freeSpace": {
       "runs": [
         {
-          "wall": "wall-1",
+          "wall": "Door wall",
           "start_cm": 230,
           "end_cm": 415,
           "length_cm": 185,
           "depth_cm": 78
         },
         {
-          "wall": "wall-2",
+          "wall": "Right wall (window)",
           "start_cm": 5,
           "end_cm": 75,
           "length_cm": 70,
           "depth_cm": 150
         },
         {
-          "wall": "wall-3",
+          "wall": "Back wall (window)",
           "start_cm": 10,
           "end_cm": 85,
           "length_cm": 75,
           "depth_cm": 38
         },
         {
-          "wall": "wall-3",
+          "wall": "Back wall (window)",
           "start_cm": 240,
           "end_cm": 415,
           "length_cm": 175,
           "depth_cm": 70
         },
         {
-          "wall": "wall-4",
+          "wall": "Left wall",
           "start_cm": 10,
           "end_cm": 65,
           "length_cm": 55,
@@ -95,7 +95,7 @@
         "colors": ["light wood", "grey fabric boxes"],
         "spot": {
           "kind": "run",
-          "wall": "wall-1",
+          "wall": "Door wall",
           "run_cm": [230, 415],
           "runLength_cm": 185,
           "spare_cm": 77.2,
@@ -109,10 +109,10 @@
     "recommendations": [
       {
         "productId": "wooden_display_shelves_01",
-        "reason": "Fits wall-1 185 cm run with 77.2 cm to spare; light wood suits neutral modern room.",
-        "styleMatch": 0.7
+        "reason": "Fits Door wall 185 cm run with 77 cm to spare; light wood suits neutral modern room.",
+        "styleMatch": 0.6
       }
     ]
   },
-  "time": "2026-10-26T20:49:33.399Z"
+  "time": "2026-10-26T21:09:40.379Z"
 }

@@ -33,40 +33,45 @@
       }
     ],
     "request": {
-      "category": "coffee-table"
+      "category": "sofa",
+      "replace": {
+        "productId": "sofa_02",
+        "centre_cm": [41, 200],
+        "rotationY": 90
+      }
     },
     "freeSpace": {
       "runs": [
         {
-          "wall": "wall-1",
+          "wall": "Door wall",
           "start_cm": 230,
           "end_cm": 415,
           "length_cm": 185,
           "depth_cm": 78
         },
         {
-          "wall": "wall-2",
+          "wall": "Right wall (window)",
           "start_cm": 5,
           "end_cm": 75,
           "length_cm": 70,
           "depth_cm": 150
         },
         {
-          "wall": "wall-3",
+          "wall": "Back wall (window)",
           "start_cm": 10,
           "end_cm": 85,
           "length_cm": 75,
           "depth_cm": 38
         },
         {
-          "wall": "wall-3",
+          "wall": "Back wall (window)",
           "start_cm": 240,
           "end_cm": 415,
           "length_cm": 175,
           "depth_cm": 70
         },
         {
-          "wall": "wall-4",
+          "wall": "Left wall",
           "start_cm": 10,
           "end_cm": 65,
           "length_cm": 55,
@@ -87,20 +92,20 @@
     },
     "candidates": [
       {
-        "productId": "modern_coffee_table_01",
-        "name": "Slate Coffee Table",
-        "size_cm": [120.2, 60, 39],
-        "price_usd": 340,
-        "styleTags": ["modern"],
-        "colors": ["warm wood frame", "stone top"],
+        "productId": "Sofa_01",
+        "name": "Provence Loveseat",
+        "size_cm": [157.1, 65.8, 79.7],
+        "price_usd": 890,
+        "styleTags": ["French provincial", "classic"],
+        "colors": ["stone fabric (default)", "carved dark wood"],
         "spot": {
           "kind": "run",
-          "wall": "wall-1",
-          "run_cm": [230, 415],
-          "runLength_cm": 185,
-          "spare_cm": 64.8,
-          "centre_cm": [322.5, 34],
-          "rotationY": 0
+          "wall": "Left wall",
+          "run_cm": [81.4, 238.6],
+          "runLength_cm": 157.2,
+          "spare_cm": 0,
+          "centre_cm": [41, 200],
+          "rotationY": 90
         }
       }
     ]
@@ -108,11 +113,11 @@
   "response": {
     "recommendations": [
       {
-        "productId": "modern_coffee_table_01",
-        "reason": "Fits your 185 cm run with 65 cm to spare; modern style matches room.",
-        "styleMatch": 0.95
+        "productId": "Sofa_01",
+        "reason": "Fits Left wall 157 cm run with 0 cm to spare; stone fabric suits neutral modern palette",
+        "styleMatch": 0.4
       }
     ]
   },
-  "time": "2026-10-26T20:49:22.237Z"
+  "time": "2026-10-26T21:10:08.974Z"
 }

@@ -1,12 +1,17 @@
 /**
  * Demo recommend requests: the four recorded requests for the demo room
- * (the sample room with `shared/samples/fit-tests/valid.json`) — sofas,
- * coffee tables, shelves, and "What fits here?" on the longest free run of
- * the north wall (`wall-3`).
+ * (the sample room with `shared/samples/fit-tests/valid.json`) — coffee
+ * tables (in front of the sofa), shelves, "What fits here?" on the longest
+ * free run of the back wall, and "Find a replacement" for the Chester
+ * Leather Sofa.
  *
  * Built with the shared code (free-space analysis + candidate filter), with
- * every candidate spot verified by the fit engine: adding the probe must
- * introduce no new error, so every recorded answer fits by construction.
+ * every candidate spot verified by the fit engine: seat accessories ignore
+ * placed items of their own category and the replacement leaves the
+ * selected instance out (see `shared/src/recommend/ignore.ts`), so adding
+ * the probe must introduce no new error — every recorded answer fits by
+ * construction. A category with no candidates (e.g. sofas in the demo room)
+ * never reaches the model: the panel answers locally with sizes.
  */
 
 import { readFileSync } from "node:fs";
@@ -16,7 +21,10 @@ import {
   FitEngine,
   analyzeFreeSpace,
   buildRecommendRequest,
+  recommendIgnoreIds,
+  wallDisplayName,
   type CatalogItem,
+  type CandidateQuery,
   type FitIssue,
   type RecommendRequest,
   type RoomLayout,
@@ -53,49 +61,62 @@ export function buildRecommendDemoRequests(): RecommendRequest[] {
   for (const issue of engine.check(scene)) {
     if (issue.severity === "error") base.add(issueKey(issue));
   }
-  const verify = (
-    productId: string,
-    position: { x: number; z: number },
-    rotationY: number,
-  ): boolean => {
-    const probe = {
-      ...scene,
-      items: [
-        ...scene.items,
-        {
-          instanceId: "recommend-probe",
-          productId,
-          position: {
-            x: Math.round(position.x * 10) / 10,
-            z: Math.round(position.z * 10) / 10,
+  const verifyFor = (query: CandidateQuery) => {
+    const ignore = new Set(recommendIgnoreIds(scene, catalog, query));
+    const items = scene.items.filter((i) => !ignore.has(i.instanceId));
+    return (productId: string, position: { x: number; z: number }, rotationY: number): boolean => {
+      const probe = {
+        ...scene,
+        items: [
+          ...items,
+          {
+            instanceId: "recommend-probe",
+            productId,
+            position: {
+              x: Math.round(position.x * 10) / 10,
+              z: Math.round(position.z * 10) / 10,
+            },
+            rotationY,
+            variant: "",
           },
-          rotationY,
-          variant: "",
-        },
-      ],
+        ],
+      };
+      for (const issue of engine.check(probe)) {
+        if (issue.severity !== "error") continue;
+        if (!base.has(issueKey(issue))) return false;
+      }
+      return true;
     };
-    for (const issue of engine.check(probe)) {
-      if (issue.severity !== "error") continue;
-      if (!base.has(issueKey(issue))) return false;
-    }
-    return true;
   };
 
   const free = analyzeFreeSpace(room, scene, catalogById);
-  const north = free.runs
-    .filter((run) => run.wall === "wall-3")
+  const back = free.runs
+    .filter((run) => wallDisplayName(room, run.wall).startsWith("Back wall"))
     .sort((a, b) => b.length_cm - a.length_cm)[0];
-  if (north === undefined) {
-    throw new Error("demo room has no free run on the north wall (wall-3).");
+  if (back === undefined) {
+    throw new Error("demo room has no free run on the back wall.");
   }
-  const queries = [
-    { category: "sofa" as const },
-    { category: "coffee-table" as const },
-    { category: "shelf" as const },
+  const chester = scene.items.find((i) => i.productId === "sofa_02");
+  if (chester === undefined) {
+    throw new Error("demo room has no Chester Leather Sofa to replace.");
+  }
+  const queries: CandidateQuery[] = [
+    { category: "coffee-table" },
+    { category: "shelf" },
     {
-      category: "any" as const,
-      spot: { wall: north.wall, start_cm: north.start_cm, end_cm: north.end_cm },
+      category: "any",
+      spot: { wall: back.wall, start_cm: back.start_cm, end_cm: back.end_cm },
+    },
+    {
+      category: "sofa",
+      replace: {
+        productId: chester.productId,
+        position: { ...chester.position },
+        rotationY: chester.rotationY,
+      },
     },
   ];
-  return queries.map((query) => buildRecommendRequest(room, scene, catalog, query, verify));
+  return queries.map((query) =>
+    buildRecommendRequest(room, scene, catalog, query, verifyFor(query)),
+  );
 }
