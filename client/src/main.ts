@@ -1,3 +1,7 @@
+import "@fontsource/nunito/400.css";
+import "@fontsource/nunito/600.css";
+import "@fontsource/nunito/700.css";
+import "@fontsource/nunito/800.css";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import type { CatalogItem, RoomLayout, SceneItem } from "@fitroom/shared";
@@ -50,15 +54,15 @@ async function refreshApiStatus(): Promise<void> {
 }
 
 /** Plaster PBR on the shared wall material (ambientCG tiling). */
-function dressWalls(): void {
+function dressWalls(onLoad: () => void): void {
   const loader = new THREE.TextureLoader();
   const base = "assets/textures/ambientcg/PaintedPlaster017/PaintedPlaster017_1K-JPG";
-  const map = loader.load(`${base}_Color.jpg`);
+  const map = loader.load(`${base}_Color.jpg`, onLoad);
   map.wrapS = THREE.RepeatWrapping;
   map.wrapT = THREE.RepeatWrapping;
   map.repeat.set(2, 1);
   map.colorSpace = THREE.SRGBColorSpace;
-  const normalMap = loader.load(`${base}_NormalGL.jpg`);
+  const normalMap = loader.load(`${base}_NormalGL.jpg`, onLoad);
   normalMap.wrapS = THREE.RepeatWrapping;
   normalMap.wrapT = THREE.RepeatWrapping;
   normalMap.repeat.set(2, 1);
@@ -97,6 +101,9 @@ class FitRoomApp {
   private drag: { id: string; offsetX: number; offsetZ: number } | null = null;
   private rotating = false;
   private container: HTMLElement;
+  /** Render-on-demand: a queued rAF id (0 = none) plus a shadow refresh flag. */
+  private rafId = 0;
+  private shadowNeedsUpdate = true;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -138,14 +145,16 @@ class FitRoomApp {
     this.controls.minDistance = 1.2;
     this.controls.maxDistance = 18;
 
-    dressWalls();
-    const floorMat = makeFloorMaterial(wM, dM);
+    dressWalls(() => this.requestRender());
+    const floorMat = makeFloorMaterial(wM, dM, () => this.requestRender());
     const built = buildRoom(ROOM, floorMat);
     this.scene.add(built.group);
     this.scene.add(this.modelsRoot);
     const floor = built.group.getObjectByName("fitroom-floor");
     if (floor instanceof THREE.Mesh) this.floorMesh = floor;
-    this.rig = setupStage(this.renderer, this.scene, built.floorSize, built.wallHeightM);
+    this.rig = setupStage(this.renderer, this.scene, built.floorSize, built.wallHeightM, () =>
+      this.requestRender(),
+    );
     this.roomWalls = built.group;
     this.wallEntries = built.wallEntries.map((e) => ({
       wallId: e.wallId,
@@ -156,7 +165,7 @@ class FitRoomApp {
     // Selection outline + rotate handle + size tag.
     this.rotateHandle = new THREE.Mesh(
       new THREE.SphereGeometry(0.07, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0x2563eb }),
+      new THREE.MeshBasicMaterial({ color: 0xf54e49 }),
     );
     this.rotateHandle.name = "fitroom-rotate-handle";
     this.rotateHandle.visible = false;
@@ -187,16 +196,43 @@ class FitRoomApp {
     this.bindToolbar();
     this.bindPointer();
     this.bindKeys();
+    this.controls.addEventListener("change", () => this.requestRender());
     this.store.subscribe(() => {
       void this.syncInstances();
       this.refreshIssues();
+      this.markSceneChanged();
+    });
+
+    const roomName = document.getElementById("room-name");
+    if (roomName !== null) roomName.textContent = ROOM.name;
+    document.getElementById("fit-badge")?.addEventListener("click", () => {
+      document.getElementById("fit-list")?.toggleAttribute("hidden");
     });
 
     window.addEventListener("resize", () => this.resize());
     void this.syncInstances();
     this.refreshIssues();
     this.updateMeasure();
-    this.renderer.setAnimationLoop(() => this.frame());
+    this.updateTopBar();
+    // Render on demand: frames only while the camera moves, after scene or
+    // selection changes, or when a texture finishes loading. No idle loop.
+    this.requestRender();
+  }
+
+  /** Queue a single frame unless one is already queued. */
+  private requestRender(): void {
+    if (this.rafId !== 0) return;
+    this.rafId = requestAnimationFrame(() => {
+      this.rafId = 0;
+      this.frame();
+    });
+  }
+
+  /** Scene or selection changed: refresh shadows once, then draw. */
+  private markSceneChanged(): void {
+    requestContactRefresh(this.rig);
+    this.shadowNeedsUpdate = true;
+    this.requestRender();
   }
 
   private roomWalls: THREE.Group;
@@ -205,19 +241,20 @@ class FitRoomApp {
   // ---- mutations ----
 
   private async addItem(item: CatalogItem): Promise<void> {
-    const spot = nearestFreeSpot(item.id, CATALOG_MAP, ROOM, this.store.state);
+    // Start the search where the user is looking (camera target on the floor).
+    const start = { x: this.controls.target.x * 100, z: this.controls.target.z * 100 };
+    const spot = nearestFreeSpot(item.id, CATALOG_MAP, ROOM, this.store.state, start);
     const instance: SceneItem = {
       instanceId: makeInstanceId(item.id),
       productId: item.id,
       position: { x: Math.round(spot.x), z: Math.round(spot.z) },
-      rotationY: 0,
+      rotationY: spot.rotationY,
       variant: item.variants[0]?.name ?? "",
     };
     this.store.commit((draft) => {
       draft.items.push(instance);
     });
     this.select(instance.instanceId);
-    requestContactRefresh(this.rig);
   }
 
   private commitMove(id: string, x: number, z: number): void {
@@ -227,7 +264,6 @@ class FitRoomApp {
         it.position = { x: Math.round(x), z: Math.round(z) };
       }
     });
-    requestContactRefresh(this.rig);
   }
 
   private commitRotate(id: string, deg: number): void {
@@ -236,7 +272,6 @@ class FitRoomApp {
       const it = draft.items.find((i) => i.instanceId === id);
       if (it !== undefined) it.rotationY = Math.round(norm * 10) / 10;
     });
-    requestContactRefresh(this.rig);
   }
 
   private commitVariant(id: string, variant: string): void {
@@ -244,7 +279,6 @@ class FitRoomApp {
       const it = draft.items.find((i) => i.instanceId === id);
       if (it !== undefined) it.variant = variant;
     });
-    requestContactRefresh(this.rig);
   }
 
   private deleteItem(id: string): void {
@@ -252,7 +286,6 @@ class FitRoomApp {
       draft.items = draft.items.filter((i) => i.instanceId !== id);
     });
     if (this.selectedId === id) this.select(null);
-    requestContactRefresh(this.rig);
   }
 
   private select(id: string | null): void {
@@ -265,7 +298,7 @@ class FitRoomApp {
     const entry = id === null ? undefined : this.instances.get(id);
     if (entry !== undefined) {
       const bad = id !== null && this.issues.some((f) => f.itemIds.includes(id));
-      this.outline = new THREE.BoxHelper(entry.group, bad ? 0xdc2626 : 0xf59e0b);
+      this.outline = new THREE.BoxHelper(entry.group, bad ? 0xb3261e : 0xe59500);
       this.scene.add(this.outline);
       this.rotateHandle.visible = true;
       this.positionHandle(entry);
@@ -276,6 +309,7 @@ class FitRoomApp {
       id === null ? null : (this.store.state.items.find((i) => i.instanceId === id) ?? null);
     this.inspector.setSelection(current);
     this.updateMeasure();
+    this.requestRender();
   }
 
   private positionHandle(entry: InstanceEntry): void {
@@ -298,7 +332,7 @@ class FitRoomApp {
           const group = await loadModel(entry);
           group.position.set(cmToMeters(item.position.x), 0, cmToMeters(item.position.z));
           group.rotation.y = (item.rotationY * Math.PI) / 180;
-          applyVariant(group, entry, item.variant);
+          await applyVariant(group, entry, item.variant);
           this.modelsRoot.add(group);
           this.instances.set(item.instanceId, { item: { ...item }, group, variant: item.variant });
         } catch {
@@ -314,7 +348,7 @@ class FitRoomApp {
             const group = await loadModel(entry);
             group.position.copy(existing.group.position);
             group.rotation.y = (item.rotationY * Math.PI) / 180;
-            applyVariant(group, entry, item.variant);
+            await applyVariant(group, entry, item.variant);
             this.modelsRoot.add(group);
             existing.group = group;
             existing.variant = item.variant;
@@ -337,20 +371,97 @@ class FitRoomApp {
       this.select(this.selectedId);
     }
     this.updateMeasure();
+    // Models (and their textures) arrived asynchronously: draw + refresh shadows.
+    this.markSceneChanged();
   }
 
   private refreshIssues(): void {
     this.issues = computeFitIssues(this.store.state, CATALOG_MAP, ROOM);
-    const el = document.getElementById("fit-status");
-    if (el !== null) {
+    const badge = document.getElementById("fit-badge");
+    if (badge instanceof HTMLButtonElement) {
       const errors = this.issues.filter((i) => i.severity === "error").length;
       const warns = this.issues.length - errors;
-      el.textContent =
-        this.issues.length === 0
-          ? "Fit: all clear"
-          : `Fit: ${errors} error(s), ${warns} warning(s)`;
-      el.dataset["state"] = errors > 0 ? "bad" : warns > 0 ? "warn" : "good";
+      if (errors > 0) {
+        badge.dataset["state"] = "bad";
+        badge.textContent = `✕ ${this.issues.length} problem${this.issues.length === 1 ? "" : "s"}`;
+      } else if (warns > 0) {
+        badge.dataset["state"] = "warn";
+        badge.textContent = `! ${warns} warning${warns === 1 ? "" : "s"}`;
+      } else {
+        badge.dataset["state"] = "good";
+        badge.textContent = "✓ Everything fits";
+      }
     }
+    this.renderFitList();
+    this.updateTopBar();
+  }
+
+  /** Problem list opened from the fit badge; picking one selects the piece. */
+  private renderFitList(): void {
+    const host = document.getElementById("fit-list");
+    if (host === null) return;
+    host.innerHTML = "";
+    if (this.issues.length === 0) {
+      host.setAttribute("hidden", "");
+      return;
+    }
+    for (const issue of this.issues) {
+      const b = document.createElement("button");
+      b.type = "button";
+      const first = issue.itemIds[0];
+      const item =
+        first === undefined
+          ? undefined
+          : this.store.state.items.find((i) => i.instanceId === first);
+      const entry = item === undefined ? undefined : CATALOG_MAP.get(item.productId);
+      b.textContent = `${issue.severity === "error" ? "✕" : "!"} ${issue.message}${entry === undefined ? "" : ` — ${entry.name}`}`;
+      b.addEventListener("click", () => {
+        if (first !== undefined) this.select(first);
+        host.setAttribute("hidden", "");
+      });
+      host.appendChild(b);
+    }
+  }
+
+  /** Room total in the top bar (sum of placed pieces, tabular figures). */
+  private updateTopBar(): void {
+    const el = document.getElementById("cart-total");
+    if (el === null) return;
+    let total = 0;
+    let count = 0;
+    for (const item of this.store.state.items) {
+      const entry = CATALOG_MAP.get(item.productId);
+      if (entry === undefined) continue;
+      total += entry.price;
+      count += 1;
+    }
+    el.textContent = count === 0 ? "$0" : `$${total.toLocaleString("en-US")} · ${count}`;
+  }
+
+  /** Download the current cart (room + placed pieces + total) as JSON. */
+  private downloadCart(): void {
+    const items = this.store.state.items.map((item) => {
+      const entry = CATALOG_MAP.get(item.productId);
+      return {
+        instanceId: item.instanceId,
+        productId: item.productId,
+        name: entry?.name ?? item.productId,
+        price: entry?.price ?? 0,
+        variant: item.variant,
+        position: item.position,
+        rotationY: item.rotationY,
+      };
+    });
+    const total = items.reduce((sum, i) => sum + i.price, 0);
+    const payload = { room: ROOM.id, roomName: ROOM.name, items, total };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "fitroom-cart.json";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    window.setTimeout(() => URL.revokeObjectURL(a.href), 1000);
   }
 
   private updateMeasure(): void {
@@ -448,6 +559,7 @@ class FitRoomApp {
             entry.group.rotation.y = (item.rotationY * Math.PI) / 180;
             this.positionHandle(entry);
             this.updateMeasure();
+            this.requestRender();
           }
         }
         return;
@@ -465,6 +577,7 @@ class FitRoomApp {
             this.positionHandle(live);
           }
           this.updateMeasure();
+          this.requestRender();
         }
       }
     });
@@ -472,7 +585,6 @@ class FitRoomApp {
     el.addEventListener("pointerup", () => {
       if (this.drag !== null || this.rotating) {
         this.store.touch();
-        requestContactRefresh(this.rig);
       }
       this.drag = null;
       this.rotating = false;
@@ -508,6 +620,7 @@ class FitRoomApp {
     const on = (id: string, fn: () => void): void => {
       document.getElementById(id)?.addEventListener("click", fn);
     };
+    on("tool-cart", () => this.downloadCart());
     on("tool-orbit", () => this.setMode("orbit"));
     on("tool-plan", () => this.setMode("plan"));
     on("tool-rot-left", () => this.nudgeRotate(-15));
@@ -545,6 +658,7 @@ class FitRoomApp {
       this.controls.target.set(cmToMeters(210), 0, cmToMeters(180));
     }
     this.controls.update();
+    this.requestRender();
   }
 
   // ---- frame ----
@@ -559,6 +673,7 @@ class FitRoomApp {
     this.planCam.updateProjectionMatrix();
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
     this.renderer.setSize(w, h);
+    this.requestRender();
   }
 
   /** Dollhouse: hide the 2 walls nearest the camera (orbit mode only). */
@@ -607,7 +722,9 @@ class FitRoomApp {
   private frame(): void {
     // Never below the floor.
     if (this.orbitCam.position.y < 0.1) this.orbitCam.position.y = 0.1;
-    this.controls.update();
+    // OrbitControls.update() returns true while the camera is still moving
+    // (including damping glide): keep drawing until it settles, then stop.
+    const moved = this.controls.update();
     this.updateDollhouse();
     if (this.outline !== null) this.outline.update();
     if (this.selectedId !== null) {
@@ -626,7 +743,13 @@ class FitRoomApp {
     if (this.rig !== null && this.rig.contactNeedsRefresh.value) {
       this.rig.contactNeedsRefresh.value = false;
     }
+    // Shadow maps are static between changes: refresh only after a change.
+    if (this.shadowNeedsUpdate) {
+      this.renderer.shadowMap.needsUpdate = true;
+      this.shadowNeedsUpdate = false;
+    }
     this.renderer.render(this.scene, this.activeCamera());
+    if (moved) this.requestRender();
   }
 }
 

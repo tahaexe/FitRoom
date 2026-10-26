@@ -1,5 +1,5 @@
 import * as THREE from "three";
-import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
+import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
 
 const HDRI_URL = "assets/hdri/polyhaven/lebombo_1k.hdr";
 
@@ -14,10 +14,11 @@ function pbrSet(
   base: string,
   repeatX: number,
   repeatY: number,
+  onLoad: () => void,
 ): { map: THREE.Texture; normalMap: THREE.Texture; roughnessMap: THREE.Texture } {
   const loader = new THREE.TextureLoader();
   const load = (url: string, srgb: boolean): THREE.Texture => {
-    const tex = loader.load(url);
+    const tex = loader.load(url, onLoad);
     tex.wrapS = THREE.RepeatWrapping;
     tex.wrapT = THREE.RepeatWrapping;
     tex.repeat.set(repeatX, repeatY);
@@ -33,12 +34,17 @@ function pbrSet(
 }
 
 /** Tiled ambientCG PBR floor: WoodFloor070, repeat derived from room metres. */
-export function makeFloorMaterial(roomWM: number, roomDM: number): THREE.MeshStandardMaterial {
+export function makeFloorMaterial(
+  roomWM: number,
+  roomDM: number,
+  onLoad: () => void = () => {},
+): THREE.MeshStandardMaterial {
   const tileM = 2;
   const sets = pbrSet(
     "assets/textures/ambientcg/WoodFloor070/WoodFloor070_1K-JPG",
     Math.max(1, roomWM / tileM),
     Math.max(1, roomDM / tileM),
+    onLoad,
   );
   return new THREE.MeshStandardMaterial({
     map: sets.map,
@@ -50,24 +56,27 @@ export function makeFloorMaterial(roomWM: number, roomDM: number): THREE.MeshSta
 }
 
 /**
- * IBL from the lebombo HDRI + filmic tone mapping + sun with soft shadows +
- * a contact-shadow catcher plane re-rendered whenever contactNeedsRefresh
- * is set by scene changes.
+ * IBL from the lebombo HDRI + neutral tone mapping + sun with shadows + a
+ * contact-shadow catcher plane. Shadow maps are static between changes
+ * (`autoUpdate = false`): callers set `needsUpdate` after a scene change.
+ * `onLoad` fires for every async texture so the app can draw a frame.
  */
 export function setupStage(
   renderer: THREE.WebGLRenderer,
   scene: THREE.Scene,
   floorSize: { wM: number; dM: number; cxM: number; czM: number },
   wallHeightM: number,
+  onLoad: () => void = () => {},
 ): StageRig {
-  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMapping = THREE.NeutralToneMapping;
   renderer.toneMappingExposure = 1.0;
   renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  scene.background = new THREE.Color(0x8f959c);
+  renderer.shadowMap.type = THREE.PCFShadowMap;
+  renderer.shadowMap.autoUpdate = false;
+  scene.background = new THREE.Color(0xf6f6f6);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
-  new RGBELoader().load(
+  new HDRLoader().load(
     HDRI_URL,
     (hdr) => {
       const env = pmrem.fromEquirectangular(hdr).texture;
@@ -75,6 +84,7 @@ export function setupStage(
       scene.environmentIntensity = 0.55;
       hdr.dispose();
       pmrem.dispose();
+      onLoad();
     },
     undefined,
     () => {
