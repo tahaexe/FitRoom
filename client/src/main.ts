@@ -32,6 +32,7 @@ import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.js
 import { initLiveSwitch } from "./api";
 import { CatalogPanel } from "./catalog-ui";
 import { RecommendPanel } from "./recommend/panel";
+import { AssistantPanel } from "./assistant/panel";
 import { applyVariant, loadModel } from "./models";
 import { PlanOverlay } from "./plan";
 import { FitOverlay } from "./fit-overlay";
@@ -146,6 +147,7 @@ class FitRoomApp {
   private fitOverlay: FitOverlay;
   private inspector: Inspector;
   private recommendPanel: RecommendPanel | null = null;
+  private assistantPanel: AssistantPanel | null = null;
   private runHighlight: THREE.Mesh | null = null;
   private fitEngine: FitEngine;
   private analysis: FitAnalysis | null = null;
@@ -287,6 +289,17 @@ class FitRoomApp {
       this.recommendPanel.refresh();
     }
 
+    const assistantHost = document.getElementById("assistant-panel");
+    if (assistantHost !== null) {
+      this.assistantPanel = new AssistantPanel(assistantHost, {
+        room: ROOM,
+        catalog: CATALOG,
+        getScene: () => this.store.state,
+        applyTurn: (endScene) => this.applyAssistantTurn(endScene),
+        resetDemoRoom: () => this.resetDemoRoom(),
+      });
+    }
+
     this.bindToolbar();
     this.bindPointer();
     this.bindKeys();
@@ -410,6 +423,14 @@ class FitRoomApp {
       draft.items.push(instance);
     });
     this.select(instance.instanceId);
+  }
+
+  /** Apply an assistant turn's end scene, as one undo step. */
+  private applyAssistantTurn(endScene: SceneState): void {
+    const items = JSON.parse(JSON.stringify(endScene.items)) as SceneState["items"];
+    this.store.commit((draft) => {
+      draft.items = items;
+    });
   }
 
   /** Reset to the demo room scene, as one undo step. */
@@ -880,6 +901,13 @@ class FitRoomApp {
       if (panel === null) return;
       const hidden = panel.toggleAttribute("hidden");
       document.getElementById("tool-recommend")?.setAttribute("data-active", String(!hidden));
+    });
+    on("tool-assistant", () => {
+      const panel = document.getElementById("assistant-panel");
+      if (panel === null) return;
+      const hidden = panel.toggleAttribute("hidden");
+      document.getElementById("tool-assistant")?.setAttribute("data-active", String(!hidden));
+      if (!hidden) this.assistantPanel?.syncMode();
     });
     on("tool-orbit", () => this.setMode("orbit"));
     on("tool-plan", () => this.setMode("plan"));

@@ -83,7 +83,33 @@ function tostr(value: number): string {
   return String(value);
 }
 
-/** Muse Spark chat completion, parsed to the first message's text. */
+/** One tool call Muse Spark requested (OpenAI `tool_calls` shape). */
+export interface SparkToolCall {
+  id: string;
+  name: string;
+  /** Raw JSON arguments string (parsed by the route). */
+  arguments: string;
+}
+
+function sparkToolCalls(message: Record<string, unknown>): SparkToolCall[] {
+  const raw = message["tool_calls"];
+  if (!Array.isArray(raw)) return [];
+  const out: SparkToolCall[] = [];
+  for (const entry of raw) {
+    if (typeof entry !== "object" || entry === null) continue;
+    const record = entry as Record<string, unknown>;
+    const fn = (record["function"] ?? {}) as Record<string, unknown>;
+    if (typeof record["id"] !== "string" || typeof fn["name"] !== "string") continue;
+    out.push({
+      id: record["id"],
+      name: fn["name"],
+      arguments: typeof fn["arguments"] === "string" ? fn["arguments"] : "{}",
+    });
+  }
+  return out;
+}
+
+/** Muse Spark chat completion, parsed to the first message's text and tool calls. */
 export async function callSpark(
   apiKey: string,
   options: SparkCallOptions,
@@ -108,7 +134,10 @@ export async function callSpark(
   const first = (choices[0] ?? {}) as Record<string, unknown>;
   const message = (first["message"] ?? {}) as Record<string, unknown>;
   const text = typeof message["content"] === "string" ? message["content"] : "";
-  return { data: { text }, usage: usageFromUpstream(record["usage"], 0) };
+  const toolCalls = sparkToolCalls(message);
+  const data: Record<string, unknown> = { text };
+  if (toolCalls.length > 0) data["toolCalls"] = toolCalls;
+  return { data, usage: usageFromUpstream(record["usage"], 0) };
 }
 
 function dataUrlJpeg(bytes: Uint8Array): string {

@@ -1,6 +1,8 @@
 /**
  * Demo request lists, one per route. `npm run demo:record -- <route>` sends
- * the route's list through the live pipeline with recording on.
+ * the route's list through the live pipeline with recording on (the
+ * assistant list holds the six scripted turns' first rounds; recording runs
+ * the whole multi-round turn per request).
  *
  * The recommend list holds the four recorded requests for the demo room
  * (the sample room with `shared/samples/fit-tests/valid.json`): coffee
@@ -9,6 +11,8 @@
  * Leather Sofa. Generated with the shared code — see
  * `src/recommend-demo.ts` (`check:recommend` rebuilds and compares).
  */
+
+import { buildAssistantDemoRequests } from "./assistant-demo.js";
 
 export const DEMO_REQUESTS: Record<"recommend" | "assistant" | "render", unknown[]> = {
   recommend: [
@@ -509,6 +513,6 @@ export const DEMO_REQUESTS: Record<"recommend" | "assistant" | "render", unknown
       ],
     },
   ],
-  assistant: [],
+  assistant: buildAssistantDemoRequests(),
   render: [],
 };

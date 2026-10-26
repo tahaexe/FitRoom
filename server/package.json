@@ -12,6 +12,7 @@
     "start": "node dist/index.js",
     "check:gateway": "tsx scripts/check-gateway.ts",
     "check:recommend": "tsx scripts/check-recommend.ts",
+    "check:assistant": "tsx scripts/check-assistant.ts",
     "demo:record": "tsx scripts/record-demo.ts",
     "demo:import": "tsx scripts/import-demo.ts"
   },

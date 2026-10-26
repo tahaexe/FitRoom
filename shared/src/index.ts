@@ -24,6 +24,7 @@ export function isHealthResponse(value: unknown): value is HealthResponse {
 }
 
 export * from "./types.js";
+export * from "./assistant/index.js";
 export * from "./units.js";
 export * from "./fit.js";
 export * from "./schemas/index.js";

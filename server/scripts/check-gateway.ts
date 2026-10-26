@@ -294,7 +294,21 @@ async function main(): Promise<void> {
               freeSpace: { runs: [], openAreas: [] },
               candidates: [],
             }
-          : { prompt: "no such demo answer 000000" };
+          : route === "assistant"
+            ? {
+                request: "no such demo answer 000000",
+                messages: [{ role: "user", content: "no such demo answer 000000" }],
+                room: JSON.parse(
+                  readFileSync(join(repoRoot, "shared", "samples", "living-420x360.json"), "utf8"),
+                ),
+                scene: JSON.parse(
+                  readFileSync(
+                    join(repoRoot, "shared", "samples", "fit-tests", "valid.json"),
+                    "utf8",
+                  ),
+                ),
+              }
+            : { prompt: "no such demo answer 000000" };
       let missOk = 0;
       for (const route of ROUTES) {
         const res = await jar.post(route, missBody(route), { ip: "10.8.8.3" });
