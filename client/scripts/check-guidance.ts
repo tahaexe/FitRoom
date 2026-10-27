@@ -56,6 +56,8 @@ import {
   detectDefaultUnit,
   detectSlip,
   echoFor,
+  echoForRaw,
+  isImperialInput,
   parseLengthToCm,
   resolveFirstOpen,
   sidesLimitLine,
@@ -605,6 +607,20 @@ check(
 check("units:ceiling-ok", validateCeiling(250, "cm") === null);
 check("units:echo-cm", echoFor(419, "ftin") === "= 419 cm", echoFor(419, "ftin"));
 check("units:echo-ft", echoFor(419, "cm") === `= 13'9"`, echoFor(419, "cm"));
+// The echo shows the other unit of what was typed, never the mode's echo.
+check("units:echo-imperial-typed", echoForRaw(`13'9"`, 419) === "= 419 cm");
+check("units:echo-metric-typed", echoForRaw("420", 420) === `= 13'9"`, echoForRaw("420", 420));
+check(
+  "units:echo-cm-suffix-typed",
+  echoForRaw("420 cm", 420) === `= 13'9"`,
+  echoForRaw("420 cm", 420),
+);
+check("units:imperial-quote", isImperialInput(`13'9"`) === true);
+check("units:imperial-words", isImperialInput("13.75 ft") === true);
+check("units:imperial-pair", isImperialInput("13 9") === true);
+check("units:metric-bare", isImperialInput("420") === false);
+check("units:metric-cm", isImperialInput("4.2 cm") === false);
+check("units:metric-m", isImperialInput("4.2 m") === false);
 // A slip asks for an explicit "cm" reading or a bare number in cm mode.
 check(
   "units:slip-cm-suffix",
@@ -683,8 +699,8 @@ check(
 );
 check(
   "firstopen:live-limits",
-  firstOpenSource.includes("sideError("),
-  "limits update live under each field",
+  firstOpenSource.includes("sideError(") && firstOpenSource.includes("echoForRaw("),
+  "limits and the other-unit echo update live",
 );
 check("firstopen:photos-live", firstOpenSource.includes("Uses Live AI"));
 check("firstopen:sample-size", firstOpenSource.includes("420 × 360 cm"));

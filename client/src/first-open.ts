@@ -8,10 +8,9 @@
 
 import {
   ceilingLimitMessage,
-  ceilingPrefillEcho,
   detectDefaultUnit,
   detectSlip,
-  echoFor,
+  echoForRaw,
   formatCmAsFtIn,
   parseLengthToCm,
   sideLimitMessage,
@@ -373,12 +372,14 @@ export class FirstOpen {
     const w = this.parsed(this.widthInput);
     const l = this.parsed(this.lengthInput);
     const c = this.parsed(this.ceilingInput);
-    this.widthEcho.textContent = w === null ? "" : echoFor(w, this.unit);
-    this.lengthEcho.textContent = l === null ? "" : echoFor(l, this.unit);
-    if (c === null && this.ceilingInput.value.trim() === "") {
-      this.ceilingEcho.textContent = ceilingPrefillEcho(this.unit);
+    // The echo always shows the other unit of what was typed.
+    this.widthEcho.textContent = w === null ? "" : echoForRaw(wRaw, w);
+    this.lengthEcho.textContent = l === null ? "" : echoForRaw(lRaw, l);
+    if (c === null && cRaw.trim() === "") {
+      const prefill = this.unit === "cm" ? "250" : `8'2"`;
+      this.ceilingEcho.textContent = echoForRaw(prefill, 250);
     } else {
-      this.ceilingEcho.textContent = c === null ? "" : echoFor(c, this.unit);
+      this.ceilingEcho.textContent = c === null ? "" : echoForRaw(cRaw, c);
     }
     // Limits show under the field at once, in the visitor's unit.
     this.widthError.textContent = this.sideError("width", wRaw, w);

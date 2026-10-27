@@ -159,6 +159,21 @@ export interface SlipSuggestion {
   action: string;
 }
 
+/** True when the typed text reads as feet/inches (the echo then shows cm). */
+export function isImperialInput(raw: string): boolean {
+  const text = normalize(raw);
+  if (/['"]/.test(text)) return true;
+  if (/\b(ft|feet|inch|inches|in)\b/i.test(text)) return true;
+  if (/^\d+(?:\.\d+)? \d+(?:\.\d+)?$/.test(text)) return true;
+  return false;
+}
+
+/** Echo in the *other* unit of what was typed: 13'9" -> "= 419 cm". */
+export function echoForRaw(raw: string, cm: number): string {
+  if (isImperialInput(raw)) return `= ${String(cm)} cm`;
+  return `= ${formatCmAsFtIn(cm)}`;
+}
+
 /** One-line build-gate reason: both sides must read 1-15 m. */
 export function sidesLimitLine(unit: SizeUnit): string {
   if (unit === "cm") return `Width and length must be 1-15 m (3'3"-49'2")`;
