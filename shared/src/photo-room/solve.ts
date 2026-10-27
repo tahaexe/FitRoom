@@ -1161,6 +1161,66 @@ function cornerOcclusion(
   return null;
 }
 
+/**
+ * Two walls merged into one facing range: the merged wall pieces leave a
+ * wide gap between them while the floor line is hidden, so the quad spans
+ * two planes with only the ceiling line showing the corner. A doorway
+ * explains the gap (a door instance reaches into it); anything else is a
+ * corner (or the occluder hiding it) and the photo is flagged instead of
+ * claiming both corners on one wall. Returns the gap span, else null.
+ */
+function twoWallsGap(
+  photo: PhotoInput,
+  pick: WallPick,
+  floorHidden: number,
+): { gap0: number; gap1: number } | null {
+  if (floorHidden <= 0.6) return null;
+  const spans = pick.pieces
+    .filter((p) => p.concept === "wall")
+    .map((p) => [p.box[0], p.box[2]] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+  if (spans.length < 2) return null;
+  const minGap = scalePx(40, photo.width);
+  for (let i = 1; i < spans.length; i += 1) {
+    const prev = spans[i - 1];
+    const cur = spans[i];
+    if (prev === undefined || cur === undefined) continue;
+    const gap0 = prev[1] + 1;
+    const gap1 = cur[0] - 1;
+    if (gap1 - gap0 + 1 < minGap) continue;
+    const doorway = photo.instances.some(
+      (inst) => inst.concept === "door" && inst.box[0] <= gap1 && inst.box[2] >= gap0,
+    );
+    if (doorway) continue;
+    return { gap0, gap1 };
+  }
+  return null;
+}
+
+/**
+ * A wall never ends at a door's jamb: when the facing range edge lands
+ * within tolerance of a door instance's box edge on the same wall, the
+ * wall likely continues past the door and the corner is uncertain.
+ * Returns the side, else null.
+ */
+function edgeAtDoorJamb(photo: PhotoInput, pick: WallPick): "left" | "right" | null {
+  if (pick.pieces.length === 0) return null;
+  const tol = scalePx(16, photo.width);
+  const doors = photo.instances.filter((inst) => inst.concept === "door");
+  for (const side of ["left", "right"] as const) {
+    const edge = side === "left" ? pick.colMin : pick.colMax;
+    for (const d of doors) {
+      // Only doors of this wall: the leaf's centre falls inside the range.
+      const cx = (d.box[0] + d.box[2]) / 2;
+      if (cx < pick.colMin || cx > pick.colMax) continue;
+      if (Math.abs(edge - (d.box[0] - 1)) <= tol || Math.abs(edge - (d.box[2] + 1)) <= tol) {
+        return side;
+      }
+    }
+  }
+  return null;
+}
+
 export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
   const flags: DraftFlag[] = [];
   const photos: PhotoSolution[] = [];
@@ -1246,6 +1306,25 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
       flags.push({
         code: "corner-occluded",
         message: `Wall ${photo.wall}: a full-height occluder covers the ${occluded} corner.`,
+        wall: photo.wall,
+      });
+    }
+    // Two walls merged into one range while the floor line hides the
+    // corner: flag the photo instead of claiming both corners on one wall.
+    if (twoWallsGap(photo, pick, bounds.floorHidden) !== null) {
+      flags.push({
+        code: "two-walls-in-view",
+        message: `Wall ${photo.wall}: two walls in view — stand square to one wall and retake.`,
+        wall: photo.wall,
+      });
+    }
+    // The range edge lands on a door's jamb: the wall likely continues
+    // past the door, so the corner is uncertain.
+    const jambSide = edgeAtDoorJamb(photo, pick);
+    if (jambSide !== null) {
+      flags.push({
+        code: "edge-at-door",
+        message: `Wall ${photo.wall}: the ${jambSide} edge lands on a door jamb, so the corner is uncertain.`,
         wall: photo.wall,
       });
     }

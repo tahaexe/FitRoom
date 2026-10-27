@@ -45,6 +45,21 @@ export function errorRecovery(message: string): "retry" | "retake" {
   return message === NO_WALL_MESSAGE || message === NO_FLOOR_MESSAGE ? "retake" : "retry";
 }
 
+/** Corner row copy when the solver sees two walls in one frame. */
+export const TWO_WALLS_COPY = "Two walls in view: stand square to one wall";
+
+/** Amber row copy when the range edge lands on a door's jamb. */
+export const EDGE_AT_DOOR_COPY = "A door is at the wall's edge: check that corner in the next step";
+
+/**
+ * True when the card may claim both corners: the corners sit inside the
+ * frame and the solver did not flag two walls in view (a quad across the
+ * corner never reads "Both corners found").
+ */
+export function bothCornersOk(bothFound: boolean, twoWallsInView: boolean): boolean {
+  return bothFound && !twoWallsInView;
+}
+
 export interface CheckVerdict {
   bothCornersFound: boolean;
   floorLineFound: boolean;

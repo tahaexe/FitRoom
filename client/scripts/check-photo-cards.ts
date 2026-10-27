@@ -18,10 +18,13 @@
 
 /* global process */
 import {
+  EDGE_AT_DOOR_COPY,
   FALLBACK_DECODE_CONCEPT,
   FLOOR_FALLBACK_CONCEPT,
   NO_FLOOR_MESSAGE,
   NO_WALL_MESSAGE,
+  TWO_WALLS_COPY,
+  bothCornersOk,
   errorRecovery,
   isEmptyAnswerText,
   nextIsPrimary,
@@ -92,6 +95,26 @@ check(
 check(
   "two failures make retake primary",
   !nextIsPrimary({ bothCornersFound: false, floorLineFound: false }),
+);
+
+// Two walls in view replaces the both-corners row; an edge-at-door is an
+// amber note. A ✕ always makes "Retake" primary.
+check(
+  "two walls copy tells the shopper to face one wall",
+  TWO_WALLS_COPY === "Two walls in view: stand square to one wall",
+  TWO_WALLS_COPY,
+);
+check(
+  "edge at door copy asks to check the corner next",
+  EDGE_AT_DOOR_COPY === "A door is at the wall's edge: check that corner in the next step",
+  EDGE_AT_DOOR_COPY,
+);
+check("two walls block both corners", !bothCornersOk(true, true));
+check("clean corners stay ok", bothCornersOk(true, false));
+check("missing corners stay missing", !bothCornersOk(false, false));
+check(
+  "two walls make retake primary",
+  !nextIsPrimary({ bothCornersFound: bothCornersOk(true, true), floorLineFound: true }),
 );
 
 console.log(

@@ -123,6 +123,8 @@ export type DraftFlagCode =
   | "floor-hidden"
   | "height-from-ceiling"
   | "focal-wide"
+  | "two-walls-in-view"
+  | "edge-at-door"
   | "tap-the-door";
 
 export interface DraftFlag {

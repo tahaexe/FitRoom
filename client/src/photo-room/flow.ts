@@ -43,7 +43,13 @@ import {
 } from "./example";
 import { processPhotoFile, type IntakePhoto } from "./intake";
 import { clearPhoto, loadPhoto, savePhoto, type StoredPhoto } from "./photo-store";
-import { errorRecovery, nextIsPrimary } from "./cards";
+import {
+  EDGE_AT_DOOR_COPY,
+  TWO_WALLS_COPY,
+  bothCornersOk,
+  errorRecovery,
+  nextIsPrimary,
+} from "./cards";
 import {
   analyseWallPhoto,
   cornersFound,
@@ -813,15 +819,32 @@ export class PhotoFlow {
       return sheet;
     }
     const solution = analysis.solution;
-    const both = cornersFound(solution, state.intake?.segWidth ?? 0, state.intake?.segHeight ?? 0);
+    const bothRaw = cornersFound(
+      solution,
+      state.intake?.segWidth ?? 0,
+      state.intake?.segHeight ?? 0,
+    );
     const floor = floorLineFound(solution);
     const tilt = tiltDeg(solution);
-    sheet.appendChild(
-      this.checkRow(both, "Both corners found", "Both corners missing — step back and retake"),
+    const twoWalls = analysis.draft.flags.some(
+      (flag) =>
+        flag.code === "two-walls-in-view" && (flag.wall === letter || flag.wall === undefined),
     );
+    const edgeAtDoor = analysis.draft.flags.some(
+      (flag) => flag.code === "edge-at-door" && (flag.wall === letter || flag.wall === undefined),
+    );
+    const both = bothCornersOk(bothRaw, twoWalls);
+    if (twoWalls) {
+      sheet.appendChild(this.checkRow(false, "Both corners found", TWO_WALLS_COPY));
+    } else {
+      sheet.appendChild(
+        this.checkRow(both, "Both corners found", "Both corners missing — step back and retake"),
+      );
+    }
     sheet.appendChild(
       this.checkRow(floor, "Floor line found", "Floor line hidden — clear the view and retake"),
     );
+    if (edgeAtDoor) sheet.appendChild(this.checkRow(null, EDGE_AT_DOOR_COPY));
     if (tilt > TILT_AMBER_DEG) sheet.appendChild(this.checkRow(null, "Hold the phone level"));
     const tapFlag =
       analysis.draft.flags.some((flag) => flag.code === "tap-the-door" && flag.wall === letter) &&
