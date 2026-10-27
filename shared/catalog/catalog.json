@@ -782,5 +782,145 @@
     "thumbnail": "assets/models/polyhaven/vintage_wooden_drawer_01/thumb.png",
     "credit": "Vintage Wooden Drawer 01 by James Ray Cock, Poly Haven (CC0)",
     "license": "CC0-1.0"
+  },
+  {
+    "id": "rug_160x230",
+    "name": "Oslo Flatweave Rug 160x230",
+    "category": "rug",
+    "price": 199,
+    "seats": 0,
+    "size": {
+      "w": 160,
+      "d": 230,
+      "h": 1
+    },
+    "styleTags": ["modern", "minimalist"],
+    "colors": ["greige", "woven"],
+    "roomTypes": ["living room", "bedroom"],
+    "variants": [],
+    "model": "assets/models/fitroom/rug_160x230/rug_160x230_1k.gltf",
+    "thumbnail": "assets/models/fitroom/rug_160x230/thumb.png",
+    "credit": "Oslo Flatweave Rug 160x230: FitRoom Studio original, built in code (CC0-1.0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "rug_200x300",
+    "name": "Oslo Flatweave Rug 200x300",
+    "category": "rug",
+    "price": 249,
+    "seats": 0,
+    "size": {
+      "w": 200,
+      "d": 300,
+      "h": 1
+    },
+    "styleTags": ["modern", "minimalist"],
+    "colors": ["greige", "woven"],
+    "roomTypes": ["living room", "bedroom"],
+    "variants": [],
+    "model": "assets/models/fitroom/rug_200x300/rug_200x300_1k.gltf",
+    "thumbnail": "assets/models/fitroom/rug_200x300/thumb.png",
+    "credit": "Oslo Flatweave Rug 200x300: FitRoom Studio original, built in code (CC0-1.0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "rug_240x340",
+    "name": "Oslo Flatweave Rug 240x340",
+    "category": "rug",
+    "price": 329,
+    "seats": 0,
+    "size": {
+      "w": 240,
+      "d": 340,
+      "h": 1
+    },
+    "styleTags": ["modern", "minimalist"],
+    "colors": ["greige", "woven"],
+    "roomTypes": ["living room", "bedroom"],
+    "variants": [],
+    "model": "assets/models/fitroom/rug_240x340/rug_240x340_1k.gltf",
+    "thumbnail": "assets/models/fitroom/rug_240x340/thumb.png",
+    "credit": "Oslo Flatweave Rug 240x340: FitRoom Studio original, built in code (CC0-1.0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "fitroom_floor_lamp",
+    "name": "Aria Floor Lamp",
+    "category": "decor",
+    "price": 189,
+    "seats": 0,
+    "size": {
+      "w": 40,
+      "d": 40,
+      "h": 160
+    },
+    "styleTags": ["modern", "minimalist"],
+    "colors": ["black metal", "oatmeal fabric shade"],
+    "roomTypes": ["living room", "bedroom"],
+    "variants": [],
+    "model": "assets/models/fitroom/fitroom_floor_lamp/fitroom_floor_lamp_1k.gltf",
+    "thumbnail": "assets/models/fitroom/fitroom_floor_lamp/thumb.png",
+    "credit": "Aria Floor Lamp: FitRoom Studio original, built in code (CC0-1.0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "fitroom_wardrobe",
+    "name": "Oslo Two-Door Wardrobe",
+    "category": "wardrobe",
+    "price": 899,
+    "seats": 0,
+    "size": {
+      "w": 100,
+      "d": 60,
+      "h": 200
+    },
+    "styleTags": ["modern", "Scandinavian"],
+    "colors": ["oak", "black handles"],
+    "roomTypes": ["bedroom"],
+    "variants": [],
+    "model": "assets/models/fitroom/fitroom_wardrobe/fitroom_wardrobe_1k.gltf",
+    "thumbnail": "assets/models/fitroom/fitroom_wardrobe/thumb.png",
+    "credit": "Oslo Two-Door Wardrobe: FitRoom Studio original, built in code (CC0-1.0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "fitroom_platform_bed",
+    "name": "Oslo Platform Bed",
+    "category": "bed",
+    "price": 1090,
+    "seats": 0,
+    "size": {
+      "w": 160,
+      "d": 200,
+      "h": 100
+    },
+    "styleTags": ["modern", "Scandinavian"],
+    "colors": ["oak", "natural linen"],
+    "roomTypes": ["bedroom"],
+    "variants": [],
+    "model": "assets/models/fitroom/fitroom_platform_bed/fitroom_platform_bed_1k.gltf",
+    "thumbnail": "assets/models/fitroom/fitroom_platform_bed/thumb.png",
+    "credit": "Oslo Platform Bed: FitRoom Studio original, built in code (CC0-1.0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "fitroom_sofa_3seat",
+    "name": "Oslo Three-Seat Sofa",
+    "category": "sofa",
+    "price": 1190,
+    "seats": 3,
+    "size": {
+      "w": 220,
+      "d": 90,
+      "h": 80
+    },
+    "styleTags": ["modern", "Scandinavian"],
+    "colors": ["slate fabric", "warm grey"],
+    "roomTypes": ["living room"],
+    "variants": [],
+    "model": "assets/models/fitroom/fitroom_sofa_3seat/fitroom_sofa_3seat_1k.gltf",
+    "thumbnail": "assets/models/fitroom/fitroom_sofa_3seat/thumb.png",
+    "credit": "Oslo Three-Seat Sofa: FitRoom Studio original, built in code (CC0-1.0)",
+    "license": "CC0-1.0"
   }
 ]

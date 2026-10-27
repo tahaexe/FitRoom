@@ -17,6 +17,7 @@ export const CATEGORIES: Array<CatalogCategory | "all"> = [
   "ottoman",
   "shelf",
   "decor",
+  "rug",
 ];
 
 /** Readable chip names (never the raw slugs). */
@@ -30,6 +31,7 @@ export const CATEGORY_LABELS: Record<CatalogCategory | "all", string> = {
   "tv-unit": "TV units",
   shelf: "Shelves",
   decor: "Decor",
+  rug: "Rugs",
   "dining-table": "Dining tables",
   "dining-chair": "Dining chairs",
   bed: "Beds",
@@ -77,6 +79,10 @@ const SYNONYMS: Array<{ words: string[]; match: (item: CatalogItem) => boolean }
     match: (item) => item.category === "storage",
   },
   { words: ["ottoman", "ottomans", "footstool"], match: (item) => item.category === "ottoman" },
+  {
+    words: ["rug", "rugs", "carpet", "carpets", "mat", "mats"],
+    match: (item) => item.category === "rug",
+  },
 ];
 
 /** True when the item matches a free-text query, including common synonyms. */
@@ -182,7 +188,7 @@ export class CatalogPanel {
       empty.textContent =
         q === ""
           ? "Nothing in this category yet — try All."
-          : `No matches for “${q}”. Try a category: Sofas, Armchairs, Dining tables, Dining chairs, Coffee tables, Side tables, Beds, Wardrobes, Cabinets, Bookcases, Storage, TV units, Shelves or Decor.`;
+          : `No matches for “${q}”. Try a category: Sofas, Armchairs, Dining tables, Dining chairs, Coffee tables, Side tables, Beds, Wardrobes, Cabinets, Bookcases, Storage, TV units, Shelves, Decor or Rugs.`;
       host.appendChild(empty);
       return;
     }
