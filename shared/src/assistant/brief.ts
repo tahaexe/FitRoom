@@ -228,3 +228,14 @@ export function briefResultCard(
 export function briefStyleChip(style: BriefStyle): string {
   return `${style.charAt(0).toUpperCase()}${style.slice(1)} ✓`;
 }
+
+/**
+ * The computed line under a brief's result card: where the turn started and
+ * what Undo restores, from the real counts — never the model's words.
+ */
+export function briefStartLine(brief: AssistantBrief, startCount: number): string {
+  const pieces = startCount === 1 ? "1 piece" : `${String(startCount)} pieces`;
+  if (brief.keepExisting) return `Kept the ${pieces} already here.`;
+  if (startCount === 0) return "Started from an empty room.";
+  return `Started from an empty room; Undo brings back the ${pieces} that were here.`;
+}

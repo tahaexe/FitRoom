@@ -31,6 +31,7 @@ import {
   assistantToolMessages,
   briefError,
   briefResultCard,
+  briefStartLine,
   briefStyleChip,
   buildBriefRequest,
   cloneScene,
@@ -637,10 +638,19 @@ export class AssistantPanel {
       }
       box.appendChild(list);
     }
-    const text = document.createElement("p");
-    text.className = "assistant-answer";
-    text.textContent = answer;
-    box.appendChild(text);
+    // The text under a brief's card is computed first (where the turn
+    // started, what Undo restores), then the model's final answer when it
+    // gave one — never Arrange's move list.
+    const startLine = document.createElement("p");
+    startLine.className = "assistant-answer";
+    startLine.textContent = briefStartLine(brief, start.items.length);
+    box.appendChild(startLine);
+    if (answer.trim() !== "") {
+      const reply = document.createElement("p");
+      reply.className = "assistant-answer";
+      reply.textContent = firstSentences(answer);
+      box.appendChild(reply);
+    }
     log.appendChild(box);
     box.scrollIntoView({ block: "nearest" });
     log.scrollTop = log.scrollHeight;
@@ -722,13 +732,9 @@ export class AssistantPanel {
         if (cleanSnapshot !== null) {
           this.deps.applyTurn(cleanSnapshot);
           this.deps.onFurnished();
-          const composed = summarizeAssistantTurn(
-            start,
-            cleanSnapshot,
-            this.deps.room,
-            this.deps.catalog,
-          );
-          this.addFurnishCard(brief, start, cleanSnapshot, composed);
+          // Round cap with no final answer: the card shows the computed
+          // start line only, never a move list composed from tool records.
+          this.addFurnishCard(brief, start, cleanSnapshot, "");
         } else {
           this.addFurnishNotice("I ran out of steps without a clean draft, so nothing changed.");
         }
@@ -1093,6 +1099,16 @@ export class AssistantPanel {
       records,
     );
   }
+}
+
+/** First three sentences of a longer text (the model's card reply stays short). */
+export function firstSentences(text: string, max = 3): string {
+  const sentences = text.match(/[^.!?…]+[.!?…]+/g) ?? [text];
+  const picked = sentences
+    .map((sentence) => sentence.trim())
+    .filter((sentence) => sentence !== "")
+    .slice(0, Math.max(1, max));
+  return picked.join(" ");
 }
 
 /** One progress line per furnish round, from the round's tool calls. */
