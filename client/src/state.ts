@@ -259,6 +259,34 @@ export function itemCorners(item: SceneItem, catalog: Map<string, CatalogItem>):
   }));
 }
 
+/**
+ * Clamp a piece centre so its whole rotated footprint stays inside the
+ * room: the rotated half extents (not the centre) meet the walls. When the
+ * piece is wider than the room, it centres on that axis.
+ */
+export function clampFootprintToRoom(
+  x: number,
+  z: number,
+  w: number,
+  d: number,
+  rotationDeg: number,
+  bounds: { minX: number; maxX: number; minZ: number; maxZ: number },
+): { x: number; z: number } {
+  const rad = (rotationDeg * Math.PI) / 180;
+  const cos = Math.abs(Math.cos(rad));
+  const sin = Math.abs(Math.sin(rad));
+  const hx = (w / 2) * cos + (d / 2) * sin;
+  const hz = (w / 2) * sin + (d / 2) * cos;
+  const loX = bounds.minX + hx;
+  const hiX = bounds.maxX - hx;
+  const loZ = bounds.minZ + hz;
+  const hiZ = bounds.maxZ - hz;
+  return {
+    x: loX > hiX ? (bounds.minX + bounds.maxX) / 2 : Math.min(hiX, Math.max(loX, x)),
+    z: loZ > hiZ ? (bounds.minZ + bounds.maxZ) / 2 : Math.min(hiZ, Math.max(loZ, z)),
+  };
+}
+
 export function cornersOverlap(a: PlanPoint[], b: PlanPoint[]): boolean {
   // Separating-axis test on the two rectangles' edge normals. Touching
   // edges (within a micrometre) count as separated, so exact-pitch wall

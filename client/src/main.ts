@@ -62,6 +62,7 @@ import "./photo-room/photo-room.css";
 import "./editor/editor.css";
 import {
   catalogProducts,
+  clampFootprintToRoom,
   cornersOverlap,
   distanceToWallM,
   emptyScene,
@@ -1042,7 +1043,7 @@ class FitRoomApp {
   }
 
   private commitMove(id: string, x: number, z: number): void {
-    const clamped = this.clampToRoom(x, z);
+    const clamped = this.clampToRoom(x, z, id);
     this.store.commit((draft) => {
       const it = draft.items.find((i) => i.instanceId === id);
       if (it !== undefined) {
@@ -1307,14 +1308,28 @@ class FitRoomApp {
     }
   }
 
-  /** Clamp a room position to the floor bounds so the Inspector and arrow
-   * keys can never send a piece out of the room. */
-  private clampToRoom(x: number, z: number): { x: number; z: number } {
+  /** Clamp a room position so the whole rotated footprint stays inside:
+   * the Inspector and arrow keys can never push half a piece into a wall. */
+  private clampToRoom(x: number, z: number, id: string | null = null): { x: number; z: number } {
     const b = roomBounds(ROOM);
-    return {
-      x: Math.min(b.maxX, Math.max(b.minX, Math.round(x))),
-      z: Math.min(b.maxZ, Math.max(b.minZ, Math.round(z))),
-    };
+    const item =
+      id === null ? undefined : this.store.state.items.find((i) => i.instanceId === id);
+    const entry = item === undefined ? undefined : CATALOG_MAP.get(item.productId);
+    if (item === undefined || entry === undefined) {
+      return {
+        x: Math.min(b.maxX, Math.max(b.minX, Math.round(x))),
+        z: Math.min(b.maxZ, Math.max(b.minZ, Math.round(z))),
+      };
+    }
+    const next = clampFootprintToRoom(
+      Math.round(x),
+      Math.round(z),
+      entry.size.w,
+      entry.size.d,
+      item.rotationY,
+      b,
+    );
+    return { x: Math.round(next.x), z: Math.round(next.z) };
   }
 
   /** Toolbar toggle state, announced (aria-pressed) and visible. */

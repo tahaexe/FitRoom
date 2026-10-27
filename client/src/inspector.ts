@@ -1,4 +1,5 @@
 import type { CatalogItem, SceneItem } from "@fitroom/shared";
+import { clampFootprintToRoom } from "./state";
 
 export interface InspectorBounds {
   minX: number;
@@ -70,77 +71,84 @@ export class Inspector {
     const widthCm = bounds === null ? 0 : Math.round(bounds.maxX - bounds.minX);
     const depthCm = bounds === null ? 0 : Math.round(bounds.maxZ - bounds.minZ);
 
-    const posRow = document.createElement("div");
-    posRow.className = "inspector-row";
-    const xLabel = document.createElement("label");
-    xLabel.textContent = `From left wall (cm${bounds === null ? "" : `, 0–${widthCm}`}) `;
-    const xInput = document.createElement("input");
-    xInput.type = "number";
-    xInput.name = "position-x-cm";
-    xInput.step = "1";
-    xInput.min = "0";
-    if (bounds !== null) xInput.max = String(widthCm);
-    xInput.value = String(Math.round(item.position.x - minX));
-    xInput.setAttribute("aria-label", "From left wall in centimetres");
-    xInput.addEventListener("change", () => {
-      const raw = xInput.value.trim();
-      if (raw === "") {
-        // Empty field restores the previous value: no commit.
-        xInput.value = String(Math.round(item.position.x - minX));
-        return;
-      }
-      const parsed = Number(raw);
-      if (!Number.isFinite(parsed)) {
-        xInput.value = String(Math.round(item.position.x - minX));
-        return;
-      }
-      const dist = Math.round(parsed);
-      const absolute = minX + dist;
-      const clampedX =
-        bounds === null ? absolute : Math.min(bounds.maxX, Math.max(bounds.minX, absolute));
-      if (clampedX !== absolute && bounds !== null) {
-        this.note = `Clamped to the room (0–${widthCm} cm from the left wall).`;
-      } else {
-        this.note = null;
-      }
-      this.renderNote();
-      this.opts.onMove(item.instanceId, clampedX, item.position.z);
-    });
-    const zLabel = document.createElement("label");
-    zLabel.textContent = `From door wall (cm${bounds === null ? "" : `, 0–${depthCm}`}) `;
-    const zInput = document.createElement("input");
-    zInput.type = "number";
-    zInput.name = "position-z-cm";
-    zInput.step = "1";
-    zInput.min = "0";
-    if (bounds !== null) zInput.max = String(depthCm);
-    zInput.value = String(Math.round(item.position.z - minZ));
-    zInput.setAttribute("aria-label", "From door wall in centimetres");
-    zInput.addEventListener("change", () => {
-      const raw = zInput.value.trim();
-      if (raw === "") {
-        zInput.value = String(Math.round(item.position.z - minZ));
-        return;
-      }
-      const parsed = Number(raw);
-      if (!Number.isFinite(parsed)) {
-        zInput.value = String(Math.round(item.position.z - minZ));
-        return;
-      }
-      const dist = Math.round(parsed);
-      const absolute = minZ + dist;
-      const clampedZ =
-        bounds === null ? absolute : Math.min(bounds.maxZ, Math.max(bounds.minZ, absolute));
-      if (clampedZ !== absolute && bounds !== null) {
-        this.note = `Clamped to the room (0–${depthCm} cm from the door wall).`;
-      } else {
-        this.note = null;
-      }
-      this.renderNote();
-      this.opts.onMove(item.instanceId, item.position.x, clampedZ);
-    });
-    posRow.append(xLabel, xInput, zLabel, zInput);
-    this.root.appendChild(posRow);
+    // Labels sit above their fields, one line each; the room range is a
+    // hint, and the clamp keeps the whole rotated footprint inside.
+    const sizeW = entry?.size.w ?? 60;
+    const sizeD = entry?.size.d ?? 60;
+    const clampCentre = (x: number, z: number): { x: number; z: number } =>
+      bounds === null
+        ? { x, z }
+        : clampFootprintToRoom(x, z, sizeW, sizeD, item.rotationY, bounds);
+    const posCol = document.createElement("div");
+    posCol.className = "inspector-pos";
+    const makeField = (
+      labelText: string,
+      hintText: string,
+      ariaText: string,
+      inputName: string,
+      value: number,
+      onCommit: (distCm: number) => void,
+    ): void => {
+      const field = document.createElement("div");
+      field.className = "inspector-field";
+      const label = document.createElement("label");
+      label.textContent = `${labelText} `;
+      const hint = document.createElement("span");
+      hint.className = "inspector-hint";
+      hint.textContent = hintText;
+      label.appendChild(hint);
+      const input = document.createElement("input");
+      input.type = "number";
+      input.name = inputName;
+      input.step = "1";
+      input.min = "0";
+      input.value = String(Math.round(value));
+      input.setAttribute("aria-label", ariaText);
+      input.addEventListener("change", () => {
+        const raw = input.value.trim();
+        if (raw === "" || !Number.isFinite(Number(raw))) {
+          // Empty or invalid field restores the previous value: no commit.
+          input.value = String(Math.round(value));
+          return;
+        }
+        onCommit(Math.round(Number(raw)));
+      });
+      field.append(label, input);
+      posCol.appendChild(field);
+    };
+    makeField(
+      "From left wall · cm",
+      bounds === null ? "" : `0–${widthCm}`,
+      "From left wall in centimetres",
+      "position-x-cm",
+      item.position.x - minX,
+      (dist) => {
+        const next = clampCentre(minX + dist, item.position.z);
+        const moved = Math.round(next.x) !== Math.round(minX + dist);
+        this.note = moved
+          ? `Kept the whole piece inside the room (0–${widthCm} cm from the left wall).`
+          : null;
+        this.renderNote();
+        this.opts.onMove(item.instanceId, Math.round(next.x), item.position.z);
+      },
+    );
+    makeField(
+      "From door wall · cm",
+      bounds === null ? "" : `0–${depthCm}`,
+      "From door wall in centimetres",
+      "position-z-cm",
+      item.position.z - minZ,
+      (dist) => {
+        const next = clampCentre(item.position.x, minZ + dist);
+        const moved = Math.round(next.z) !== Math.round(minZ + dist);
+        this.note = moved
+          ? `Kept the whole piece inside the room (0–${depthCm} cm from the door wall).`
+          : null;
+        this.renderNote();
+        this.opts.onMove(item.instanceId, item.position.x, Math.round(next.z));
+      },
+    );
+    this.root.appendChild(posCol);
 
     const rotRow = document.createElement("div");
     rotRow.className = "inspector-row";
