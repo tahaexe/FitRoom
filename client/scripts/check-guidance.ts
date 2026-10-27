@@ -45,6 +45,13 @@ import {
   formatTopBar,
   matchesCatalogQuery,
 } from "../src/catalog-ui.js";
+import {
+  INSPECTOR_MORE_LABEL,
+  PHONE_AI_MENU_LABELS,
+  PHONE_BAR_LABELS,
+  PHONE_MEDIA,
+  PHONE_MENU_LABELS,
+} from "../src/phone-sheet.js";
 import { measuredMarkText, photoBandText, tapeWallLabel } from "../src/editor/source-mark.js";
 import {
   cornerHandleLabel,
@@ -742,6 +749,139 @@ check(
 check(
   "firstopen:inputmode",
   firstOpenSource.includes('inputmode", "decimal') || firstOpenSource.includes("inputmode"),
+);
+
+// ---- Phone bottom sheets, bars and touch targets ----
+check(
+  "phone:media",
+  PHONE_MEDIA === "(max-width: 720px), (max-height: 500px) and (orientation: landscape)",
+  PHONE_MEDIA,
+);
+check(
+  "phone:bar",
+  JSON.stringify(PHONE_BAR_LABELS) === JSON.stringify(["Catalog", "AI", "Visualise"]),
+  PHONE_BAR_LABELS.join(","),
+);
+check(
+  "phone:menu",
+  JSON.stringify(PHONE_MENU_LABELS) ===
+    JSON.stringify(["Plan", "Clearance", "Reset view", "Edit room", "Credits"]),
+  PHONE_MENU_LABELS.join(","),
+);
+check(
+  "phone:ai-menu",
+  JSON.stringify(PHONE_AI_MENU_LABELS) === JSON.stringify(["Arrange", "Furnish", "Recommend"]),
+  PHONE_AI_MENU_LABELS.join(","),
+);
+check("phone:more", INSPECTOR_MORE_LABEL === "More", INSPECTOR_MORE_LABEL);
+const phoneCss = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "style.css"),
+  "utf8",
+);
+check("phone:topbar-48", phoneCss.includes("--top-bar-phone: 48px"), "48 px top bar");
+check("phone:bottombar-56", phoneCss.includes("--phone-bar-height: 56px"), "56 px bottom bar");
+check(
+  "phone:sheet-heights",
+  phoneCss.includes("--sheet-peek: 40dvh") && phoneCss.includes("--sheet-full: 88dvh"),
+  "peek 40 %, full 88 %",
+);
+check(
+  "phone:landscape",
+  phoneCss.includes("(max-height: 500px) and (orientation: landscape)"),
+  "landscape height ≤ 500 px",
+);
+check(
+  "phone:safe-area",
+  phoneCss.includes("env(safe-area-inset-top)") && phoneCss.includes("env(safe-area-inset-bottom)"),
+  "safe-area insets",
+);
+check("phone:sheet-handle", phoneCss.includes(".sheet-handle"), "drag handle");
+check(
+  "phone:overlays-above-sheet",
+  phoneCss.includes('body[data-sheet-open="true"] .fit-badge') &&
+    phoneCss.includes('body[data-sheet-open="true"] .door-tip'),
+  "badge, pills and tips above the sheet",
+);
+check(
+  "phone:coarse-targets",
+  phoneCss.includes("@media (pointer: coarse)") && phoneCss.includes("min-height: 44px"),
+  "44 px targets on touch screens",
+);
+check(
+  "phone:coarse-text",
+  phoneCss.includes("font-size: 16px") && phoneCss.includes("no zoom on focus"),
+  "13 px text, 16 px inputs",
+);
+check(
+  "phone:inspector-more",
+  phoneCss.includes("#inspector:not([data-expanded=") && phoneCss.includes(".inspector-more"),
+  "position fields behind More",
+);
+const phoneIndex = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "index.html"),
+  "utf8",
+);
+for (const id of ["phone-bar", "phone-catalog", "phone-ai", "phone-visualise", "phone-cart"]) {
+  check(`phone:chrome-${id}`, phoneIndex.includes(`id="${id}"`), `index.html has #${id}`);
+}
+check("phone:chrome-menu", phoneIndex.includes('id="tool-phone-menu"'), "⋯ menu button");
+for (const label of ["Plan", "Clearance", "Reset view", "Edit room", "Credits"]) {
+  check(`phone:menu-${label}`, phoneIndex.includes(`>${label}<`), `⋯ menu has ${label}`);
+}
+for (const label of ["Arrange", "Furnish", "Recommend"]) {
+  check(`phone:ai-${label}`, phoneIndex.includes(`>${label}<`), `AI menu has ${label}`);
+}
+check(
+  "phone:credits-close",
+  phoneIndex.includes('class="btn-secondary">Close<'),
+  "Credits Close uses the shared button style",
+);
+const phoneMain = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "main.ts"),
+  "utf8",
+);
+check("phone:sheets", phoneMain.includes("PhoneSheets"), "bottom-sheet controller");
+check(
+  "phone:one-at-a-time",
+  phoneMain.includes("one at a time") || phoneMain.includes("one sheet at a time"),
+  "one sheet at a time",
+);
+check("phone:esc", phoneMain.includes("closePhoneChrome()"), "Esc closes the sheet");
+check(
+  "phone:cart",
+  phoneMain.includes('getElementById("phone-cart")'),
+  "cart summary on the phone bar",
+);
+check(
+  "phone:door-room",
+  phoneMain.includes("fitroom.doors-tip-seen:${ROOM.id}") &&
+    phoneMain.includes('tip.dataset["room"]'),
+  "door tip shows only in the room it was made for",
+);
+check(
+  "phone:ring-hit",
+  phoneMain.includes("0.28") && phoneMain.includes("44 px touch target"),
+  "rotation ring 44 px hit area",
+);
+const phoneSheetSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "phone-sheet.ts"),
+  "utf8",
+);
+check(
+  "phone:swipe",
+  phoneSheetSource.includes("pointerup") && phoneSheetSource.includes("80"),
+  "swipe down closes the sheet",
+);
+const phoneInspector = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "inspector.ts"),
+  "utf8",
+);
+check(
+  "phone:inspector-actions",
+  phoneInspector.includes("inspector-actions") &&
+    phoneInspector.includes("inspector-more") &&
+    phoneInspector.includes("onRotate"),
+  "rotate, variants and delete first, More for position fields",
 );
 
 if (failures > 0) process.exit(1);
