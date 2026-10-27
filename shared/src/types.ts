@@ -226,4 +226,22 @@ export interface FitIssue {
   itemIds: string[];
   message: string;
   location: PlanPoint;
+  /**
+   * Measured amount in whole cm: overlap depth (smallest separating move),
+   * depth past the wall face, depth inside the door swing, narrowest clear
+   * width, or distance to the window.
+   */
+  amountCm?: number;
+  /** The rule's value where one applies (e.g. 80 for a walkway). */
+  limitCm?: number;
+  /**
+   * The other side in shopper words: the other piece's catalog name,
+   * "the wall", "the door" or "the window" (with the wall when several
+   * could clash, e.g. "the window on the left wall").
+   */
+  otherLabel?: string;
+  /** Conflict region as plan-cm polygon points. */
+  area?: PlanPoint[];
+  /** Dimension line endpoints (plan cm). */
+  dimension?: [PlanPoint, PlanPoint];
 }

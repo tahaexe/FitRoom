@@ -134,8 +134,14 @@ function checkFitExpectations(): boolean {
     return false;
   }
   const products: FitProducts = new Map(
-    catalog.map((c) => [c.id, { size: c.size, category: c.category }]),
+    catalog.map((c) => [c.id, { size: c.size, category: c.category, name: c.name }]),
   );
+  // Internal keys that must never appear in a shopper-facing verdict.
+  const internalIds = new Set<string>();
+  for (const wall of room.walls) internalIds.add(wall.id);
+  for (const opening of room.openings) internalIds.add(opening.id);
+  for (const fixture of room.fixtures) internalIds.add(fixture.id);
+  for (const entry of catalog) internalIds.add(entry.id);
   let failed = false;
   for (const name of Object.keys(expected).sort()) {
     const sceneFile = join(testsDir, `${name}.json`);
@@ -145,21 +151,42 @@ function checkFitExpectations(): boolean {
       continue;
     }
     const scene = readJson(sceneFile) as SceneState;
-    const actual = checkFit(room, scene, products)
+    for (const item of scene.items) internalIds.add(item.instanceId);
+    const found = checkFit(room, scene, products);
+    const actual = found
       .map((issue) => ({ type: issue.type, itemIds: [...issue.itemIds].sort() }))
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
     const want = (expected[name] ?? [])
       .map((issue) => ({ type: issue.type, itemIds: [...issue.itemIds].sort() }))
       .sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
-    if (JSON.stringify(actual) === JSON.stringify(want)) {
+    const problems: string[] = [];
+    if (JSON.stringify(actual) !== JSON.stringify(want)) {
+      problems.push(
+        `contract mismatch: want ${JSON.stringify(want)}, got ${JSON.stringify(actual)}`,
+      );
+    }
+    // Every verdict reads as a measurement: a number, a numeric amount and
+    // no internal key (instance, product, opening, wall or fixture id).
+    for (const issue of found) {
+      const leaked = [...internalIds].filter((id) => issue.message.includes(id));
+      if (leaked.length > 0) {
+        problems.push(`[${issue.type}] message leaks id(s) ${leaked.join(",")}: ${issue.message}`);
+      }
+      if (!/\d/.test(issue.message)) {
+        problems.push(`[${issue.type}] message has no number: ${issue.message}`);
+      }
+      if (typeof issue.amountCm !== "number" || !Number.isFinite(issue.amountCm)) {
+        problems.push(`[${issue.type}] amountCm is not numeric: ${issue.message}`);
+      }
+    }
+    if (problems.length === 0) {
       console.log(
         `fit-tests/${name}: OK (${actual.length} issue${actual.length === 1 ? "" : "s"})`,
       );
     } else {
       failed = true;
       console.error(`fit-tests/${name}: FAIL`);
-      console.error(`  expected: ${JSON.stringify(want)}`);
-      console.error(`  actual:   ${JSON.stringify(actual)}`);
+      for (const problem of problems) console.error(`  ${problem}`);
     }
   }
   return !failed;

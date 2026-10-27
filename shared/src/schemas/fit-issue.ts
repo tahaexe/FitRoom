@@ -1,4 +1,14 @@
 /** JSON Schema (draft 2020-12) for {@link FitIssue}. */
+const planPoint = {
+  type: "object",
+  properties: {
+    x: { type: "number" },
+    z: { type: "number" },
+  },
+  required: ["x", "z"],
+  additionalProperties: false,
+} as const;
+
 export const fitIssueSchema = {
   $schema: "https://json-schema.org/draft/2020-12/schema",
   $id: "https://fitroom.app/schemas/fit-issue.schema.json",
@@ -10,15 +20,12 @@ export const fitIssueSchema = {
     severity: { enum: ["error", "warning"] },
     itemIds: { type: "array", items: { type: "string" } },
     message: { type: "string", minLength: 1 },
-    location: {
-      type: "object",
-      properties: {
-        x: { type: "number" },
-        z: { type: "number" },
-      },
-      required: ["x", "z"],
-      additionalProperties: false,
-    },
+    location: planPoint,
+    amountCm: { type: "number" },
+    limitCm: { type: "number" },
+    otherLabel: { type: "string", minLength: 1 },
+    area: { type: "array", items: planPoint },
+    dimension: { type: "array", items: planPoint, minItems: 2, maxItems: 2 },
   },
   required: ["type", "severity", "itemIds", "message", "location"],
   additionalProperties: false,
