@@ -69,6 +69,20 @@ export function formatTopBar(count: number, total: number): string {
   return `${String(count)} ${count === 1 ? "item" : "items"} · $${total.toLocaleString("en-US")}`;
 }
 
+/** Status pill for the selected piece, in plain words (never symbols). */
+export function formatMeasure(
+  name: string,
+  widthCm: number,
+  depthCm: number,
+  wallCm: number,
+  rotationDeg: number,
+): string {
+  return (
+    `${name} ${String(Math.round(widthCm))}×${String(Math.round(depthCm))}cm · ` +
+    `${String(Math.round(wallCm))} cm from the wall · ${String(Math.round(rotationDeg))}°`
+  );
+}
+
 /** Left catalog panel: search + category chips + product cards. */
 export class CatalogPanel {
   private query = "";

@@ -342,59 +342,77 @@ export class FitOverlay {
   }
 
   /**
-   * One chip per issue (icon plus the verdict text with its number) plus
-   * one small dimension number per dimension line. Issues on the same
-   * piece share an anchor and stack upward; `update` then separates every
-   * visible label so none overlap. Tooltips repeat the verdict text (ids
-   * never appear in any label or tooltip).
+   * One short chip per piece (its most serious issue: errors before
+   * warnings, then the largest number) plus one small dimension number for
+   * that same issue. Everything else lives in the problem list, so pills
+   * never stack on one anchor; `update` still separates neighbours so no
+   * two pills overlap. Tooltips repeat the verdict text (ids never appear
+   * in any label or tooltip).
    */
   private rebuildLabels(issues: FitIssue[]): void {
     this.labelLayer.innerHTML = "";
     this.labels = [];
-    const groups = new Map<string, FitIssue[]>();
+    const byPiece = new Map<string, FitIssue[]>();
     for (const issue of issues) {
-      const key = issue.itemIds[0] ?? `${issue.location.x},${issue.location.z}`;
-      const list = groups.get(key);
-      if (list === undefined) groups.set(key, [issue]);
-      else list.push(issue);
+      if (issue.itemIds.length === 0) {
+        const key = `unplaced:${issue.location.x},${issue.location.z}`;
+        const list = byPiece.get(key);
+        if (list === undefined) byPiece.set(key, [issue]);
+        else list.push(issue);
+        continue;
+      }
+      for (const id of issue.itemIds) {
+        const list = byPiece.get(id);
+        if (list === undefined) byPiece.set(id, [issue]);
+        else list.push(issue);
+      }
     }
-    for (const list of groups.values()) {
-      const anchor = list[0]?.location ?? { x: 0, z: 0 };
-      list.forEach((issue, stack) => {
-        const el = document.createElement("div");
-        el.className = "fit-issue-label";
-        el.dataset["severity"] = issue.severity;
-        el.textContent = `${issue.severity === "error" ? "✕" : "!"} ${issue.message}`;
-        el.title = issue.message;
-        this.labelLayer.appendChild(el);
-        this.labels.push({ el, at: { ...anchor }, stack });
-        const dimension = issue.dimension;
-        if (dimension !== undefined && issue.amountCm !== undefined) {
-          const [from, to] = dimension;
-          if (Math.hypot(to.x - from.x, to.z - from.z) >= 1) {
-            const dim = document.createElement("div");
-            dim.className = "fit-dim-label";
-            dim.dataset["severity"] = issue.severity;
-            dim.textContent = `${String(issue.amountCm)} cm`;
-            dim.title = issue.message;
-            this.labelLayer.appendChild(dim);
-            // Beside the dimension line, never on it: offset the chip
-            // perpendicular to the line so it cannot cover the line — or a
-            // wall/opening label under it — before separation runs.
-            const ddx = to.x - from.x;
-            const ddz = to.z - from.z;
-            const dlen = Math.hypot(ddx, ddz) || 1;
-            this.labels.push({
-              el: dim,
-              at: {
-                x: (from.x + to.x) / 2 + (-ddz / dlen) * DIM_CHIP_OFFSET_CM,
-                z: (from.z + to.z) / 2 + (ddx / dlen) * DIM_CHIP_OFFSET_CM,
-              },
-              stack: 0,
-            });
-          }
+    const rank = (issue: FitIssue): number =>
+      (issue.severity === "error" ? 0 : 1) * 100000 - (issue.amountCm ?? 0);
+    // The same issue (e.g. one overlap naming both pieces) renders once,
+    // merged at its conflict centre, so pills never cover each other.
+    const shown = new Set<string>();
+    const keyOf = (issue: FitIssue): string =>
+      `${issue.type}|${[...issue.itemIds].sort().join(",")}|${issue.location.x},${issue.location.z}`;
+    for (const list of byPiece.values()) {
+      const sorted = [...list].sort((a, b) => rank(a) - rank(b));
+      const issue = sorted.find((candidate) => !shown.has(keyOf(candidate)));
+      if (issue === undefined) continue;
+      shown.add(keyOf(issue));
+      const anchor = issue.location;
+      const el = document.createElement("div");
+      el.className = "fit-issue-label";
+      el.dataset["severity"] = issue.severity;
+      el.textContent = `${issue.severity === "error" ? "✕" : "!"} ${issue.message}`;
+      el.title = issue.message;
+      this.labelLayer.appendChild(el);
+      this.labels.push({ el, at: { ...anchor }, stack: 0 });
+      const dimension = issue.dimension;
+      if (dimension !== undefined && issue.amountCm !== undefined) {
+        const [from, to] = dimension;
+        if (Math.hypot(to.x - from.x, to.z - from.z) >= 1) {
+          const dim = document.createElement("div");
+          dim.className = "fit-dim-label";
+          dim.dataset["severity"] = issue.severity;
+          dim.textContent = `${String(issue.amountCm)} cm`;
+          dim.title = issue.message;
+          this.labelLayer.appendChild(dim);
+          // Beside the dimension line, never on it: offset the chip
+          // perpendicular to the line so it cannot cover the line — or a
+          // wall/opening label under it — before separation runs.
+          const ddx = to.x - from.x;
+          const ddz = to.z - from.z;
+          const dlen = Math.hypot(ddx, ddz) || 1;
+          this.labels.push({
+            el: dim,
+            at: {
+              x: (from.x + to.x) / 2 + (-ddz / dlen) * DIM_CHIP_OFFSET_CM,
+              z: (from.z + to.z) / 2 + (ddx / dlen) * DIM_CHIP_OFFSET_CM,
+            },
+            stack: 0,
+          });
         }
-      });
+      }
     }
   }
 

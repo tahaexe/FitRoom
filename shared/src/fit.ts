@@ -1151,8 +1151,12 @@ export class FitEngine {
           const pair = [aId, bId].sort();
           const first = pair[0] as string;
           const second = pair[1] as string;
-          const otherItem = items.find((it) => it.instanceId === second);
-          const other = otherItem === undefined ? "other piece" : productName(otherItem.productId);
+          const firstItem = items.find((it) => it.instanceId === first);
+          const secondItem = items.find((it) => it.instanceId === second);
+          const subject =
+            firstItem === undefined ? "A piece" : productName(firstItem.productId);
+          const other =
+            secondItem === undefined ? "other piece" : productName(secondItem.productId);
           const { depth, nx, nz } = separatingDepth(a, b);
           const amount = depthCm(depth);
           const area = cleanPoly(intersectOriented(a.corners, b));
@@ -1161,7 +1165,7 @@ export class FitEngine {
             type: "overlap",
             severity: "error",
             itemIds: [first, second],
-            message: `Overlaps the ${other} by ${String(amount)} cm`,
+            message: `${subject} overlaps the ${other} by ${String(amount)} cm`,
             location: { x: centre.x, z: centre.z },
             amountCm: amount,
             otherLabel: other,
@@ -1180,6 +1184,7 @@ export class FitEngine {
         if (rectsOverlap(a, fx)) {
           const def = this.fixtureDefs[f];
           const kind = def?.type === "other" || def === undefined ? "fixture" : def.type;
+          const subject = productName(aItem.productId);
           const { depth, nx, nz } = separatingDepth(a, fx);
           const amount = depthCm(depth);
           const area = cleanPoly(intersectOriented(a.corners, fx));
@@ -1188,7 +1193,7 @@ export class FitEngine {
             type: "overlap",
             severity: "error",
             itemIds: [aId],
-            message: `Overlaps the ${kind} by ${String(amount)} cm`,
+            message: `${subject} overlaps the ${kind} by ${String(amount)} cm`,
             location: { x: centre.x, z: centre.z },
             amountCm: amount,
             otherLabel: kind,

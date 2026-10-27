@@ -39,7 +39,7 @@ import rotatedOverlapScene from "../../shared/samples/fit-tests/rotated-overlap.
 import rotatedOutsideScene from "../../shared/samples/fit-tests/rotated-outside.json";
 import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.json";
 import { initLiveSwitch } from "./api";
-import { CatalogPanel, formatTopBar } from "./catalog-ui";
+import { CatalogPanel, formatMeasure, formatTopBar } from "./catalog-ui";
 import { RecommendPanel } from "./recommend/panel";
 import { AssistantPanel } from "./assistant/panel";
 import { applyVariant, loadModel } from "./models";
@@ -1653,9 +1653,13 @@ class FitRoomApp {
       return;
     }
     const wallM = distanceToWallM(item.position, ROOM);
-    this.measureEl.textContent =
-      `${entry.name} ${Math.round(entry.size.w)}×${Math.round(entry.size.d)}cm · ` +
-      `Δwall ${(wallM * 100).toFixed(0)}cm · ∠${Math.round(item.rotationY)}°`;
+    this.measureEl.textContent = formatMeasure(
+      entry.name,
+      entry.size.w,
+      entry.size.d,
+      wallM * 100,
+      item.rotationY,
+    );
   }
 
   // ---- input ----
