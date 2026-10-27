@@ -110,7 +110,7 @@ export interface RoomStyle {
   dominantColors: string[];
 }
 
-export type RoomSource = "sample" | "photos";
+export type RoomSource = "sample" | "photos" | "manual";
 
 export interface RoomLayout {
   id: string;

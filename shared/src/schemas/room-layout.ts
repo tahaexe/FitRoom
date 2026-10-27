@@ -49,7 +49,7 @@ export const roomLayoutSchema = {
       required: ["tags", "dominantColors"],
       additionalProperties: false,
     },
-    source: { enum: ["sample", "photos"] },
+    source: { enum: ["sample", "photos", "manual"] },
     confidence: { type: "number", minimum: 0, maximum: 1 },
   },
   required: [
