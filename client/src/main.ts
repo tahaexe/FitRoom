@@ -477,6 +477,7 @@ class FitRoomApp {
         applyTurn: (endScene) => this.applyAssistantTurn(endScene),
         resetDemoRoom: () => this.resetDemoRoom(),
         isSampleScene: () => this.isSampleScene(),
+        onFurnished: () => this.showFurnishedToast(),
       });
     }
 
@@ -1596,10 +1597,47 @@ class FitRoomApp {
       hint = document.createElement("div");
       hint.id = "empty-hint";
       hint.className = "empty-hint";
-      hint.textContent = "This room is empty. Add furniture from the catalog on the left.";
+      const text = document.createElement("span");
+      text.textContent = "This room is empty. Add furniture from the catalog on the left. ";
+      const furnish = document.createElement("button");
+      furnish.type = "button";
+      furnish.className = "empty-hint-link";
+      furnish.textContent = "Furnish it for me";
+      furnish.addEventListener("click", () => {
+        this.showSidePanel("assistant");
+        this.assistantPanel?.openFurnish();
+      });
+      hint.append(text, furnish);
       this.container.appendChild(hint);
     }
     hint.removeAttribute("hidden");
+  }
+
+  /** Furnish-turn toast: applied as one undo step, undoable from the toast. */
+  private showFurnishedToast(): void {
+    let host = document.getElementById("delete-toast");
+    if (host === null) {
+      host = document.createElement("div");
+      host.id = "delete-toast";
+      host.className = "delete-toast";
+      host.setAttribute("hidden", "");
+      document.getElementById("scene-container")?.appendChild(host);
+      this.toastEl = host;
+    }
+    host.innerHTML = "";
+    const text = document.createElement("span");
+    text.textContent = "Furnished · ";
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Undo";
+    btn.addEventListener("click", () => {
+      this.hideDeleteToast();
+      this.doUndo();
+    });
+    host.append(text, btn);
+    host.removeAttribute("hidden");
+    window.clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => this.hideDeleteToast(), 5000);
   }
 
   /**

@@ -1,12 +1,15 @@
 /**
  * `npm run check:assistant` — headless assistant check for the demo room.
  *
- * For the demo room and the six scripted assistant turns it replays each
+ * For the demo room and the eight scripted assistant turns (six
+ * arrangements plus two furnishing briefs) it replays each
  * turn from the demo store through the gateway pipeline in demo mode: every
  * round goes to `POST /api/assistant` (served from the store, zero upstream
  * calls), its tool calls run through the shared executor on a draft copy of
  * the demo scene, and the results go back as tool messages — until the model
- * answers in text (at most 8 rounds, like the client).
+ * answers in text (at most 8 rounds, like the client). Brief turns
+ * replay from an empty draft with the brief in the key and must end with no
+ * fit error, within budget and with their seats.
  *
  * It then checks that each final scene has no fit error and meets its
  * request (sofa centred on window A within 5 cm facing south; the Provence
@@ -30,17 +33,27 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   ASSISTANT_MAX_ROUNDS,
+  assistantRequestError,
   assistantToolMessages,
+  briefNewItems,
+  briefPricedTotal,
+  briefResultCard,
+  briefSeatCount,
+  briefStyleMatches,
   checkFit,
   cloneScene,
   createAssistantContext,
+  executeAssistantTool,
   executeTurnRound,
   footprintOf,
   impossibleAnswer,
   isAssistantRequest,
   isAssistantRoundData,
+  overBudgetError,
+  startBriefDraft,
   summarizeAssistantTurn,
   wallDisplayName,
+  type AssistantBrief,
   type AssistantMessage,
   type AssistantRequest,
   type AssistantToolRecord,
@@ -51,7 +64,12 @@ import {
   type SceneState,
 } from "@fitroom/shared";
 import { META_MODELS } from "../src/config.js";
-import { ASSISTANT_DEMO_REQUESTS, buildAssistantDemoRequests } from "../src/assistant-demo.js";
+import {
+  ASSISTANT_DEMO_BRIEFS,
+  ASSISTANT_DEMO_REQUESTS,
+  assistantDemoBriefRequests,
+  buildAssistantDemoRequests,
+} from "../src/assistant-demo.js";
 import { DEMO_REQUESTS } from "../src/demo-requests.js";
 import { gatewayKey } from "../src/meta/keys.js";
 import { assistantKeyInput } from "../src/routes/assistant.js";
@@ -149,7 +167,9 @@ async function replayTurn(
   start: SceneState,
   reached: Set<string>,
 ): Promise<Replay> {
-  const draft = cloneScene(start);
+  // A brief with keepExisting false starts from an empty draft, like the
+  // client, the recorder and the executor key all agree.
+  const draft = startBriefDraft(start, first.brief);
   const messages: AssistantMessage[] = JSON.parse(
     JSON.stringify(first.messages),
   ) as AssistantMessage[];
@@ -169,6 +189,7 @@ async function replayTurn(
       messages,
       room: first.room,
       scene: draft,
+      ...(first.brief === undefined ? {} : { brief: { ...first.brief } }),
     };
     // The key the pipeline reads for this round (same key input it uses).
     reached.add(gatewayKey("assistant", META_MODELS.spark, assistantKeyInput(body)));
@@ -195,7 +216,8 @@ async function replayTurn(
       return { ok: true, answer: data.text, rounds: round + 1, draft };
     }
     messages.push({ role: "assistant", content: data.text, toolCalls: data.toolCalls });
-    const ctx = createAssistantContext(room, replayCatalog);
+    // The brief rides along so budget refusals replay exactly as recorded.
+    const ctx = createAssistantContext(room, replayCatalog, first.brief);
     const step = executeTurnRound(ctx, draft, data.toolCalls);
     records.push(...step);
     messages.push(...assistantToolMessages(data.toolCalls, step));
@@ -362,13 +384,26 @@ async function main(): Promise<void> {
 
   const rebuilt = buildAssistantDemoRequests();
   const listed = DEMO_REQUESTS["assistant"];
-  check("demo list holds the six assistant requests", listed.length === 6);
+  check("demo list holds the eight assistant requests", listed.length === 8);
   check(
     "demo list holds the scripted request texts",
     ASSISTANT_DEMO_REQUESTS.length === 6 &&
       ASSISTANT_DEMO_REQUESTS.every(
         (text, index) =>
           isRecord(listed[index]) && (listed[index] as Record<string, unknown>)["request"] === text,
+      ),
+  );
+  const briefTexts = assistantDemoBriefRequests();
+  check(
+    "demo list holds the two brief requests",
+    ASSISTANT_DEMO_BRIEFS.length === 2 &&
+      briefTexts.length === 2 &&
+      ASSISTANT_DEMO_BRIEFS.every(
+        (brief, index) =>
+          isRecord(listed[6 + index]) &&
+          (listed[6 + index] as Record<string, unknown>)["request"] === briefTexts[index] &&
+          JSON.stringify((listed[6 + index] as Record<string, unknown>)["brief"]) ===
+            JSON.stringify(brief),
       ),
   );
   const keysMatch =
@@ -389,6 +424,204 @@ async function main(): Promise<void> {
 
   const baseErrors = checkFit(room, scene, products).filter((i) => i.severity === "error");
   check("demo room scene has no fit errors", baseErrors.length === 0);
+
+  // ---- brief validation: friendly rejections like the rest of the body ----
+  const validBody = {
+    request: "Furnish it",
+    messages: [{ role: "user" as const, content: "Furnish it" }],
+    room,
+    scene,
+  };
+  const briefBody = (brief: unknown): unknown => ({ ...validBody, brief });
+  const classicBrief = { seats: 4, style: "classic", budget: 2500, keepExisting: false };
+  check("brief: missing brief is fine", assistantRequestError(validBody) === null);
+  check("brief: valid brief passes", assistantRequestError(briefBody(classicBrief)) === null);
+  check(
+    "brief: seats 0 rejected",
+    assistantRequestError(briefBody({ ...classicBrief, seats: 0 })) ===
+      "The brief needs seats from 1 to 8.",
+  );
+  check(
+    "brief: seats 9 rejected",
+    assistantRequestError(briefBody({ ...classicBrief, seats: 9 })) ===
+      "The brief needs seats from 1 to 8.",
+  );
+  check(
+    "brief: fractional seats rejected",
+    assistantRequestError(briefBody({ ...classicBrief, seats: 2.5 })) ===
+      "The brief needs seats from 1 to 8.",
+  );
+  check(
+    "brief: bad style rejected",
+    assistantRequestError(briefBody({ ...classicBrief, style: "victorian" })) ===
+      "The brief style is any, modern, classic or scandinavian.",
+  );
+  check(
+    "brief: budget 299 rejected",
+    assistantRequestError(briefBody({ ...classicBrief, budget: 299 })) ===
+      "The brief needs a budget from $300 to $20,000.",
+  );
+  check(
+    "brief: budget 20001 rejected",
+    assistantRequestError(briefBody({ ...classicBrief, budget: 20001 })) ===
+      "The brief needs a budget from $300 to $20,000.",
+  );
+  check(
+    "brief: bad keepExisting rejected",
+    assistantRequestError(briefBody({ ...classicBrief, keepExisting: "yes" })) ===
+      "The brief needs keepExisting true or false.",
+  );
+
+  // ---- style groups by catalog tag (case-insensitive) ----
+  check("style: modern matches mid-century modern", briefStyleMatches("modern", ["mid-century modern"]));
+  check("style: modern matches Mid-Century", briefStyleMatches("modern", ["Mid-Century"]));
+  check(
+    "style: classic matches French provincial",
+    briefStyleMatches("classic", ["French provincial"]),
+  );
+  check("style: scandinavian matches Simple", briefStyleMatches("scandinavian", ["Simple"]));
+  check("style: classic misses modern", !briefStyleMatches("classic", ["modern"]));
+  check("style: any matches everything", briefStyleMatches("any", ["modern"]));
+  check("style: any tag matches classic", briefStyleMatches("classic", ["any"]));
+
+  // ---- budget engine: refuse over budget, free on remove ----
+  const brief4 = { ...classicBrief } as AssistantBrief;
+  const budgetCtx = createAssistantContext(room, catalog, brief4);
+  const budgetDraft = startBriefDraft(scene, brief4);
+  check("brief: keepExisting false starts empty", budgetDraft.items.length === 0);
+  check(
+    "brief: keepExisting true keeps pieces",
+    startBriefDraft(scene, { ...brief4, keepExisting: true }).items.length === scene.items.length,
+  );
+  const placed1 = executeAssistantTool(budgetCtx, budgetDraft, "place_item", {
+    productId: "sofa_02",
+    x: 210,
+    z: 180,
+    rotationY: 180,
+  });
+  check("brief: first piece placed", placed1["ok"] === true);
+  const placed2 = executeAssistantTool(budgetCtx, budgetDraft, "place_item", {
+    productId: "modern_coffee_table_01",
+    x: 210,
+    z: 60,
+    rotationY: 0,
+  });
+  check("brief: second piece placed", placed2["ok"] === true);
+  const itemsBefore = budgetDraft.items.length;
+  const refused = executeAssistantTool(budgetCtx, budgetDraft, "place_item", {
+    productId: "modern_wooden_cabinet",
+    x: 100,
+    z: 100,
+    rotationY: 0,
+  });
+  check(
+    "brief: over budget refused with amounts",
+    refused["ok"] === false &&
+      refused["error"] === overBudgetError("Rhythm TV Unit", 860, 1830, 2500),
+    String(refused["error"] ?? refused["ok"]),
+  );
+  check("brief: refused placement changes nothing", budgetDraft.items.length === itemsBefore);
+  const wallCtx = createAssistantContext(room, catalog, brief4);
+  const wallDraft = startBriefDraft(scene, brief4);
+  executeAssistantTool(wallCtx, wallDraft, "place_item", {
+    productId: "sofa_02",
+    x: 210,
+    z: 180,
+    rotationY: 180,
+  });
+  executeAssistantTool(wallCtx, wallDraft, "place_item", {
+    productId: "modern_coffee_table_01",
+    x: 210,
+    z: 60,
+    rotationY: 0,
+  });
+  const wallId = room.walls[0]?.id ?? "wall-1";
+  const refusedWall = executeAssistantTool(wallCtx, wallDraft, "place_against_wall", {
+    productId: "modern_wooden_cabinet",
+    wallId,
+    offset_cm: 50,
+  });
+  check(
+    "brief: wall placement over budget refused",
+    refusedWall["ok"] === false &&
+      typeof refusedWall["error"] === "string" &&
+      refusedWall["error"].includes("Over budget"),
+    String(refusedWall["error"] ?? refusedWall["ok"]),
+  );
+  const removed = executeAssistantTool(budgetCtx, budgetDraft, "remove_item", {
+    instanceId: "sofa_02",
+  });
+  check("brief: removing a new piece frees its price", removed["ok"] === true);
+  const placed3 = executeAssistantTool(budgetCtx, budgetDraft, "place_item", {
+    productId: "modern_wooden_cabinet",
+    x: 100,
+    z: 100,
+    rotationY: 0,
+  });
+  check("brief: placement fits after the remove", placed3["ok"] === true);
+  check(
+    "brief: seat count",
+    briefSeatCount(catalog, [
+      {
+        instanceId: "a",
+        productId: "sofa_02",
+        position: { x: 1, z: 1 },
+        rotationY: 0,
+        variant: "default",
+      },
+      {
+        instanceId: "b",
+        productId: "GreenChair_01",
+        position: { x: 2, z: 2 },
+        rotationY: 0,
+        variant: "default",
+      },
+    ]) === 3,
+  );
+  const briefStatus = executeAssistantTool(budgetCtx, budgetDraft, "check_fit", {});
+  check(
+    "brief: check_fit adds the status line",
+    typeof briefStatus["brief"] === "string" &&
+      (briefStatus["brief"] as string).includes("Seats 0 of 4") &&
+      (briefStatus["brief"] as string).includes("$1,200 of $2,500") &&
+      (briefStatus["brief"] as string).includes("Classic match: none"),
+    String(briefStatus["brief"] ?? ""),
+  );
+  const plainStatus = executeAssistantTool(
+    createAssistantContext(room, catalog),
+    budgetDraft,
+    "check_fit",
+    {},
+  );
+  check("brief: no status line without a brief", !("brief" in plainStatus));
+
+  // ---- result card numbers equal the end scene's ----
+  const byId = new Map(catalog.map((c) => [c.id, c]));
+  const endSeats = budgetDraft.items.reduce(
+    (sum, item) => sum + (byId.get(item.productId)?.seats ?? 0),
+    0,
+  );
+  const endTotal = budgetDraft.items.reduce(
+    (sum, item) => sum + (byId.get(item.productId)?.price ?? 0),
+    0,
+  );
+  const card = briefResultCard(scene, budgetDraft, room, catalog, brief4);
+  check("brief: card seats equal the end scene", card.seats === endSeats);
+  check("brief: card total equals the end scene", card.total === endTotal);
+  check(
+    "brief: card counts every new piece",
+    card.newCount === budgetDraft.items.length && card.rows.length === budgetDraft.items.length,
+  );
+  check(
+    "brief: card headline names seats, pieces and budget",
+    card.headline.includes(`Seats ${String(endSeats)} of 4`) &&
+      card.headline.includes(`$${String(endTotal.toLocaleString("en-US"))} of $2,500`),
+    card.headline,
+  );
+  check(
+    "brief: every end piece is new from an empty draft",
+    briefNewItems(scene, budgetDraft, brief4).length === budgetDraft.items.length,
+  );
 
   rmSync(workDir, { recursive: true, force: true });
   mkdirSync(dataDir, { recursive: true });
@@ -559,7 +792,7 @@ async function main(): Promise<void> {
             table.position.x < sofa.position.x,
         );
         check(`${tag}: no fit error`, errs.length === 0, errs.join(","));
-      } else {
+      } else if (i === 5) {
         check(
           `${tag}: scene unchanged`,
           JSON.stringify(replay.draft.items) === JSON.stringify(scene.items),
@@ -568,6 +801,42 @@ async function main(): Promise<void> {
           `${tag}: answer names both lengths`,
           replay.answer.includes("273") && replay.answer.includes("30"),
           replay.answer.slice(0, 200),
+        );
+      } else {
+        // A recorded brief replays to an end scene with no fit errors,
+        // within its budget and with its seats; the card's numbers equal the
+        // end scene's (recomputed here, not via the card builder).
+        const brief = ASSISTANT_DEMO_BRIEFS[i - 6] as AssistantBrief;
+        const seats = replay.draft.items.reduce(
+          (sum, item) => sum + (byId.get(item.productId)?.seats ?? 0),
+          0,
+        );
+        const total = replay.draft.items.reduce(
+          (sum, item) => sum + (byId.get(item.productId)?.price ?? 0),
+          0,
+        );
+        check(`${tag}: no fit error`, errs.length === 0, errs.join(","));
+        check(
+          `${tag}: seats as asked`,
+          seats >= brief.seats,
+          `seats=${String(seats)} asked=${String(brief.seats)}`,
+        );
+        check(
+          `${tag}: within budget`,
+          total <= brief.budget,
+          `total=$${String(total)} budget=$${String(brief.budget)}`,
+        );
+        const briefCard = briefResultCard(scene, replay.draft, room, replayCatalog, brief);
+        check(`${tag}: card seats equal the end scene`, briefCard.seats === seats);
+        check(`${tag}: card total equals the end scene`, briefCard.total === total);
+        check(
+          `${tag}: card counts every new piece`,
+          briefCard.newCount === replay.draft.items.length &&
+            briefCard.rows.length === replay.draft.items.length,
+        );
+        check(
+          `${tag}: card rows price the catalog`,
+          briefCard.rows.every((row) => row.price === (byId.get(row.productId)?.price ?? -1)),
         );
       }
       // Every turn summary tells the truth about landmarks and casing: a
@@ -595,7 +864,7 @@ async function main(): Promise<void> {
       }
     }
 
-    // Every stored assistant answer is reached by the six demo turns;
+    // Every stored assistant answer is reached by the eight demo turns;
     // anything else is a leftover of an earlier recording (like the old
     // turn-6 rounds) and must be removed from the committed store.
     const stored = readdirSync(join(dataDir, "demo", "assistant"))

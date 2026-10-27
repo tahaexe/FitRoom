@@ -24,10 +24,10 @@ import { fileURLToPath } from "node:url";
 import {
   ASSISTANT_MAX_ROUNDS,
   assistantToolMessages,
-  cloneScene,
   createAssistantContext,
   executeTurnRound,
   isAssistantRoundData,
+  startBriefDraft,
   type AssistantMessage,
   type AssistantRequest,
   type CatalogItem,
@@ -107,8 +107,11 @@ async function recordAssistantTurn(
   const catalog = JSON.parse(
     readFileSync(resolve(sharedDir, "catalog", "catalog.json"), "utf8"),
   ) as CatalogItem[];
-  const ctx = createAssistantContext(start.room as RoomLayout, catalog);
-  const draft = cloneScene(start.scene as SceneState);
+  const brief = (start as { brief?: AssistantRequest["brief"] }).brief;
+  const ctx = createAssistantContext(start.room as RoomLayout, catalog, brief);
+  // A brief with keepExisting false starts from an empty draft, inside the
+  // same turn (the same undo step on the client).
+  const draft = startBriefDraft(start.scene as SceneState, brief);
   const messages: AssistantMessage[] = JSON.parse(
     JSON.stringify(start.messages),
   ) as AssistantMessage[];
@@ -119,6 +122,7 @@ async function recordAssistantTurn(
       messages,
       room: start.room,
       scene: JSON.parse(JSON.stringify(draft)) as SceneState,
+      ...(brief === undefined ? {} : { brief }),
     };
     const parsed = assistantDef.parseBody(roundInput);
     if ("error" in parsed) {
@@ -164,11 +168,19 @@ async function main(): Promise<void> {
   const def = route === undefined ? undefined : DEFS[route];
   if (route === undefined || def === undefined) {
     fail(
-      "usage: npm run demo:record -- <recommend|assistant|render|label> [1-based request numbers]",
+      "usage: npm run demo:record -- <recommend|assistant|render|label> [1-based request numbers] [--only furnish]",
     );
   }
+  // `--only furnish` records only brief (furnish) turns: never re-records
+  // the six existing arrangement turns.
+  const args = process.argv.slice(3);
+  const onlyFurnish = args.includes("--only") && args.includes("furnish");
+  if (args.includes("--only") && !onlyFurnish) {
+    fail(`invalid filter "${args.join(" ")}" (only "--only furnish" is supported).`);
+  }
   const only = new Set<number>();
-  for (const arg of process.argv.slice(3)) {
+  for (const arg of args) {
+    if (arg === "--only" || arg === "furnish") continue;
     const n = Number(arg);
     if (!Number.isInteger(n) || n < 1) {
       fail(`invalid request number "${arg}".`);
@@ -189,7 +201,14 @@ async function main(): Promise<void> {
   }
   let recorded = 0;
   let totalUsd = 0;
-  const picked = requests.filter((_, index) => only.size === 0 || only.has(index + 1));
+  const isBriefTurn = (item: unknown): boolean =>
+    typeof item === "object" &&
+    item !== null &&
+    (item as Record<string, unknown>)["brief"] !== undefined;
+  const picked = requests.filter(
+    (_, index) =>
+      (only.size === 0 || only.has(index + 1)) && (!onlyFurnish || isBriefTurn(requests[index])),
+  );
   if (picked.length === 0) {
     fail("no requests selected.");
   }

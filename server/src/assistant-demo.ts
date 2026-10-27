@@ -1,7 +1,9 @@
 /**
  * Demo assistant requests: the six scripted turns for the demo room (the
  * sample room with `shared/samples/fit-tests/valid.json`) — five
- * arrangements plus the impossible one.
+ * arrangements plus the impossible one — and two furnishing briefs on the
+ * same demo room (seats 4 classic $2,500; seats 2 modern $1,500), both with
+ * `keepExisting` false.
  *
  * Each entry is the turn's first round: the customer text, the conversation
  * so far (just that text), the room and the start scene. Later rounds append
@@ -13,7 +15,13 @@
 import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { AssistantRequest, RoomLayout, SceneState } from "@fitroom/shared";
+import {
+  buildBriefRequest,
+  type AssistantBrief,
+  type AssistantRequest,
+  type RoomLayout,
+  type SceneState,
+} from "@fitroom/shared";
 
 export const ASSISTANT_DEMO_REQUESTS: string[] = [
   "Put the sofa under the window and keep 80 cm free in front of the door.",
@@ -24,6 +32,17 @@ export const ASSISTANT_DEMO_REQUESTS: string[] = [
   "Put the Heritage Grand Sofa on the wall between the door and the corner.",
 ];
 
+/** The two demo furnishing briefs (seats, style, budget, empty room). */
+export const ASSISTANT_DEMO_BRIEFS: AssistantBrief[] = [
+  { seats: 4, style: "classic", budget: 2500, keepExisting: false },
+  { seats: 2, style: "modern", budget: 1500, keepExisting: false },
+];
+
+/** Request texts of the two demo briefs, built like the panel builds them. */
+export function assistantDemoBriefRequests(): string[] {
+  return ASSISTANT_DEMO_BRIEFS.map((brief) => buildBriefRequest(brief));
+}
+
 function serverRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), "..");
 }
@@ -32,15 +51,26 @@ function readJson(file: string): unknown {
   return JSON.parse(readFileSync(file, "utf8")) as unknown;
 }
 
-/** The six demo turns, rebuilt deterministically. */
+/** The demo turns, rebuilt deterministically (six arrangements + two briefs). */
 export function buildAssistantDemoRequests(): AssistantRequest[] {
   const sharedDir = resolve(serverRoot(), "..", "shared");
   const room = readJson(resolve(sharedDir, "samples", "living-420x360.json")) as RoomLayout;
   const scene = readJson(resolve(sharedDir, "samples", "fit-tests", "valid.json")) as SceneState;
-  return ASSISTANT_DEMO_REQUESTS.map((request) => ({
+  const arrange: AssistantRequest[] = ASSISTANT_DEMO_REQUESTS.map((request) => ({
     request,
     messages: [{ role: "user" as const, content: request }],
     room: JSON.parse(JSON.stringify(room)) as RoomLayout,
     scene: JSON.parse(JSON.stringify(scene)) as SceneState,
   }));
+  const furnish: AssistantRequest[] = ASSISTANT_DEMO_BRIEFS.map((brief) => {
+    const request = buildBriefRequest(brief);
+    return {
+      request,
+      messages: [{ role: "user" as const, content: request }],
+      room: JSON.parse(JSON.stringify(room)) as RoomLayout,
+      scene: JSON.parse(JSON.stringify(scene)) as SceneState,
+      brief: { ...brief },
+    };
+  });
+  return [...arrange, ...furnish];
 }

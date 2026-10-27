@@ -18,8 +18,10 @@
  */
 
 import type {
+  AssistantBrief,
   AssistantMessage,
   AssistantToolRecord,
+  BriefStyle,
   CatalogItem,
   RoomLayout,
   SceneState,
@@ -27,12 +29,17 @@ import type {
 import {
   ASSISTANT_MAX_ROUNDS,
   assistantToolMessages,
+  briefError,
+  briefResultCard,
+  briefStyleChip,
+  buildBriefRequest,
   cloneScene,
   createAssistantContext,
   executeTurnRound,
   formatAssistantToolRecord,
   impossibleAnswer,
   isAssistantRoundData,
+  startBriefDraft,
   summarizeAssistantTurn,
   turnErrors,
 } from "@fitroom/shared";
@@ -58,7 +65,20 @@ export interface AssistantDeps {
   resetDemoRoom: () => void;
   /** True when the live scene still matches the sample layout. */
   isSampleScene: () => boolean;
+  /** Toast the applied furnish turn ("Furnished · Undo"). */
+  onFurnished: () => void;
 }
+
+/** Demo brief chips start with the brief sentence the panel builds. */
+const FURNISH_CHIP_PREFIX = "Furnish this room for";
+
+/** Style chips on the Furnish tab (panel labels). */
+const FURNISH_STYLES: Array<{ value: BriefStyle; label: string }> = [
+  { value: "any", label: "Any" },
+  { value: "modern", label: "Modern" },
+  { value: "classic", label: "Classic" },
+  { value: "scandinavian", label: "Scandinavian" },
+];
 
 export class AssistantPanel {
   private readonly deps: AssistantDeps;
@@ -72,32 +92,60 @@ export class AssistantPanel {
     this.render();
   }
 
+  private tab: "arrange" | "furnish" = "arrange";
+
+  /** Open the panel on the Furnish tab (the empty-room "Furnish it for me"). */
+  openFurnish(): void {
+    this.tab = "furnish";
+    this.render();
+    this.syncMode();
+  }
+
   private render(): void {
     this.root.innerHTML = "";
     const head = document.createElement("div");
     head.className = "assistant-head";
-    const title = document.createElement("h2");
-    title.textContent = "Arrange";
+    const tabs = document.createElement("div");
+    tabs.className = "assistant-tabs";
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Assistant mode");
+    for (const name of ["arrange", "furnish"] as const) {
+      const tab = document.createElement("button");
+      tab.type = "button";
+      tab.className = "assistant-tab";
+      tab.setAttribute("role", "tab");
+      tab.textContent = name === "arrange" ? "Arrange" : "Furnish";
+      tab.setAttribute("aria-selected", String(this.tab === name));
+      tab.toggleAttribute("data-active", this.tab === name);
+      tab.addEventListener("click", () => {
+        this.tab = name;
+        this.render();
+        this.syncMode();
+      });
+      tabs.appendChild(tab);
+    }
     const close = document.createElement("button");
     close.type = "button";
     close.className = "assistant-close";
     close.textContent = "×";
     close.title = "Hide the assistant";
+    close.setAttribute("aria-label", "Hide the assistant");
     close.addEventListener("click", () => {
       this.root.setAttribute("hidden", "");
       document.getElementById("tool-assistant")?.setAttribute("data-active", "false");
     });
-    head.append(title, close);
+    head.append(tabs, close);
     this.root.appendChild(head);
 
+    const arrangeView = document.createElement("div");
+    arrangeView.className = "assistant-view";
+    if (this.tab !== "arrange") arrangeView.setAttribute("hidden", "");
     if (!isLive()) {
-      this.root.appendChild(this.buildChips());
+      arrangeView.appendChild(this.buildChips());
     }
-
     const log = document.createElement("div");
     log.className = "assistant-log";
-    this.root.appendChild(log);
-
+    arrangeView.appendChild(log);
     const row = document.createElement("div");
     row.className = "assistant-row";
     const input = document.createElement("input");
@@ -115,24 +163,27 @@ export class AssistantPanel {
     go.textContent = "Send";
     go.addEventListener("click", () => void this.send(input.value));
     row.append(input, go);
-    this.root.appendChild(row);
+    arrangeView.appendChild(row);
+    this.root.appendChild(arrangeView);
+
+    const furnishView = document.createElement("div");
+    furnishView.className = "assistant-view furnish-view";
+    if (this.tab !== "furnish") furnishView.setAttribute("hidden", "");
+    furnishView.appendChild(this.buildFurnishView());
+    this.root.appendChild(furnishView);
   }
 
   /** Show or hide the demo chips without losing the chat log. */
   syncMode(): void {
-    const existing = this.root.querySelector(".assistant-chips");
+    const arrangeView = this.root.querySelectorAll(".assistant-view")[0];
+    const existing = arrangeView?.querySelector(":scope > .assistant-chips") ?? null;
     if (isLive()) {
       existing?.remove();
-      return;
+    } else if (existing === null && arrangeView !== undefined) {
+      const chips = this.buildChips();
+      arrangeView.prepend(chips);
     }
-    if (existing !== null) return;
-    const head = this.root.querySelector(".assistant-head");
-    const chips = this.buildChips();
-    if (head?.nextSibling !== null && head?.nextSibling !== undefined) {
-      this.root.insertBefore(chips, head.nextSibling);
-    } else {
-      this.root.appendChild(chips);
-    }
+    this.syncFurnishMode();
   }
 
   /** Demo-store request texts, once loaded (demo mode shows no unrecorded chip). */
@@ -189,6 +240,539 @@ export class AssistantPanel {
       }
       host.appendChild(chip);
     }
+  }
+
+  // ---- Furnish tab ----
+
+  private furnishSeats = 4;
+  private furnishStyle: BriefStyle = "any";
+  private furnishBudget = 2000;
+  private furnishKeep = true;
+  private furnishNote = "";
+
+  private buildFurnishView(): HTMLElement {
+    const view = document.createElement("div");
+    view.className = "furnish-body";
+
+    const chips = document.createElement("div");
+    chips.className = "assistant-chips furnish-chips";
+    view.appendChild(chips);
+
+    const form = document.createElement("div");
+    form.className = "furnish-form";
+
+    // Seats stepper (1-8, default 4).
+    const seatsField = document.createElement("div");
+    seatsField.className = "furnish-field";
+    const seatsLabel = document.createElement("label");
+    seatsLabel.textContent = "Seats";
+    seatsLabel.id = "furnish-seats-label";
+    const stepper = document.createElement("div");
+    stepper.className = "furnish-stepper";
+    stepper.setAttribute("role", "group");
+    stepper.setAttribute("aria-labelledby", "furnish-seats-label");
+    const minus = document.createElement("button");
+    minus.type = "button";
+    minus.className = "furnish-step";
+    minus.textContent = "−";
+    minus.setAttribute("aria-label", "Fewer seats");
+    const value = document.createElement("output");
+    value.className = "furnish-seats-value";
+    value.setAttribute("aria-live", "polite");
+    value.setAttribute("aria-label", "Seats");
+    value.textContent = String(this.furnishSeats);
+    const plus = document.createElement("button");
+    plus.type = "button";
+    plus.className = "furnish-step";
+    plus.textContent = "+";
+    plus.setAttribute("aria-label", "More seats");
+    const step = (delta: number): void => {
+      this.furnishSeats = Math.min(8, Math.max(1, this.furnishSeats + delta));
+      value.textContent = String(this.furnishSeats);
+      minus.toggleAttribute("disabled", this.furnishSeats <= 1);
+      plus.toggleAttribute("disabled", this.furnishSeats >= 8);
+    };
+    minus.addEventListener("click", () => step(-1));
+    plus.addEventListener("click", () => step(1));
+    minus.toggleAttribute("disabled", this.furnishSeats <= 1);
+    stepper.append(minus, value, plus);
+    seatsField.append(seatsLabel, stepper);
+    form.appendChild(seatsField);
+
+    // Style chips (default Any).
+    const styleField = document.createElement("div");
+    styleField.className = "furnish-field";
+    const styleLabel = document.createElement("span");
+    styleLabel.className = "furnish-label";
+    styleLabel.id = "furnish-style-label";
+    styleLabel.textContent = "Style";
+    const styleChips = document.createElement("div");
+    styleChips.className = "furnish-styles";
+    styleChips.setAttribute("role", "group");
+    styleChips.setAttribute("aria-labelledby", "furnish-style-label");
+    const styleButtons: HTMLButtonElement[] = [];
+    for (const option of FURNISH_STYLES) {
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "furnish-style";
+      chip.textContent = option.label;
+      chip.setAttribute("aria-pressed", String(this.furnishStyle === option.value));
+      chip.toggleAttribute("data-active", this.furnishStyle === option.value);
+      chip.addEventListener("click", () => {
+        this.furnishStyle = option.value;
+        for (const other of styleButtons) {
+          const active = other === chip;
+          other.setAttribute("aria-pressed", String(active));
+          other.toggleAttribute("data-active", active);
+        }
+      });
+      styleButtons.push(chip);
+      styleChips.appendChild(chip);
+    }
+    styleField.append(styleLabel, styleChips);
+    form.appendChild(styleField);
+
+    // Budget dollars (default 2,000).
+    const budgetField = document.createElement("div");
+    budgetField.className = "furnish-field";
+    const budgetLabel = document.createElement("label");
+    budgetLabel.textContent = "Budget";
+    budgetLabel.htmlFor = "furnish-budget";
+    const budgetRow = document.createElement("div");
+    budgetRow.className = "furnish-budget-row";
+    const dollar = document.createElement("span");
+    dollar.className = "furnish-dollar";
+    dollar.textContent = "$";
+    dollar.setAttribute("aria-hidden", "true");
+    const budget = document.createElement("input");
+    budget.type = "number";
+    budget.id = "furnish-budget";
+    budget.name = "furnish-budget";
+    budget.min = "300";
+    budget.max = "20000";
+    budget.step = "50";
+    budget.value = String(this.furnishBudget);
+    budget.setAttribute("aria-label", "Budget in dollars");
+    budget.addEventListener("change", () => {
+      const parsed = Math.round(Number(budget.value));
+      this.furnishBudget = Number.isFinite(parsed)
+        ? Math.min(20000, Math.max(300, parsed))
+        : 2000;
+      budget.value = String(this.furnishBudget);
+    });
+    budgetRow.append(dollar, budget);
+    budgetField.append(budgetLabel, budgetRow);
+    form.appendChild(budgetField);
+
+    // Keep existing pieces (on; only when the room has pieces).
+    const keepRow = document.createElement("div");
+    keepRow.className = "furnish-keep";
+    const keep = document.createElement("input");
+    keep.type = "checkbox";
+    keep.id = "furnish-keep";
+    keep.name = "furnish-keep";
+    keep.checked = this.furnishKeep;
+    keep.addEventListener("change", () => {
+      this.furnishKeep = keep.checked;
+    });
+    const keepLabel = document.createElement("label");
+    keepLabel.htmlFor = "furnish-keep";
+    keepLabel.textContent = "Keep the pieces already here";
+    keepRow.append(keep, keepLabel);
+    form.appendChild(keepRow);
+
+    // Optional note (at most 200 characters).
+    const noteField = document.createElement("div");
+    noteField.className = "furnish-field";
+    const noteLabel = document.createElement("label");
+    noteLabel.textContent = "Anything else? (optional)";
+    noteLabel.htmlFor = "furnish-note";
+    const note = document.createElement("input");
+    note.type = "text";
+    note.id = "furnish-note";
+    note.name = "furnish-note";
+    note.placeholder = "e.g. leave the window wall free";
+    note.maxLength = 200;
+    note.value = this.furnishNote;
+    note.setAttribute("aria-label", "Anything else? e.g. leave the window wall free");
+    note.addEventListener("input", () => {
+      this.furnishNote = note.value;
+    });
+    noteField.append(noteLabel, note);
+    form.appendChild(noteField);
+
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "assistant-go furnish-go";
+    go.textContent = "Furnish";
+    go.addEventListener("click", () => void this.furnishSubmit());
+    form.appendChild(go);
+
+    const liveNote = document.createElement("p");
+    liveNote.className = "furnish-live-note";
+    liveNote.textContent = "Uses Live AI · about 30 s";
+    form.appendChild(liveNote);
+
+    const demoNote = document.createElement("p");
+    demoNote.className = "furnish-demo-note";
+    demoNote.textContent = "Other briefs use Live AI";
+    form.appendChild(demoNote);
+    const liveButton = document.createElement("button");
+    liveButton.type = "button";
+    liveButton.className = "assistant-quiet furnish-live-button";
+    liveButton.textContent = "Turn on Live AI";
+    liveButton.addEventListener("click", () => {
+      setLive(true);
+      this.syncMode();
+    });
+    form.appendChild(liveButton);
+
+    view.appendChild(form);
+
+    const log = document.createElement("div");
+    log.className = "assistant-log furnish-log";
+    view.appendChild(log);
+    return view;
+  }
+
+  private furnishView(): HTMLElement | null {
+    return this.root.querySelector(".furnish-view");
+  }
+
+  private furnishLogEl(): HTMLElement | null {
+    return this.root.querySelector(".furnish-log");
+  }
+
+  /** Enable the form in live mode; disable it around the demo chips. */
+  private syncFurnishMode(): void {
+    const view = this.furnishView();
+    if (view === null) return;
+    const live = isLive();
+    const chips = view.querySelector(".furnish-chips");
+    if (live) {
+      chips?.setAttribute("hidden", "");
+    } else {
+      chips?.removeAttribute("hidden");
+      const host = chips instanceof HTMLElement ? chips : null;
+      if (host !== null && host.childElementCount === 0) void this.fillFurnishChips(host);
+    }
+    for (const field of view.querySelectorAll(".furnish-form button, .furnish-form input")) {
+      if (!(field instanceof HTMLButtonElement) && !(field instanceof HTMLInputElement)) continue;
+      if (field.classList.contains("furnish-live-button")) {
+        field.toggleAttribute("hidden", live);
+        continue;
+      }
+      field.toggleAttribute("disabled", !live);
+    }
+    view.querySelector(".furnish-live-note")?.toggleAttribute("hidden", !live);
+    view.querySelector(".furnish-demo-note")?.toggleAttribute("hidden", live);
+    // "Keep the pieces already here" only reads when the room has pieces.
+    const hasPieces = this.deps.getScene().items.length > 0;
+    view.querySelector(".furnish-keep")?.toggleAttribute("hidden", !hasPieces);
+  }
+
+  private async fillFurnishChips(host: HTMLElement): Promise<void> {
+    const recorded = await this.loadRecordedChips();
+    const briefs = (recorded ?? []).filter((text) => text.startsWith(FURNISH_CHIP_PREFIX));
+    if (briefs.length === 0) {
+      host.setAttribute("hidden", "");
+      return;
+    }
+    host.innerHTML = "";
+    for (const text of briefs) {
+      const parsed = parseBriefChip(text);
+      const chip = document.createElement("button");
+      chip.type = "button";
+      chip.className = "assistant-chip";
+      chip.textContent = text;
+      if (parsed === null) {
+        chip.title = `${text} — needs Live AI (no stored demo answer)`;
+        chip.toggleAttribute("disabled", true);
+        chip.setAttribute("aria-disabled", "true");
+      } else {
+        chip.title = text;
+        const brief = parsed.brief;
+        chip.addEventListener("click", () => void this.sendFurnishDemo(text, brief));
+      }
+      host.appendChild(chip);
+    }
+  }
+
+  private furnishSubmit(): void {
+    if (this.sending) return;
+    const hasPieces = this.deps.getScene().items.length > 0;
+    const brief: AssistantBrief = {
+      seats: Math.min(8, Math.max(1, Math.round(this.furnishSeats))),
+      style: this.furnishStyle,
+      budget: Math.min(20000, Math.max(300, Math.round(this.furnishBudget))),
+      keepExisting: hasPieces && this.furnishKeep,
+    };
+    void this.furnishTurn(brief, buildBriefRequest(brief, this.furnishNote));
+  }
+
+  /**
+   * Demo brief chip: the recorded brief replays from the sample layout.
+   * When the room already differs, ask first — never reset it silently.
+   */
+  private async sendFurnishDemo(text: string, brief: AssistantBrief): Promise<void> {
+    if (this.sending) return;
+    const pending = this.pendingDemo;
+    if ((pending?.text !== text || pending.brief === null) && !this.deps.isSampleScene()) {
+      this.pendingDemo = { text, brief };
+      this.addSampleConfirm("furnish");
+      return;
+    }
+    this.pendingDemo = null;
+    this.deps.resetDemoRoom();
+    await this.furnishTurn(brief, text);
+  }
+
+  private addFurnishUserLine(text: string): void {
+    const log = this.furnishLogEl();
+    if (log === null) return;
+    const p = document.createElement("p");
+    p.className = "assistant-user";
+    p.textContent = text;
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  private addFurnishNotice(text: string): void {
+    const log = this.furnishLogEl();
+    if (log === null) return;
+    const p = document.createElement("p");
+    p.className = "assistant-empty";
+    p.textContent = text;
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  private addFurnishProgress(text: string): void {
+    const log = this.furnishLogEl();
+    if (log === null) return;
+    const p = document.createElement("p");
+    p.className = "furnish-progress";
+    p.setAttribute("role", "status");
+    p.textContent = text;
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  /**
+   * The result card, computed from the end scene — never from the model's
+   * text: headline, one row per new piece (thumbnail, name, price, style
+   * chip), then the model's answer.
+   */
+  private addFurnishCard(
+    brief: AssistantBrief,
+    start: SceneState,
+    end: SceneState,
+    answer: string,
+  ): void {
+    const log = this.furnishLogEl();
+    if (log === null) return;
+    const card = briefResultCard(start, end, this.deps.room, this.deps.catalog, brief);
+    const box = document.createElement("div");
+    box.className = "assistant-card furnish-card";
+    const label = document.createElement("p");
+    label.className = "assistant-model";
+    label.textContent = "Muse Spark";
+    box.appendChild(label);
+    const head = document.createElement("p");
+    head.className = "furnish-headline";
+    const [seatsPart, ...rest] = card.headline.split(" · ");
+    const seats = document.createElement("span");
+    seats.className = "furnish-seats";
+    seats.textContent = seatsPart ?? "";
+    if (card.seatsShort) seats.classList.add("furnish-seats-warn");
+    head.appendChild(seats);
+    const tail = document.createElement("span");
+    tail.textContent = rest.length === 0 ? "" : ` · ${rest.join(" · ")}`;
+    head.appendChild(tail);
+    box.appendChild(head);
+    if (card.rows.length > 0) {
+      const list = document.createElement("ul");
+      list.className = "furnish-rows";
+      for (const row of card.rows) {
+        const item = document.createElement("li");
+        item.className = "furnish-row";
+        const thumb = document.createElement("img");
+        thumb.className = "furnish-thumb";
+        thumb.src = row.thumbnail;
+        thumb.alt = "";
+        const name = document.createElement("span");
+        name.className = "furnish-name";
+        name.textContent = row.name;
+        const price = document.createElement("span");
+        price.className = "furnish-price";
+        price.textContent = `$${String(row.price.toLocaleString("en-US"))}`;
+        item.append(thumb, name, price);
+        if (row.styleMatch) {
+          const chip = document.createElement("span");
+          chip.className = "furnish-style-chip";
+          chip.textContent = briefStyleChip(brief.style);
+          item.appendChild(chip);
+        }
+        list.appendChild(item);
+      }
+      box.appendChild(list);
+    }
+    const text = document.createElement("p");
+    text.className = "assistant-answer";
+    text.textContent = answer;
+    box.appendChild(text);
+    log.appendChild(box);
+    log.scrollTop = log.scrollHeight;
+  }
+
+  private async roundWithBrief(
+    request: string,
+    brief: AssistantBrief,
+    messages: AssistantMessage[],
+    draft: SceneState,
+  ): Promise<ApiResult> {
+    try {
+      return await postAssistant({
+        request,
+        messages,
+        room: this.deps.room,
+        scene: draft,
+        brief: { ...brief },
+      });
+    } catch {
+      return { status: "error", message: "The AI service is unreachable." };
+    }
+  }
+
+  private async furnishTurn(brief: AssistantBrief, request: string): Promise<void> {
+    this.addFurnishUserLine(request);
+    const start = cloneScene(this.deps.getScene());
+    const draft = startBriefDraft(start, brief);
+    const ctx = createAssistantContext(this.deps.room, this.deps.catalog, brief);
+    const messages: AssistantMessage[] = [{ role: "user", content: request }];
+    const records: AssistantToolRecord[] = [];
+    let cleanSnapshot: SceneState | null = null;
+    let answer: string | null = null;
+
+    this.setSending(true);
+    try {
+      for (let round = 0; round < ASSISTANT_MAX_ROUNDS; round += 1) {
+        const result = await this.roundWithBrief(request, brief, messages, draft);
+        if (result.status !== "ok") {
+          if (result.status === "demo-miss" || result.status === "capped") {
+            this.addFurnishDemoMiss(result.message);
+          } else if (result.status === "not-ready") {
+            this.addFurnishNotice(
+              "The assistant isn't ready yet. Turn on Live AI or reset to the demo room.",
+            );
+          } else {
+            this.addFurnishNotice(result.message);
+          }
+          return;
+        }
+        if (!isAssistantRoundData(result.data)) {
+          this.addFurnishNotice("The assistant answered oddly. Please try again.");
+          return;
+        }
+        if (result.data.toolCalls.length === 0) {
+          answer = result.data.text;
+          break;
+        }
+        const step = executeTurnRound(ctx, draft, result.data.toolCalls);
+        records.push(...step);
+        this.addFurnishProgress(furnishProgressLine(result.data.toolCalls.map((c) => c.name)));
+        messages.push({
+          role: "assistant",
+          content: result.data.text,
+          toolCalls: result.data.toolCalls,
+        });
+        messages.push(...assistantToolMessages(result.data.toolCalls, step));
+        if (turnErrors(this.deps.room, draft, this.deps.catalog).length === 0) {
+          cleanSnapshot = cloneScene(draft);
+        }
+      }
+
+      if (answer === null) {
+        const refused = impossibleAnswer(records, "");
+        if (refused !== null) {
+          this.addFurnishCard(brief, start, start, refused);
+          return;
+        }
+        if (cleanSnapshot !== null) {
+          this.deps.applyTurn(cleanSnapshot);
+          this.deps.onFurnished();
+          const composed = summarizeAssistantTurn(
+            start,
+            cleanSnapshot,
+            this.deps.room,
+            this.deps.catalog,
+          );
+          this.addFurnishCard(brief, start, cleanSnapshot, composed);
+        } else {
+          this.addFurnishNotice("I ran out of steps without a clean draft, so nothing changed.");
+        }
+        return;
+      }
+
+      const enforced = impossibleAnswer(records, answer);
+      if (enforced !== null) {
+        this.addFurnishCard(brief, start, start, enforced);
+        return;
+      }
+
+      const errors = turnErrors(this.deps.room, draft, this.deps.catalog);
+      if (errors.length > 0) {
+        this.addFurnishCard(brief, start, draft, answer);
+        this.addFurnishNotice(
+          `I didn't apply it: ${errors.length === 1 ? "1 problem left" : `${String(errors.length)} problems left`}.`,
+        );
+        return;
+      }
+      const unchanged = JSON.stringify(draft.items) === JSON.stringify(start.items);
+      if (!unchanged) {
+        this.deps.applyTurn(draft);
+        this.deps.onFurnished();
+      }
+      this.addFurnishCard(brief, start, draft, answer);
+    } finally {
+      this.setSending(false);
+    }
+  }
+
+  /**
+   * Demo miss on the Furnish tab: the message plus a way out in the same
+   * card — reset the demo room and, where it applies, Live AI.
+   */
+  private addFurnishDemoMiss(message: string): void {
+    const log = this.furnishLogEl();
+    if (log === null) return;
+    const card = document.createElement("div");
+    card.className = "assistant-card";
+    const note = document.createElement("p");
+    note.className = "assistant-answer";
+    note.textContent = message;
+    const row = document.createElement("div");
+    row.className = "assistant-row";
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "assistant-go";
+    reset.textContent = "Reset demo room";
+    reset.addEventListener("click", () => this.deps.resetDemoRoom());
+    row.appendChild(reset);
+    if (!isLive()) {
+      const live = document.createElement("button");
+      live.type = "button";
+      live.className = "assistant-quiet";
+      live.textContent = "Turn on Live AI";
+      live.addEventListener("click", () => {
+        setLive(true);
+        this.syncMode();
+      });
+      row.appendChild(live);
+    }
+    card.append(note, row);
+    log.appendChild(card);
+    log.scrollTop = log.scrollHeight;
   }
 
   private logEl(): HTMLElement | null {
@@ -305,13 +889,16 @@ export class AssistantPanel {
    * Demo chip: the scripted request replays from the sample layout. When the
    * room already differs, ask first — never reset it silently.
    */
-  private pendingDemo: string | null = null;
+  private pendingDemo: { text: string; brief: AssistantBrief | null } | null = null;
 
   private async sendDemo(text: string): Promise<void> {
     if (this.sending) return;
-    if (this.pendingDemo !== text && !this.deps.isSampleScene()) {
-      this.pendingDemo = text;
-      this.addSampleConfirm(text);
+    if (
+      (this.pendingDemo?.text !== text || this.pendingDemo.brief !== null) &&
+      !this.deps.isSampleScene()
+    ) {
+      this.pendingDemo = { text, brief: null };
+      this.addSampleConfirm("arrange");
       return;
     }
     this.pendingDemo = null;
@@ -320,8 +907,8 @@ export class AssistantPanel {
   }
 
   /** Confirm before a recorded example replaces an edited room (undoable). */
-  private addSampleConfirm(text: string): void {
-    const log = this.logEl();
+  private addSampleConfirm(target: "arrange" | "furnish"): void {
+    const log = target === "furnish" ? this.furnishLogEl() : this.logEl();
     if (log === null) return;
     const card = document.createElement("div");
     card.className = "assistant-card";
@@ -336,7 +923,12 @@ export class AssistantPanel {
     go.textContent = "Continue";
     go.addEventListener("click", () => {
       card.remove();
-      void this.sendDemo(text);
+      const pending = this.pendingDemo;
+      if (pending?.brief !== undefined && pending?.brief !== null) {
+        void this.sendFurnishDemo(pending.text, pending.brief);
+      } else if (pending !== null) {
+        void this.sendDemo(pending.text);
+      }
     });
     const cancel = document.createElement("button");
     cancel.type = "button";
@@ -479,4 +1071,36 @@ export class AssistantPanel {
       records,
     );
   }
+}
+
+/** One progress line per furnish round, from the round's tool calls. */
+export function furnishProgressLine(toolNames: string[]): string {
+  if (toolNames.includes("check_fit")) return "Checking the fit…";
+  const placed = toolNames.filter(
+    (name) => name === "place_item" || name === "place_against_wall",
+  ).length;
+  if (placed > 0) return `Placing ${String(placed)} ${placed === 1 ? "piece" : "pieces"}…`;
+  return "Choosing pieces…";
+}
+
+/**
+ * Read a recorded brief chip back into its brief (recorded demo briefs start
+ * from an empty room) plus the shopper's note. Null when the text is not a
+ * brief request the panel built.
+ */
+export function parseBriefChip(text: string): { brief: AssistantBrief; note: string } | null {
+  const match =
+    /^Furnish this room for (\d+) (person|people), (any|modern|classic|scandinavian) style, new pieces up to \$([\d,]+)\.(.*)$/.exec(
+      text.trim(),
+    );
+  if (match === null) return null;
+  const brief: AssistantBrief = {
+    seats: Number(match[1]),
+    style: (match[3] ?? "any") as BriefStyle,
+    budget: Number((match[4] ?? "").replace(/,/g, "")),
+    keepExisting: false,
+  };
+  const note = (match[5] ?? "").trim();
+  if (briefError(brief) !== null || note.length > 200) return null;
+  return { brief, note };
 }

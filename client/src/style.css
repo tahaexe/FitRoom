@@ -1464,6 +1464,304 @@ button.danger {
   cursor: default;
 }
 
+/* ---- assistant tabs (Arrange / Furnish) ---- */
+
+.assistant-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.assistant-tab {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.assistant-tab[data-active="true"] {
+  background: var(--coral);
+  border-color: var(--coral);
+  color: #ffffff;
+}
+
+.assistant-view[hidden] {
+  display: none;
+}
+
+.assistant-view {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ---- Furnish tab ---- */
+
+.furnish-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.furnish-chips[hidden] {
+  display: none;
+}
+
+.furnish-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 8px;
+}
+
+.furnish-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.furnish-field > label,
+.furnish-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.furnish-stepper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.furnish-step {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  width: 32px;
+  height: 32px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.furnish-step[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.furnish-seats-value {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  min-width: 24px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.furnish-styles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.furnish-style {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.furnish-style[data-active="true"] {
+  background: var(--coral);
+  border-color: var(--coral);
+  color: #ffffff;
+}
+
+.furnish-budget-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.furnish-dollar {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.furnish-budget-row input[type="number"],
+.furnish-field input[type="text"] {
+  flex: 1;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+  background: #ffffff;
+  font-variant-numeric: tabular-nums;
+}
+
+.furnish-keep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.furnish-keep[hidden] {
+  display: none;
+}
+
+.furnish-keep input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--coral);
+}
+
+.furnish-go {
+  width: 100%;
+}
+
+.furnish-live-note {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0;
+  text-align: center;
+}
+
+.furnish-demo-note {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0;
+  text-align: center;
+}
+
+.furnish-live-note[hidden],
+.furnish-demo-note[hidden],
+.furnish-live-button[hidden] {
+  display: none;
+}
+
+.furnish-live-button {
+  width: 100%;
+}
+
+.furnish-progress {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 0;
+}
+
+.furnish-headline {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.furnish-seats-warn {
+  color: var(--amber);
+}
+
+.furnish-rows {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.furnish-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.furnish-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 8px;
+  border: 1px solid var(--border-color);
+  flex: none;
+}
+
+.furnish-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.furnish-price {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.furnish-style-chip {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 4px 12px;
+  white-space: nowrap;
+}
+
+.empty-hint-link {
+  pointer-events: auto;
+  background: none;
+  border: 0;
+  padding: 0;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--coral);
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+/* Visible keyboard focus on the new assistant controls. */
+.assistant-tab:focus-visible,
+.furnish-step:focus-visible,
+.furnish-style:focus-visible,
+.furnish-go:focus-visible,
+.furnish-live-button:focus-visible,
+.empty-hint-link:focus-visible,
+.furnish-budget-row input:focus-visible,
+.furnish-field input:focus-visible,
+.furnish-keep input:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
+}
+
 .btn-cart[disabled] {
   opacity: 0.45;
   cursor: default;

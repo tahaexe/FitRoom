@@ -16,8 +16,21 @@
  */
 
 /* global console, process */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { FitEngine } from "@fitroom/shared";
-import type { CatalogItem, RoomLayout, SceneState } from "@fitroom/shared";
+import {
+  briefPromptAddition,
+  briefResultCard,
+  buildBriefRequest,
+  overBudgetError,
+  type AssistantBrief,
+  type CatalogItem,
+  type RoomLayout,
+  type SceneState,
+} from "@fitroom/shared";
+import { furnishProgressLine, parseBriefChip } from "../src/assistant/panel.js";
 import {
   CATEGORIES,
   CATEGORY_LABELS,
@@ -180,6 +193,120 @@ check(
     !guidePill.includes("✕") &&
     !guidePill.includes("✓"),
   guidePill,
+);
+
+// ---- Furnish brief texts ----
+const furnishBrief: AssistantBrief = {
+  seats: 4,
+  style: "classic",
+  budget: 2500,
+  keepExisting: false,
+};
+check(
+  "brief:request",
+  buildBriefRequest(furnishBrief) ===
+    "Furnish this room for 4 people, classic style, new pieces up to $2,500.",
+  buildBriefRequest(furnishBrief),
+);
+check(
+  "brief:request-note",
+  buildBriefRequest(furnishBrief, "leave the window wall free") ===
+    "Furnish this room for 4 people, classic style, new pieces up to $2,500. leave the window wall free",
+);
+check(
+  "brief:request-singular",
+  buildBriefRequest({ seats: 1, style: "modern", budget: 1500, keepExisting: false }) ===
+    "Furnish this room for 1 person, modern style, new pieces up to $1,500.",
+);
+check(
+  "brief:over-budget",
+  overBudgetError("Rhythm TV Unit", 860, 1850, 2500) ===
+    "Over budget: Rhythm TV Unit ($860) would make $2,710 of $2,500; $650 left.",
+  overBudgetError("Rhythm TV Unit", 860, 1850, 2500),
+);
+const briefAddition = briefPromptAddition(furnishBrief);
+check(
+  "brief:prompt",
+  briefAddition.includes(
+    "Furnishing brief: seat 4 people, classic style, new pieces at most $2,500 in total, starting from an empty room.",
+  ) && briefAddition.includes("Answer in at most three sentences: what you chose and why."),
+  briefAddition.slice(0, 160),
+);
+check(
+  "brief:progress-choose",
+  furnishProgressLine(["get_room", "list_items"]) === "Choosing pieces…",
+);
+check(
+  "brief:progress-place",
+  furnishProgressLine(["place_item", "place_item"]) === "Placing 2 pieces…",
+);
+check(
+  "brief:progress-place-one",
+  furnishProgressLine(["place_against_wall"]) === "Placing 1 piece…",
+);
+check("brief:progress-check", furnishProgressLine(["check_fit"]) === "Checking the fit…");
+const parsedBrief = parseBriefChip(buildBriefRequest(furnishBrief));
+check(
+  "brief:chip-roundtrip",
+  parsedBrief !== null &&
+    JSON.stringify(parsedBrief.brief) === JSON.stringify(furnishBrief) &&
+    parsedBrief.note === "",
+);
+check(
+  "brief:chip-note",
+  parseBriefChip(buildBriefRequest(furnishBrief, "leave the window wall free"))?.note ===
+    "leave the window wall free",
+);
+check("brief:chip-reject", parseBriefChip("Put the sofa under the window") === null);
+
+// The result card, computed from the end scene: headline, rows, shortfall.
+const furnishCatalog = JSON.parse(
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "..", "shared", "catalog", "catalog.json"),
+    "utf8",
+  ),
+) as CatalogItem[];
+const furnishStart = {
+  roomId: "guide",
+  items: [],
+  camera: {
+    mode: "orbit",
+    position: { x: 0, y: 0, z: 0 },
+    target: { x: 0, y: 0, z: 0 },
+  },
+} as SceneState;
+const furnishEnd: SceneState = {
+  ...furnishStart,
+  items: [
+    {
+      instanceId: "sofa_02",
+      productId: "sofa_02",
+      position: { x: 500, z: 500 },
+      rotationY: 0,
+      variant: "default",
+    },
+    {
+      instanceId: "GreenChair_01",
+      productId: "GreenChair_01",
+      position: { x: 750, z: 250 },
+      rotationY: 0,
+      variant: "default",
+    },
+  ],
+};
+const furnishCard = briefResultCard(furnishStart, furnishEnd, guideRoom, furnishCatalog, furnishBrief);
+check(
+  "brief:card-headline",
+  furnishCard.headline === "Seats 3 of 4 · 2 new pieces · $1,870 of $2,500 · ✓ Fits",
+  furnishCard.headline,
+);
+check("brief:card-short", furnishCard.seatsShort === true);
+check(
+  "brief:card-rows",
+  furnishCard.rows.length === 2 &&
+    furnishCard.rows.every((row) => row.styleMatch) &&
+    furnishCard.rows[0]?.name === "Chester Leather Sofa" &&
+    furnishCard.rows[0]?.price === 1490,
 );
 
 if (failures > 0) process.exit(1);
