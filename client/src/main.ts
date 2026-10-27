@@ -53,6 +53,7 @@ import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
 import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
 import { OrbitResolutionController } from "./orbit-resolution";
+import { isPhoneViewport, PhoneSheets } from "./phone-sheet";
 import { PointerOwnership } from "./pointer-ownership";
 import { SceneSynchronizer } from "./scene-sync";
 import { EditorStore } from "./editor/editor-store";
@@ -273,6 +274,11 @@ class FitRoomApp {
   private syncer: SceneSynchronizer<THREE.Group> | null = null;
   private toastTimer = 0;
   private toastEl: HTMLElement | null = null;
+  /** Phone bottom sheets (catalog, Inspector, Recommend, AI, Visualise). */
+  private sheets: PhoneSheets | null = null;
+  /** Current side panel (desktop visibility + phone sheet source of truth). */
+  private sidePanel: "inspector" | "recommend" | "assistant" | "none" = "none";
+  private wasPhone = false;
   /** Throttled live fit feedback while dragging (moved id, consumed once per frame). */
   private liveDirty: string | null = null;
   private container: HTMLElement;
@@ -491,9 +497,10 @@ class FitRoomApp {
     );
     ringVisible.rotation.x = -Math.PI / 2;
     ringVisible.renderOrder = 6;
-    // Generous invisible hit ring so the ring is easy to grab.
+    // Generous invisible hit ring so the ring is easy to grab: ±28 cm
+    // around the visible ring, a 44 px touch target at plan distances.
     const ringHit = new THREE.Mesh(
-      new THREE.RingGeometry(0.3, 0.62, 32),
+      new THREE.RingGeometry(0.22, 0.78, 32),
       new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }),
     );
     ringHit.rotation.x = -Math.PI / 2;
@@ -585,8 +592,23 @@ class FitRoomApp {
     }
 
     this.bindToolbar();
+    this.bindPhone();
     this.bindPointer();
     this.bindKeys();
+    this.sheets = new PhoneSheets({
+      catalog: document.getElementById("catalog"),
+      inspector: document.getElementById("inspector"),
+      recommend: document.getElementById("recommend-panel"),
+      assistant: document.getElementById("assistant-panel"),
+      render: document.getElementById("render-viewer"),
+    });
+    this.wasPhone = isPhoneViewport();
+    if (this.wasPhone) {
+      // A phone starts with the room full-screen: every panel is a closed
+      // sheet until the bottom bar opens one.
+      document.getElementById("catalog")?.setAttribute("hidden", "");
+      this.syncPhoneBar();
+    }
     this.controls.addEventListener("change", () => this.requestRender());
     this.store.subscribe(() => {
       void this.syncInstances();
@@ -620,7 +642,10 @@ class FitRoomApp {
       document.getElementById("fit-list")?.toggleAttribute("hidden");
     });
 
-    window.addEventListener("resize", () => this.resize());
+    window.addEventListener("resize", () => {
+      this.syncBreakpoint();
+      this.resize();
+    });
     this.applyDevGating();
     // Nothing open on first load: the side column starts empty.
     this.showSidePanel("none");
@@ -1027,11 +1052,12 @@ class FitRoomApp {
     this.buildRoomAtSize(at);
   }
 
-  /** One dismissible tip after the first build, shown once. */
+  /** One dismissible tip after the first build, shown once per room. */
   private maybeShowDoorTip(): void {
+    const key = `fitroom.doors-tip-seen:${ROOM.id}`;
     const seen = ((): boolean => {
       try {
-        return window.localStorage.getItem("fitroom.doors-tip-seen") === "1";
+        return window.localStorage.getItem(key) === "1";
       } catch {
         return true;
       }
@@ -1051,21 +1077,29 @@ class FitRoomApp {
       dismiss.textContent = "Got it";
       dismiss.addEventListener("click", () => {
         try {
-          window.localStorage.setItem("fitroom.doors-tip-seen", "1");
+          window.localStorage.setItem(key, "1");
         } catch {
           // Private mode: the tip simply shows again next visit.
         }
         tip?.remove();
       });
       tip.append(text, dismiss);
+      // The tip belongs to the room it was made for: switching rooms drops
+      // it, so it never follows into another room.
+      tip.dataset["room"] = ROOM.id;
       this.container.appendChild(tip);
-    } else {
+      // Sit above the toolbar like the toasts, never over a control.
+      this.placeToastAboveToolbar(tip);
+    } else if (tip.dataset["room"] === ROOM.id) {
       tip.removeAttribute("hidden");
+      this.placeToastAboveToolbar(tip);
     }
   }
 
   /** "From photos": the capture flow floats above everything. */
   private openPhotoFlow(): void {
+    this.sheets?.close();
+    this.syncPhoneBar();
     this.closePhotoFlow();
     const flow = new PhotoFlow({
       onDone: (result) => this.openPhotoDraft(result),
@@ -1147,6 +1181,8 @@ class FitRoomApp {
   }
 
   private openEditor(): void {
+    this.sheets?.close();
+    this.syncPhoneBar();
     this.editing = true;
     this.editorBase = JSON.parse(JSON.stringify(ROOM)) as RoomLayout;
     this.select(null);
@@ -1215,6 +1251,10 @@ class FitRoomApp {
 
   /** Rebuild the 3D room, fit engine and overlays after a plan edit. */
   private rebuildRoom(): void {
+    // The door tip belongs to the room it was made for: another room never
+    // inherits it.
+    const tip = document.getElementById("door-tip");
+    if (tip instanceof HTMLElement && tip.dataset["room"] !== ROOM.id) tip.remove();
     if (this.roomGroup !== null) {
       this.scene.remove(this.roomGroup);
       this.roomGroup.traverse((obj) => {
@@ -1600,6 +1640,11 @@ class FitRoomApp {
   }
 
   private select(id: string | null): void {
+    if (id === null && this.sheets !== null && isPhoneViewport()) {
+      // Deselecting on a phone dismisses the Inspector sheet as well.
+      this.sheets.close();
+      this.syncPhoneBar();
+    }
     this.selectedId = id;
     this.rebuildOutline();
     // The hover outline never doubles the selection.
@@ -1669,6 +1714,23 @@ class FitRoomApp {
 
   /** Right-hand column: one panel at a time (Inspector, Recommend, Arrange). */
   private showSidePanel(name: "inspector" | "recommend" | "assistant" | "none"): void {
+    this.sidePanel = name;
+    // A phone shows the same panels as bottom sheets, one at a time.
+    if (this.sheets !== null && isPhoneViewport()) {
+      if (name === "none") {
+        if (!this.sheets.isOpen("catalog") && !this.sheets.isOpen("render")) {
+          this.sheets.close();
+        }
+      } else if (!this.sheets.isOpen(name)) {
+        // Keep the user's height (peek/full) when the sheet is already open.
+        this.sheets.open(name);
+      }
+      if (name === "assistant") this.assistantPanel?.syncMode();
+      this.syncPhoneBar();
+      this.container.classList.toggle("has-side-panel", false);
+      this.resize();
+      return;
+    }
     const inspector = document.getElementById("inspector");
     const recommend = document.getElementById("recommend-panel");
     const assistant = document.getElementById("assistant-panel");
@@ -1689,6 +1751,161 @@ class FitRoomApp {
     // While any panel is open the fit badge sits left of it (see
     // `has-side-panel` in style.css), never over the panel's tabs.
     this.container.classList.toggle("has-side-panel", name !== "none");
+    this.resize();
+  }
+
+  /** Phone bottom bar: Catalog, AI, Visualise and the cart summary. */
+  private bindPhone(): void {
+    const on = (id: string, fn: () => void): void => {
+      document.getElementById(id)?.addEventListener("click", fn);
+    };
+    on("phone-catalog", () => {
+      this.closePhoneMenus();
+      this.sheets?.toggle("catalog");
+      this.syncPhoneBar();
+    });
+    on("phone-ai", () => {
+      this.togglePhoneMenu("phone-ai-menu", "phone-ai");
+    });
+    on("phone-visualise", () => {
+      this.closePhoneMenus();
+      this.openVisualise();
+    });
+    on("tool-phone-menu", () => {
+      this.togglePhoneMenu("phone-menu", "tool-phone-menu");
+    });
+    for (const item of document.querySelectorAll("#phone-menu [data-phone-action]")) {
+      if (!(item instanceof HTMLElement)) continue;
+      item.addEventListener("click", () => {
+        const action = item.dataset["phone-action"] ?? "";
+        this.closePhoneMenus();
+        this.phoneMenuAction(action);
+      });
+    }
+    for (const item of document.querySelectorAll("#phone-ai-menu [data-phone-action]")) {
+      if (!(item instanceof HTMLElement)) continue;
+      item.addEventListener("click", () => {
+        const action = item.dataset["phone-action"] ?? "";
+        this.closePhoneMenus();
+        if (action === "arrange") {
+          this.showSidePanel("assistant");
+          this.assistantPanel?.openArrange();
+        } else if (action === "furnish") {
+          this.showSidePanel("assistant");
+          this.assistantPanel?.openFurnish();
+        } else if (action === "recommend") {
+          this.showSidePanel("recommend");
+        }
+      });
+    }
+  }
+
+  private togglePhoneMenu(menuId: string, buttonId: string): void {
+    const menu = document.getElementById(menuId);
+    const button = document.getElementById(buttonId);
+    if (menu === null) return;
+    const willOpen = menu.hasAttribute("hidden");
+    this.closePhoneMenus();
+    if (willOpen) {
+      menu.removeAttribute("hidden");
+      button?.setAttribute("aria-expanded", "true");
+    }
+  }
+
+  private closePhoneMenus(): void {
+    for (const id of ["phone-menu", "phone-ai-menu"]) {
+      document.getElementById(id)?.setAttribute("hidden", "");
+    }
+    for (const id of ["tool-phone-menu", "phone-ai"]) {
+      document.getElementById(id)?.setAttribute("aria-expanded", "false");
+    }
+  }
+
+  /** Close phone menus and the open sheet; true when anything closed. */
+  private closePhoneChrome(): boolean {
+    if (!isPhoneViewport()) return false;
+    let closed = false;
+    for (const id of ["phone-menu", "phone-ai-menu"]) {
+      const menu = document.getElementById(id);
+      if (menu !== null && !menu.hasAttribute("hidden")) {
+        menu.setAttribute("hidden", "");
+        closed = true;
+      }
+    }
+    if (this.sheets?.close() === true) closed = true;
+    if (closed) this.syncPhoneBar();
+    return closed;
+  }
+
+  private phoneMenuAction(action: string): void {
+    if (action === "plan") {
+      this.sheets?.close();
+      this.setMode(this.mode === "plan" ? "orbit" : "plan");
+    } else if (action === "clearance") {
+      this.sheets?.close();
+      this.toggleClearance();
+    } else if (action === "reset-view") {
+      this.sheets?.close();
+      this.resetView();
+    } else if (action === "edit-room") {
+      this.sheets?.close();
+      this.editorStore?.load(ROOM);
+      this.openEditor();
+    } else if (action === "credits") {
+      const dlg = document.getElementById("credits-dialog");
+      if (dlg instanceof HTMLDialogElement) dlg.showModal();
+    }
+    this.syncPhoneBar();
+  }
+
+  /** Visualise: on a phone the viewer opens as a bottom sheet. */
+  private openVisualise(): void {
+    this.showSidePanel("none");
+    this.select(null);
+    if (isPhoneViewport()) {
+      this.sheets?.open("render");
+      this.syncPhoneBar();
+    }
+    void this.renderViewer?.visualise();
+  }
+
+  /** Bottom-bar active states mirror the open sheet. */
+  private syncPhoneBar(): void {
+    const catalog = document.getElementById("phone-catalog");
+    const ai = document.getElementById("phone-ai");
+    const visualise = document.getElementById("phone-visualise");
+    const sheet = (["catalog", "inspector", "recommend", "assistant", "render"] as const).find(
+      (name) => this.sheets?.isOpen(name) === true,
+    );
+    catalog?.setAttribute("data-active", String(sheet === "catalog"));
+    ai?.setAttribute(
+      "data-active",
+      String(sheet === "assistant" || sheet === "recommend" || sheet === "inspector"),
+    );
+    visualise?.setAttribute("data-active", String(sheet === "render"));
+  }
+
+  /** Crossing the phone/desktop breakpoint rebuilds the panel chrome. */
+  private syncBreakpoint(): void {
+    const phone = isPhoneViewport();
+    if (phone === this.wasPhone) return;
+    this.wasPhone = phone;
+    this.closePhoneMenus();
+    if (!phone) {
+      this.sheets?.resetToDesktop();
+      document.getElementById("catalog")?.removeAttribute("hidden");
+      const name = this.sidePanel;
+      this.sidePanel = "none";
+      this.showSidePanel(name);
+    } else {
+      document.getElementById("catalog")?.setAttribute("hidden", "");
+      const renderHost = document.getElementById("render-viewer");
+      const renderOpen = renderHost !== null && !renderHost.hasAttribute("hidden");
+      if (this.sidePanel !== "none") this.sheets?.open(this.sidePanel);
+      else if (renderOpen) this.sheets?.open("render");
+      this.syncPhoneBar();
+      this.container.classList.toggle("has-side-panel", false);
+    }
     this.resize();
   }
 
@@ -1726,8 +1943,8 @@ class FitRoomApp {
     if (hit instanceof THREE.Mesh) {
       hit.geometry.dispose();
       hit.geometry = new THREE.RingGeometry(
-        Math.max(0.05, this.rotateRingRadiusM - 0.2),
-        this.rotateRingRadiusM + 0.2,
+        Math.max(0.05, this.rotateRingRadiusM - 0.28),
+        this.rotateRingRadiusM + 0.28,
         32,
       );
     }
@@ -1880,6 +2097,8 @@ class FitRoomApp {
     }
     el.textContent = formatTopBar(count, total);
     el.title = count === 0 ? "Your cart is empty" : `${formatTopBar(count, total)} in your cart`;
+    const phoneCart = document.getElementById("phone-cart");
+    if (phoneCart !== null) phoneCart.textContent = formatTopBar(count, total);
     const cart = document.getElementById("tool-cart");
     if (cart instanceof HTMLButtonElement) {
       cart.disabled = total === 0;
@@ -2324,6 +2543,8 @@ class FitRoomApp {
   private bindKeys(): void {
     window.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
+        // Phone sheets and menus dismiss first, like a native sheet.
+        if (this.closePhoneChrome()) return;
         const openDialog = document.querySelector("dialog[open]");
         if (openDialog !== null) return;
         if (this.photoFlow !== null) return;
@@ -2411,11 +2632,7 @@ class FitRoomApp {
     });
     on("tool-orbit", () => this.setMode("orbit"));
     on("tool-plan", () => this.setMode("plan"));
-    on("tool-render", () => {
-      this.showSidePanel("none");
-      this.select(null);
-      void this.renderViewer?.visualise();
-    });
+    on("tool-render", () => this.openVisualise());
     on("tool-clearance", () => this.toggleClearance());
     const scenes = document.getElementById("tool-scenes");
     if (scenes instanceof HTMLSelectElement) {

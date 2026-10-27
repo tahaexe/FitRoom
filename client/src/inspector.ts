@@ -14,6 +14,7 @@ export class Inspector {
   private bounds: InspectorBounds | null = null;
   private lastId: string | null = null;
   private note: string | null = null;
+  private expanded = false;
 
   constructor(
     private readonly root: HTMLElement,
@@ -37,6 +38,7 @@ export class Inspector {
     if (id !== this.lastId) {
       this.lastId = id;
       this.note = null;
+      this.expanded = false;
     }
     this.selected = item;
     this.render();
@@ -44,6 +46,8 @@ export class Inspector {
 
   render(): void {
     this.root.innerHTML = "";
+    if (this.expanded) this.root.setAttribute("data-expanded", "true");
+    else this.root.removeAttribute("data-expanded");
     const title = document.createElement("h2");
     title.textContent = "Inspector";
     this.root.appendChild(title);
@@ -64,6 +68,38 @@ export class Inspector {
       dims.textContent = `Size ${Math.round(entry.size.w)}×${Math.round(entry.size.d)}×${Math.round(entry.size.h)}cm · $${entry.price}`;
       this.root.appendChild(dims);
     }
+
+    // Main actions first (the phone sheet shows these at peek): quick
+    // rotate steps, then variants and delete below. Hidden on desktop.
+    const actions = document.createElement("div");
+    actions.className = "inspector-actions";
+    for (const [label, delta] of [
+      ["⟲ −15°", -15],
+      ["⟳ +15°", 15],
+    ] as const) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn-secondary";
+      b.textContent = label;
+      b.setAttribute("aria-label", `Rotate ${delta} degrees`);
+      b.addEventListener("click", () =>
+        this.opts.onRotate(item.instanceId, item.rotationY + delta),
+      );
+      actions.appendChild(b);
+    }
+    this.root.appendChild(actions);
+
+    // Position fields sit behind "More" on a phone; desktop shows all.
+    const more = document.createElement("button");
+    more.type = "button";
+    more.className = "inspector-more";
+    more.textContent = this.expanded ? "Less" : "More";
+    more.setAttribute("aria-expanded", String(this.expanded));
+    more.addEventListener("click", () => {
+      this.expanded = !this.expanded;
+      this.render();
+    });
+    this.root.appendChild(more);
 
     const bounds = this.bounds;
     const minX = bounds?.minX ?? 0;

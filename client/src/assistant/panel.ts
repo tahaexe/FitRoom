@@ -104,6 +104,13 @@ export class AssistantPanel {
     this.syncMode();
   }
 
+  /** Open the panel on the Arrange tab (the phone AI menu). */
+  openArrange(): void {
+    this.tab = "arrange";
+    this.render();
+    this.syncMode();
+  }
+
   private render(): void {
     this.root.innerHTML = "";
     const head = document.createElement("div");
