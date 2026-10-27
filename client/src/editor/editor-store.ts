@@ -5,9 +5,13 @@
  * and settles as a single step on release. `onCommitted` fires for edits the
  * 3D room must follow at once (commits, drag releases, undo) but not for
  * in-drag previews.
+ *
+ * A photo draft's source marks ride alongside the room so typing a wall
+ * length and its new "measured" mark undo together.
  */
 
 import type { RoomLayout } from "@fitroom/shared";
+import type { PhotoDraftMeta } from "../photo-room/flow";
 
 export type EditorSelection =
   | { kind: "wall"; id: string }
@@ -19,10 +23,16 @@ function cloneRoom(room: RoomLayout): RoomLayout {
   return JSON.parse(JSON.stringify(room)) as RoomLayout;
 }
 
+function cloneDraft(draft: PhotoDraftMeta | null): PhotoDraftMeta | null {
+  if (draft === null) return null;
+  return JSON.parse(JSON.stringify(draft)) as PhotoDraftMeta;
+}
+
 export class EditorStore {
   room: RoomLayout;
+  draft: PhotoDraftMeta | null = null;
   selection: EditorSelection = null;
-  private past: RoomLayout[] = [];
+  private past: Array<{ room: RoomLayout; draft: PhotoDraftMeta | null }> = [];
   private listeners = new Set<() => void>();
   private committedListeners = new Set<(room: RoomLayout) => void>();
 
@@ -61,18 +71,24 @@ export class EditorStore {
     this.emit();
   }
 
-  /** One undo step around a pure room transform. */
-  commit(next: RoomLayout): void {
-    this.past.push(cloneRoom(this.room));
+  /** Photo draft sources the plan renders beside every value. */
+  setDraft(draft: PhotoDraftMeta | null): void {
+    this.draft = cloneDraft(draft);
+  }
+
+  /** One undo step around a pure room transform (plus its draft marks). */
+  commit(next: RoomLayout, nextDraft?: PhotoDraftMeta | null): void {
+    this.past.push({ room: cloneRoom(this.room), draft: cloneDraft(this.draft) });
     if (this.past.length > 60) this.past.shift();
     this.room = next;
+    if (nextDraft !== undefined) this.draft = cloneDraft(nextDraft);
     this.emit();
     this.emitCommitted();
   }
 
   /** Push the pre-drag state so the whole drag undoes as one edit. */
   checkpoint(): void {
-    this.past.push(cloneRoom(this.room));
+    this.past.push({ room: cloneRoom(this.room), draft: cloneDraft(this.draft) });
     if (this.past.length > 60) this.past.shift();
   }
 
@@ -90,7 +106,8 @@ export class EditorStore {
   undo(): boolean {
     const prev = this.past.pop();
     if (prev === undefined) return false;
-    this.room = prev;
+    this.room = prev.room;
+    this.draft = prev.draft;
     if (this.selection !== null && !hasId(this.room, this.selection)) {
       this.selection = null;
     }

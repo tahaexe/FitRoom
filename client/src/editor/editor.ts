@@ -7,7 +7,14 @@
  */
 
 import type { DoorOpening, ExistingPiece, Opening, RoomLayout } from "@fitroom/shared";
-import { setRectangleWallLength, validateRoomLayout, wallDisplayName } from "@fitroom/shared";
+import {
+  LETTER_TO_WALL_ID,
+  setRectangleWallLength,
+  validateRoomLayout,
+  WALL_ID_TO_LETTER,
+  wallDisplayName,
+  type WallLetter,
+} from "@fitroom/shared";
 import { EditorPlanView } from "./plan-view";
 import { sourceMark } from "./source-mark";
 import { EditorStore } from "./editor-store";
@@ -167,7 +174,11 @@ export class RoomEditor {
       removeOpening: (openingId) => this.removeOpening(openingId),
       removePiece: (pieceId) => this.removePiece(pieceId),
     });
-    this.unsubscribe = this.store.subscribe(() => this.renderPanels());
+    // Undo restores the room and its marks together: follow the store.
+    this.unsubscribe = this.store.subscribe(() => {
+      this.draft = this.store.draft;
+      this.renderPanels();
+    });
     this.renderPanels();
   }
 
@@ -180,12 +191,37 @@ export class RoomEditor {
   /** Photo draft sources: every value renders its measured/estimated mark. */
   setPhotoDraft(draft: PhotoDraftMeta | null): void {
     this.draft = draft;
+    this.store.setDraft(draft);
     this.renderPanels();
   }
 
   private markFor(mark: WallSourceMark | undefined): HTMLElement {
-    if (mark === undefined || mark.source === "measured") return sourceMark("measured");
+    if (mark === undefined) return sourceMark("measured");
+    if (mark.source === "measured") return sourceMark("measured", mark.plusMinus);
     return sourceMark("estimated", mark.plusMinus);
+  }
+
+  /**
+   * A typed wall length turns measured (± 0.5 cm): the opposite wall shares
+   * the tape, so both flip and the amber band counts down. The rectangle
+   * resize itself re-solves every dependent wall, opening and piece.
+   */
+  private measuredDraftFor(wallId: string): PhotoDraftMeta | null | undefined {
+    if (this.draft === null) return undefined;
+    const letter = WALL_ID_TO_LETTER[wallId] as WallLetter | undefined;
+    if (letter === undefined) return this.draft;
+    const opposite: WallLetter =
+      letter === "A" ? "C" : letter === "C" ? "A" : letter === "B" ? "D" : "B";
+    const next: PhotoDraftMeta = JSON.parse(JSON.stringify(this.draft)) as PhotoDraftMeta;
+    for (const wall of [LETTER_TO_WALL_ID[letter], LETTER_TO_WALL_ID[opposite]]) {
+      if (wall === undefined) continue;
+      next.walls[wall] = { source: "measured", plusMinus: 0.5 };
+    }
+    const estimated = Object.values(next.walls).filter((w) => w.source === "estimated");
+    next.estimatedWallCount = estimated.length;
+    next.estimatedWallPm =
+      estimated.length > 0 ? Math.max(...estimated.map((w) => w.plusMinus ?? 0)) : 0;
+    return next;
   }
 
   private renderBand(): void {
@@ -202,11 +238,16 @@ export class RoomEditor {
       count === 1
         ? `1 wall is estimated (± ${String(pm)} cm). Tape it to make it exact.`
         : `${String(count)} walls are estimated (± ${String(pm)} cm). Tape one to make it exact.`;
+    const nextId =
+      (["wall-1", "wall-2", "wall-3", "wall-4"] as const).find(
+        (id) => this.draft?.walls[id]?.source === "estimated",
+      ) ?? "wall-1";
+    const nextLetter = (WALL_ID_TO_LETTER[nextId] as WallLetter | undefined) ?? "A";
     const tape = document.createElement("button");
     tape.type = "button";
     tape.className = "photo-draft-tape";
-    tape.textContent = "Tape wall A";
-    tape.addEventListener("click", () => this.store.select({ kind: "wall", id: "wall-1" }));
+    tape.textContent = `Tape wall ${nextLetter}`;
+    tape.addEventListener("click", () => this.store.select({ kind: "wall", id: nextId }));
     this.bandEl.append(text, tape);
   }
 
@@ -221,7 +262,12 @@ export class RoomEditor {
 
   private setWallLength(wallId: string, lengthCm: number): void {
     if (!Number.isFinite(lengthCm)) return;
-    this.store.commit(setRectangleWallLength(this.store.room, wallId, lengthCm));
+    const nextDraft = this.measuredDraftFor(wallId);
+    this.store.commit(
+      setRectangleWallLength(this.store.room, wallId, lengthCm),
+      ...(nextDraft === undefined ? [] : [nextDraft]),
+    );
+    if (nextDraft !== undefined && nextDraft !== null) this.draft = nextDraft;
   }
 
   private setCeilingHeight(heightCm: number): void {

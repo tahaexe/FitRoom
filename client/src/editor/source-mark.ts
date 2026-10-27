@@ -14,10 +14,12 @@ export function sourceMark(source: ValueSource, toleranceCm?: number): HTMLEleme
   mark.className = "source-mark";
   mark.dataset["source"] = source;
   if (source === "measured") {
-    mark.setAttribute("title", "Measured: typed by you");
+    const label =
+      toleranceCm === undefined ? "Measured" : `Measured ± ${String(Math.round(toleranceCm))} cm`;
+    mark.setAttribute("title", `${label}: typed by you`);
     mark.appendChild(tapeIcon());
     const text = document.createElement("span");
-    text.textContent = "Measured";
+    text.textContent = label;
     mark.appendChild(text);
   } else {
     const text =
