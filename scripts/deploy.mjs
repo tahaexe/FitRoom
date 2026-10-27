@@ -9,14 +9,16 @@
  *
  * Steps: build, find the `fitroom` D1 database by name (or create it),
  * write its id into the generated, git-ignored `wrangler.deploy.jsonc`
- * (no account data is committed), apply the migrations remotely, deploy
- * the Worker, set the `META_API_KEY` secret, and print the public URL.
+ * (no account data is committed), apply the migrations remotely, ensure
+ * the account's workers.dev subdomain exists (registering it when none
+ * is registered yet), deploy the Worker, set the `META_API_KEY` secret,
+ * and print the public URL.
  * The secret is set after the deploy so the first deploy on a new account
  * never prompts to create the Worker; live AI routes may briefly answer
  * "unavailable" until the secret lands, while demo mode works throughout.
  */
 
-/* global console, process */
+/* global console, fetch, process */
 import { spawn } from "node:child_process";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
@@ -150,6 +152,63 @@ function parseUrl(text) {
   return match === null ? null : match[0];
 }
 
+function cloudflareErrorText(body) {
+  const errors = Array.isArray(body?.errors) ? body.errors : [];
+  const first = errors.find((entry) => typeof entry === "object" && entry !== null);
+  const code = first?.code ?? "unknown";
+  const message = first?.message ?? "unknown Cloudflare API error";
+  return `(code ${code}) ${message}`;
+}
+
+async function ensureWorkersSubdomain(apiToken, accountId) {
+  const url = `https://api.cloudflare.com/client/v4/accounts/${accountId}/workers/subdomain`;
+  let current;
+  try {
+    const res = await fetch(url, { headers: { Authorization: `Bearer ${apiToken}` } });
+    current = await res.json();
+  } catch (error) {
+    fail(
+      `workers subdomain lookup failed: ${error instanceof Error ? error.message : String(error)}`,
+    );
+  }
+  if (current.success === true && typeof current.result?.subdomain === "string") {
+    console.log(`deploy: workers subdomain "${current.result.subdomain}" is already registered.`);
+    return current.result.subdomain;
+  }
+  if (current.success !== true) {
+    const errors = Array.isArray(current.errors) ? current.errors : [];
+    const missing = errors.some(
+      (entry) => typeof entry === "object" && entry !== null && entry.code === 10007,
+    );
+    if (!missing) {
+      fail(`workers subdomain lookup failed ${cloudflareErrorText(current)}`);
+    }
+    const desired = process.env.FITROOM_WORKERS_SUBDOMAIN?.trim() || "fitroom-demo";
+    let registered;
+    try {
+      const res = await fetch(url, {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${apiToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ subdomain: desired }),
+      });
+      registered = await res.json();
+    } catch (error) {
+      fail(
+        `workers subdomain registration failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    }
+    if (registered.success === true && typeof registered.result?.subdomain === "string") {
+      console.log(`deploy: registered workers subdomain "${registered.result.subdomain}".`);
+      return registered.result.subdomain;
+    }
+    fail(`workers subdomain registration failed ${cloudflareErrorText(registered)}`);
+  }
+  fail(`workers subdomain lookup returned no subdomain ${cloudflareErrorText(current)}`);
+}
+
 async function listFitroomId() {
   const listed = await wrangler(wranglerArgsFor("d1-list"));
   if (listed.exit !== 0) {
@@ -161,8 +220,8 @@ async function listFitroomId() {
 async function main() {
   // Secrets travel in memory and on stdin only; nothing below prints them.
   const metaKey = requiredEnv("META_API_KEY");
-  requiredEnv("CLOUDFLARE_API_TOKEN");
-  requiredEnv("CLOUDFLARE_ACCOUNT_ID");
+  const apiToken = requiredEnv("CLOUDFLARE_API_TOKEN");
+  const accountId = requiredEnv("CLOUDFLARE_ACCOUNT_ID");
 
   console.log("deploy: building shared, server and client…");
   const npmBin = process.platform === "win32" ? "npm.cmd" : "npm";
@@ -210,6 +269,9 @@ async function main() {
   if (migrated.exit !== 0) {
     fail(`migrations failed: ${`${migrated.stdout}\n${migrated.stderr}`.slice(-500).trim()}`);
   }
+
+  console.log("deploy: ensuring the workers.dev subdomain…");
+  await ensureWorkersSubdomain(apiToken, accountId);
 
   console.log("deploy: deploying the Worker…");
   const deployed = await wrangler(
