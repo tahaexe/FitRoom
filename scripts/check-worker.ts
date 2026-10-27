@@ -865,11 +865,7 @@ async function main(): Promise<void> {
         META_RATE_PER_MIN: "1000",
       });
       const base4 = `http://127.0.0.1:${String(port4)}`;
-      check(
-        "rate worker starts",
-        await waitForHealth(base4),
-        `no /api/health on ${String(port4)}`,
-      );
+      check("rate worker starts", await waitForHealth(base4), `no /api/health on ${String(port4)}`);
       {
         const rateJar = new Jar(base4);
         const one = await rateJar.post(

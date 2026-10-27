@@ -486,5 +486,74 @@ check(
   `${openingBoxLabel("door", "A", 94)} / ${openingBoxText("door", 94, 210)}`,
 );
 
+// ---- Credits text (dialog plus CREDITS.md) ----
+const creditsDialog = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "index.html"),
+  "utf8",
+).replace(/\s+/g, " ");
+check(
+  "credits:models-line",
+  creditsDialog.includes(
+    "Muse Spark runs Recommend, Arrange and Furnish and labels your photos; " +
+      "SAM 3.1 finds the walls, doors and windows in your photos; " +
+      "Muse Image draws the photoreal view.",
+  ),
+);
+check(
+  "credits:font-line",
+  creditsDialog.includes("Nunito") &&
+    creditsDialog.includes("@fontsource/nunito") &&
+    creditsDialog.includes("SIL Open Font License 1.1"),
+);
+check(
+  "credits:photos-line",
+  creditsDialog.includes("eight") &&
+    creditsDialog.includes("CC0-1.0") &&
+    creditsDialog.includes("Wikimedia Commons"),
+);
+const creditsMd = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "..", "CREDITS.md"),
+  "utf8",
+);
+check("credits:cc0-section", creditsMd.includes("## CC0 assets"));
+check("credits:code-section", creditsMd.includes("## Code dependencies"));
+check("credits:hdri-author", creditsMd.includes("lebombo") && creditsMd.includes("Greg Zaal"));
+const creditDeps: Array<[string, string]> = [
+  ["@meta-sam/parser", "SAM License"],
+  ["three", "MIT"],
+  ["exifr", "MIT"],
+  ["@fontsource/nunito", "SIL Open Font License 1.1"],
+  ["hono", "MIT"],
+  ["@hono/node-server", "MIT"],
+  ["dotenv", "BSD-2-Clause"],
+  ["ajv", "MIT"],
+];
+for (const [pkg, licence] of creditDeps) {
+  check(
+    `credits:dep-${pkg}`,
+    creditsMd.includes(`Package: \`${pkg}\``) && creditsMd.includes(licence),
+    `${pkg} with ${licence}`,
+  );
+}
+const creditPhotos: Array<[string, string]> = [
+  ["living-room-unsplash-ceborski", "Jarosław Ceborski"],
+  ["living-room-carlos-zgz", "Carlos ZGZ"],
+  ["apartment-granada-artchapiz", "Artchapiz"],
+  ["hostel-twin-room-wardrobe", "Profpcde"],
+  ["apartment-hotel-nice", "Paikan06"],
+  ["living-room-houseplants", "Lo"],
+  ["living-room-zaher-rio", "Wilfredor"],
+  ["market-house-reading-room", "Andy Li"],
+];
+for (const [slug, author] of creditPhotos) {
+  check(
+    `credits:photo-${slug}`,
+    creditsMd.includes(slug) &&
+      creditsMd.includes(author) &&
+      creditsMd.includes("commons.wikimedia.org"),
+    `${slug} by ${author}`,
+  );
+}
+
 if (failures > 0) process.exit(1);
 console.log("guidance: all checks passed");
