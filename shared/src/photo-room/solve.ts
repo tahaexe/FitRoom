@@ -41,6 +41,20 @@ export const WINDOW_FRAME_CM = -5;
 export const GAP_MARGIN_CM = 3;
 /** Frame pieces sit inside the jambs (measured on the truth renders). */
 export const FRAME_MARGIN_CM = 8;
+
+/**
+ * Pixel-size rule for the whole opening section below: every absolute pixel
+ * threshold is stated at the 1280 px reference width (the segmentation
+ * frame) and scaled by `scalePx` to the photo at hand, so the same doorway
+ * measures the same centimetres at 800, 1066 or 1280 px and a resample never
+ * moves a jamb. Sampling strides (the `+= 2` / `+= 4` loop steps) are not
+ * thresholds and stay fixed; fractions and centimetre margins never scale.
+ */
+const REF_SEG_WIDTH = 1280;
+/** Scale an absolute pixel tolerance from the 1280 px reference to this photo. */
+function scalePx(n: number, photoW: number): number {
+  return Math.max(1, Math.round((n * Math.max(1, photoW)) / REF_SEG_WIDTH));
+}
 const DEFAULT_FOCAL_35MM = 26;
 
 function tapeFor(letter: WallLetter, tapeA: number, tapeB: number): number {
@@ -728,16 +742,20 @@ function unc(value: number, plusMinus: number, source: Uncertain["source"]): Unc
 }
 
 /**
- * Wall occupancy per x over the bottom band near the floor (doorways reach
- * the floor; window sills stay well above it, so a mid-wall window hole
- * never reads as a doorway).
+ * Wall occupancy per x over a horizontal band stated as fractions of the
+ * wall height up from the fitted floor line: `fromUp`/`toUp` are 0 at the
+ * floor and 1 at the ceiling (0 to 0.15 is the bottom band near the floor;
+ * doorways reach the floor while window sills stay well above it, so a
+ * mid-wall window hole never reads as a doorway).
  */
-function wallOccupancy(
+function bandOccupancy(
   wallPieces: SamInstance[],
   floor: FittedLine,
   ceiling: FittedLine,
   colMin: number,
   colMax: number,
+  fromUp: number,
+  toUp: number,
 ): Array<{ x: number; occ: number }> {
   const out: Array<{ x: number; occ: number }> = [];
   for (let x = colMin; x <= colMax; x += 2) {
@@ -749,10 +767,12 @@ function wallOccupancy(
     }
     const top = Math.min(yf, yc);
     const bot = Math.max(yf, yc);
-    const bandTop = bot - (bot - top) * 0.15;
+    const band = Math.max(1, bot - top);
+    const yLo = Math.ceil(bot - toUp * band);
+    const yHi = Math.floor(bot - fromUp * band);
     let fill = 0;
     let total = 0;
-    for (let y = Math.ceil(bandTop); y <= Math.floor(bot); y += 2) {
+    for (let y = yLo; y <= yHi; y += 2) {
       total += 1;
       if (unionAt(wallPieces, x, y)) fill += 1;
     }
@@ -761,15 +781,26 @@ function wallOccupancy(
   return out;
 }
 
-function findDoorGap(
+/**
+ * Wall occupancy per x over the bottom band near the floor (doorways reach
+ * the floor; window sills stay well above it, so a mid-wall window hole
+ * never reads as a doorway).
+ */
+function wallOccupancy(
   wallPieces: SamInstance[],
   floor: FittedLine,
   ceiling: FittedLine,
   colMin: number,
   colMax: number,
+): Array<{ x: number; occ: number }> {
+  return bandOccupancy(wallPieces, floor, ceiling, colMin, colMax, 0, 0.15);
+}
+
+/** Widest low-occupancy run of one occupancy profile (ragged borders stay narrow). */
+function widestRun(
+  occ: Array<{ x: number; occ: number }>,
+  minRunPx: number,
 ): { x0: number; x1: number } | null {
-  if (wallPieces.length === 0) return null;
-  const occ = wallOccupancy(wallPieces, floor, ceiling, colMin, colMax);
   const consider = (
     x0: number,
     x1: number,
@@ -779,7 +810,7 @@ function findDoorGap(
     // wall's corner (its leaf spills past the jamb), while ragged mask
     // borders are narrow. Edge proximity is decided by the leaf check at
     // the call site, not by geometry.
-    if (x1 - x0 <= 25) return best;
+    if (x1 - x0 <= minRunPx) return best;
     if (best === null || x1 - x0 > best.x1 - best.x0) return { x0, x1 };
     return best;
   };
@@ -797,6 +828,118 @@ function findDoorGap(
   }
   if (cur0 !== null) best = consider(cur0, cur1, best);
   return best;
+}
+
+function findDoorGap(
+  wallPieces: SamInstance[],
+  floor: FittedLine,
+  ceiling: FittedLine,
+  colMin: number,
+  colMax: number,
+  photoW: number,
+): { x0: number; x1: number } | null {
+  if (wallPieces.length === 0) return null;
+  const occ = wallOccupancy(wallPieces, floor, ceiling, colMin, colMax);
+  return widestRun(occ, scalePx(25, photoW));
+}
+
+/**
+ * Lintel cross-check: the wall-free span in a mid-door band (0.38 to 0.62
+ * of the wall height up from the floor — inside every standard doorway,
+ * above skirting, clutter and the ragged floor edge, below the lintel).
+ * Near the floor an ajar leaf, its shadow and the casing splay the raw gap
+ * past the jambs; up here the hole is the doorway itself. The caller
+ * intersects this span with the bottom-band gap, so the lintel can only
+ * narrow the opening, never widen it.
+ */
+function findLintelGap(
+  wallPieces: SamInstance[],
+  floor: FittedLine,
+  ceiling: FittedLine,
+  colMin: number,
+  colMax: number,
+  photoW: number,
+): { x0: number; x1: number } | null {
+  if (wallPieces.length === 0) return null;
+  const occ = bandOccupancy(wallPieces, floor, ceiling, colMin, colMax, 0.38, 0.62);
+  return widestRun(occ, scalePx(25, photoW));
+}
+
+/**
+ * Shave an ajar leaf off the raw gap. A leaf beside its doorway reads as a
+ * narrow door-concept box touching one gap edge (it spills past its jamb,
+ * so the box starts at or just inside the edge) while the open void fills
+ * the rest of the gap; a closed leaf instead fills the whole gap and is far
+ * too wide to qualify. Returns the trimmed span and which sides moved, or
+ * null when nothing qualified. Widths are fractions of the gap, tolerances
+ * scale with the photo (see `scalePx`).
+ */
+function trimLeafSpill(
+  gap: { x0: number; x1: number },
+  doors: SamInstance[],
+  photoW: number,
+): { gap: { x0: number; x1: number }; west: boolean; east: boolean } | null {
+  const gapW = Math.max(1, gap.x1 - gap.x0 + 1);
+  const edgeTol = scalePx(12, photoW);
+  let x0 = gap.x0;
+  let x1 = gap.x1;
+  let west = false;
+  let east = false;
+  for (const d of doors) {
+    const w = d.box[2] - d.box[0] + 1;
+    if (w >= 0.6 * gapW) continue;
+    if (d.box[2] < gap.x0 || d.box[0] > gap.x1) continue;
+    if (d.box[0] <= gap.x0 + edgeTol && d.box[2] > x0 && d.box[2] < gap.x0 + gapW / 2) {
+      x0 = d.box[2] + 1;
+      west = true;
+    } else if (d.box[2] >= gap.x1 - edgeTol && d.box[0] < x1 && d.box[0] > gap.x1 - gapW / 2) {
+      x1 = d.box[0] - 1;
+      east = true;
+    }
+  }
+  if (!west && !east) return null;
+  if (x1 - x0 <= scalePx(25, photoW)) return null;
+  return { gap: { x0, x1 }, west, east };
+}
+
+/**
+ * Snap a leaf-trimmed edge to the open void's own edge. The leaf hides the
+ * jamb and the casing behind it, so the trimmed edge still sits on casing;
+ * the void mask starts where the casing ends. The snap only ever applies to
+ * a side the leaf trim just moved, only to a door box fully inside the gap,
+ * and by at most a casing-scale distance — so a half-open leaf standing
+ * inside the doorway can never collapse the opening.
+ */
+function snapTrimmedEdgeToVoid(
+  span: { x0: number; x1: number },
+  doors: SamInstance[],
+  trimmedWest: boolean,
+  trimmedEast: boolean,
+  photoW: number,
+): { x0: number; x1: number } {
+  const snapTol = scalePx(30, photoW);
+  let { x0, x1 } = span;
+  if (trimmedWest) {
+    let voidWest: number | null = null;
+    for (const d of doors) {
+      if (d.box[0] < span.x0 || d.box[2] > span.x1) continue;
+      if (d.box[0] <= span.x0 + snapTol && d.box[0] > span.x0) {
+        voidWest = voidWest === null ? d.box[0] : Math.min(voidWest, d.box[0]);
+      }
+    }
+    if (voidWest !== null) x0 = voidWest;
+  }
+  if (trimmedEast) {
+    let voidEast: number | null = null;
+    for (const d of doors) {
+      if (d.box[0] < span.x0 || d.box[2] > span.x1) continue;
+      if (d.box[2] >= span.x1 - snapTol && d.box[2] < span.x1) {
+        voidEast = voidEast === null ? d.box[2] : Math.max(voidEast, d.box[2]);
+      }
+    }
+    if (voidEast !== null) x1 = voidEast;
+  }
+  return { x0, x1 };
 }
 
 /**
@@ -858,8 +1001,8 @@ function yGap(a: SamInstance, b: SamInstance): number {
 }
 
 /** Panes of one opening: touching side by side, or stacked in one column. */
-function sameOpening(a: SamInstance, b: SamInstance): boolean {
-  if (boxesTouch(a, b, 10) && verticalOverlap(a, b) >= 0.25) return true;
+function sameOpening(a: SamInstance, b: SamInstance, photoW: number): boolean {
+  if (boxesTouch(a, b, scalePx(10, photoW)) && verticalOverlap(a, b) >= 0.25) return true;
   const minW = Math.min(a.box[2] - a.box[0], b.box[2] - b.box[0]) + 1;
   const minH = Math.min(a.box[3] - a.box[1], b.box[3] - b.box[1]) + 1;
   return xOverlap(a, b) >= 0.5 * minW && yGap(a, b) <= 2 * minH;
@@ -878,7 +1021,7 @@ function groupFootprint(g: SamInstance[]): SamInstance {
   };
 }
 
-function mergePanes(windows: SamInstance[]): SamInstance[] {
+function mergePanes(windows: SamInstance[], photoW: number): SamInstance[] {
   // Fixpoint: a pane joining a group grows its footprint, which can pull
   // in a further pane (a tall stack split by several mullions).
   let groups: SamInstance[][] = windows.map((w) => [w]);
@@ -889,7 +1032,7 @@ function mergePanes(windows: SamInstance[]): SamInstance[] {
       for (let j = i + 1; j < groups.length; j += 1) {
         const a = groupFootprint(groups[i] as SamInstance[]);
         const b = groupFootprint(groups[j] as SamInstance[]);
-        if (sameOpening(a, b)) {
+        if (sameOpening(a, b, photoW)) {
           (groups[i] as SamInstance[]).push(...(groups[j] as SamInstance[]));
           groups = [...groups.slice(0, j), ...groups.slice(j + 1)];
           changed = true;
@@ -1178,7 +1321,10 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     const doors = byConcept(photo.instances, "door").filter((d) => inRange(d.box));
     // Window pieces overlapping one opening (panes) merge into one; a
     // glass strip inside a door's leaf is the door glazing, not a window.
-    const windows = mergePanes(byConcept(photo.instances, "window").filter((w) => inRange(w.box)));
+    const windows = mergePanes(
+      byConcept(photo.instances, "window").filter((w) => inRange(w.box)),
+      photo.width,
+    );
     const uncMul = photoWide[pi] === true ? 2.5 : 1;
     // Shopper-tapped door point for this wall, when the solver would
     // otherwise flag `tap-the-door`: it anchors a default-width opening.
@@ -1237,10 +1383,46 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     // the full height and would read as a doorway.
     const gapLo = pick.occluder?.side === "left" ? pick.occluder.inst.box[2] + 1 : pick.colMin;
     const gapHi = pick.occluder?.side === "right" ? pick.occluder.inst.box[0] - 1 : pick.colMax;
-    const gap = findDoorGap(structural, sol.lines.floor, sol.lines.ceiling, gapLo, gapHi);
+    // A doorway is measured between its jambs, never by the widest
+    // wall-free run near the floor: the raw bottom-band gap still finds the
+    // hole, but an ajar leaf, its shadow and the casing splay it past the
+    // jambs (the example's wall A reads 145 cm for a 90 cm door). The lintel
+    // band (mid-door height, above the floor clutter) holds the hole
+    // itself, so intersecting the two can only narrow to the doorway; the
+    // leaf trim then shaves a narrow edge-touching leaf box off, and the
+    // void snap moves that edge to the open void's own start (the casing's
+    // inner edge the leaf was hiding). A closed leaf fills the whole gap
+    // and is far too wide to trim, so closed doors are untouched.
+    const rawGap = findDoorGap(
+      structural,
+      sol.lines.floor,
+      sol.lines.ceiling,
+      gapLo,
+      gapHi,
+      photo.width,
+    );
+    const lintelGap = findLintelGap(
+      structural,
+      sol.lines.floor,
+      sol.lines.ceiling,
+      gapLo,
+      gapHi,
+      photo.width,
+    );
+    let gap = rawGap;
+    if (gap !== null && lintelGap !== null) {
+      const lo = Math.max(gap.x0, lintelGap.x0);
+      const hi = Math.min(gap.x1, lintelGap.x1);
+      if (hi - lo > scalePx(25, photo.width) && lo <= hi) gap = { x0: lo, x1: hi };
+    }
+    const trimmed = gap !== null ? trimLeafSpill(gap, doors, photo.width) : null;
+    if (trimmed !== null) {
+      gap = snapTrimmedEdgeToVoid(trimmed.gap, doors, trimmed.west, trimmed.east, photo.width);
+    }
     const touchesGapOrLeaf = (p: SamInstance): boolean => {
-      const nearGap = gap !== null && p.box[0] <= gap.x1 + 4 && p.box[2] >= gap.x0 - 4;
-      const nearLeaf = doors.some((d) => boxesTouch(p, d, 8));
+      const padGap = scalePx(4, photo.width);
+      const nearGap = gap !== null && p.box[0] <= gap.x1 + padGap && p.box[2] >= gap.x0 - padGap;
+      const nearLeaf = doors.some((d) => boxesTouch(p, d, scalePx(8, photo.width)));
       return gap !== null ? nearGap && nearLeaf : nearLeaf;
     };
     const frame = wallPieces.filter(
@@ -1257,8 +1439,10 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
       };
       // West/east jamb candidates: the gap edges (ragged, small margin)
       // and the frame edges (measured ~8 cm inside the jambs on the truth
-      // renders). The doorway starts at the innermost west evidence: an
-      // ajar leaf widens the raw gap past its jamb.
+      // renders). A casing fragment is wall trim standing inside the
+      // doorway, so each side takes its innermost evidence: an ajar leaf
+      // widens the raw gap past its jamb, and a fragment jutting past the
+      // gap is wall beyond the jamb, not the jamb.
       const west: number[] = [];
       const east: number[] = [];
       let imgLo = Infinity;
@@ -1281,7 +1465,7 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
         imgHi = Math.max(imgHi, c1);
       }
       let lo = Math.max(...west);
-      let hi = Math.max(...east);
+      let hi = Math.min(...east);
       if (!Number.isFinite(lo) || !Number.isFinite(hi) || hi - lo < 20) {
         lo = Math.min(...west);
         hi = Math.max(...east);
@@ -1299,10 +1483,11 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
         imgLo,
         imgHi,
       );
+      const leafPad = scalePx(12, photo.width);
       const leafConfirms =
         Number.isFinite(imgLo) &&
         Number.isFinite(imgHi) &&
-        doors.some((d) => d.box[0] <= imgHi + 12 && d.box[2] >= imgLo - 12);
+        doors.some((d) => d.box[0] <= imgHi + leafPad && d.box[2] >= imgLo - leafPad);
       if (tallShare < 0.4 || !leafConfirms) {
         if (doors.length > 0 && !tapDoor()) {
           flags.push({
@@ -1329,7 +1514,9 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
           const leaf = doors.reduce((a, b) => (b.box[2] - b.box[0] > a.box[2] - a.box[0] ? b : a));
           const glo = imgLo as number;
           const ghi = imgHi as number;
-          const covers = leaf.box[0] <= glo + 6 && leaf.box[2] >= ghi - 6;
+          const covers =
+            leaf.box[0] <= glo + scalePx(6, photo.width) &&
+            leaf.box[2] >= ghi - scalePx(6, photo.width);
           const toRoom = (hingeEast: boolean): "left" | "right" => (hingeEast ? "left" : "right");
           if (!covers) {
             // The door concept is either the leaf beside the gap (small
@@ -1343,12 +1530,13 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
               // hinge is opposite its bulk side.
               const leafCx = (leaf.box[0] + leaf.box[2]) / 2;
               const gapCx = (glo + ghi) / 2;
-              if (leafCx < gapCx - 12) hinge = toRoom(true);
-              else if (leafCx > gapCx + 12) hinge = toRoom(false);
+              const hingePad = scalePx(12, photo.width);
+              if (leafCx < gapCx - hingePad) hinge = toRoom(true);
+              else if (leafCx > gapCx + hingePad) hinge = toRoom(false);
             } else {
               const overEast = leaf.box[2] - ghi;
               const overWest = glo - leaf.box[0];
-              if (Math.max(overEast, overWest) >= 12) {
+              if (Math.max(overEast, overWest) >= scalePx(12, photo.width)) {
                 // A flat-open leaf lies beside the gap on its hinge side.
                 hinge = toRoom(overEast > overWest);
               }
@@ -1386,7 +1574,8 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     }
 
     for (const win of windows) {
-      if (doors.length > 0 && doors.some((d) => boxesTouch(win, d))) continue;
+      if (doors.length > 0 && doors.some((d) => boxesTouch(win, d, scalePx(3, photo.width))))
+        continue;
       // The glass raster is precise; the box is loose. Map the mask
       // pixels through the homography and take the extents.
       let lo = Infinity;

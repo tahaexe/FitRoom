@@ -27,6 +27,7 @@
     "check:room-api": "npm run check:room-api -w @fitroom/server",
     "check:sam-decode": "tsx scripts/check-sam-decode.ts",
     "check:geometry": "tsx scripts/check-geometry.ts",
+    "check:example-geometry": "tsx scripts/check-example-geometry.ts",
     "check:surfaces": "tsx scripts/check-surfaces.ts",
     "check:photo-intake": "npm run check:photo-intake -w @fitroom/client",
     "check:example-room": "npm run check:example-room -w @fitroom/client",
