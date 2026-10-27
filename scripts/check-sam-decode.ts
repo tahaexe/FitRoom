@@ -187,6 +187,53 @@ async function main(): Promise<void> {
     }
   }
 
+  // A wall with nothing of a concept in view answers empty (wall A has
+  // no window): empty text, or text with no box tokens, decodes to zero
+  // instances, never an error — with or without the photo size.
+  const emptyBare = await segmentInstances("window", "");
+  check(
+    "empty text decodes to zero instances",
+    emptyBare.length === 0,
+    `got ${String(emptyBare.length)}`,
+  );
+  const emptyPhoto = await segmentInstances("window", "", { width: 1066, height: 799 });
+  check(
+    "empty text with the photo size decodes to zero instances",
+    emptyPhoto.length === 0,
+    `got ${String(emptyPhoto.length)}`,
+  );
+  const proseBare = await segmentInstances("window", "No window is visible in this photo.");
+  check(
+    "text without box tokens decodes to zero instances",
+    proseBare.length === 0,
+    `got ${String(proseBare.length)}`,
+  );
+  const prosePhoto = await segmentInstances("door", "No door is visible in this photo.", {
+    width: 1066,
+    height: 799,
+  });
+  check(
+    "text without box tokens and the photo size decodes to zero instances",
+    prosePhoto.length === 0,
+    `got ${String(prosePhoto.length)}`,
+  );
+
+  // Answers that do name sizes keep their errors.
+  let mixes = false;
+  try {
+    await segmentInstances("wall", "box w=1280;h=960 box w=640;h=480");
+  } catch (error) {
+    mixes = error instanceof Error && error.message.includes("mixes frame sizes");
+  }
+  check("an answer that mixes frame sizes still throws", mixes);
+  let invalid = false;
+  try {
+    await segmentInstances("wall", "box w=0;h=960");
+  } catch (error) {
+    invalid = error instanceof Error && error.message.includes("invalid frame size");
+  }
+  check("an answer with an invalid frame size still throws", invalid);
+
   console.log(
     failures === 0
       ? "check:sam-decode: all checks passed"

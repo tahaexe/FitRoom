@@ -925,10 +925,90 @@ async function tierSmoke(): Promise<void> {
   }
 }
 
+/**
+ * Tier 4 (wall without openings): the committed north fixtures decode for
+ * wall, floor and ceiling while the window and door answers are empty, the
+ * way `analyseWallPhoto` sees a wall with no window or door in view. The
+ * analysis still produces the instant check: a defined photo solution with
+ * finite corners and a validating draft.
+ */
+async function tierEmptyOptionals(): Promise<void> {
+  console.log("== tier 4: empty window and door ==");
+  const prefix = "living-420x360-n";
+  let base = inboxTruth;
+  if (!listFiles(inboxTruth).includes(`${prefix}.json`)) base = fixtureDir;
+  let raw: ExactTruth;
+  try {
+    raw = JSON.parse(readFileSync(join(base, `${prefix}.json`), "utf8")) as ExactTruth;
+  } catch {
+    console.log(`SKIP tier 4: no ${prefix}.json`);
+    return;
+  }
+  const view = prefix.slice(-1);
+  const letter = VIEW_LETTER[view] ?? "A";
+  const photoSize = { width: raw.width, height: raw.height };
+  try {
+    const instances = [];
+    for (const concept of ["wall", "floor", "ceiling"]) {
+      const flat = join(base, `${prefix}-${concept}.txt`);
+      const sammed = join(base, "sam", `${prefix}-${concept}.txt`);
+      let text: string | null = null;
+      for (const file of [flat, sammed]) {
+        try {
+          text = readFileSync(file, "utf8");
+          break;
+        } catch {
+          // Try the next location; a missing read fails the tier below.
+        }
+      }
+      if (text === null) throw new Error(`missing fixture ${prefix}-${concept}.txt`);
+      instances.push(...(await segmentInstances(concept, text, photoSize)));
+    }
+    const emptyWindow = await segmentInstances("window", "", photoSize);
+    check("empty-optionals: empty window decodes to zero instances", emptyWindow.length === 0);
+    const emptyDoor = await segmentInstances("door", "", photoSize);
+    check("empty-optionals: empty door decodes to zero instances", emptyDoor.length === 0);
+    instances.push(...emptyWindow, ...emptyDoor);
+    const room = exactRoom("living-420x360", raw.room);
+    const focal35mm = (((raw.fx + raw.fy) / 2) * 43.27) / Math.hypot(raw.width, raw.height);
+    const draft = solveRoomFromPhotos({
+      photos: [{ wall: letter, width: raw.width, height: raw.height, focal35mm, instances }],
+      tapeA: room.tapeA,
+      tapeB: room.tapeB,
+    });
+    const solution = draft.photos[0];
+    check("empty-optionals: wall without window or door still solves", solution !== undefined);
+    const corners =
+      solution === undefined
+        ? []
+        : [solution.corners.m1, solution.corners.m2, solution.corners.m3, solution.corners.m4];
+    check(
+      "empty-optionals: instant check corners are finite",
+      corners.length === 4 &&
+        corners.every(
+          (corner) =>
+            Array.isArray(corner) &&
+            corner.length === 2 &&
+            corner.every((v) => typeof v === "number" && Number.isFinite(v)),
+        ),
+      JSON.stringify(corners),
+    );
+    const vd = validateRoomDraft(draft);
+    check("empty-optionals: RoomDraft validates", vd.ok, vd.errors.join("; "));
+  } catch (error) {
+    check(
+      "empty-optionals: wall without window or door still solves",
+      false,
+      error instanceof Error ? error.message : String(error),
+    );
+  }
+}
+
 async function main(): Promise<void> {
   tierSynthetic();
   await tierExact();
   await tierSmoke();
+  await tierEmptyOptionals();
   console.log(
     failures === 0
       ? "check:geometry: all checks passed"

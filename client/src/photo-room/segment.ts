@@ -115,8 +115,23 @@ export async function analyseWallPhoto(
       );
     }
     const text = textOf(result.data);
-    if (text === null) throw new Error("The room scanner answered without segmentation.");
-    instances.push(...(await segmentInstances(concept, text)));
+    // A wall without windows, doors or a ceiling in view is normal: a
+    // missing or empty answer for an optional concept holds zero instances
+    // and the analysis goes on. Only a missing or empty wall or floor
+    // answer stops the instant check, with a plain reason.
+    if (text === null || text.trim().length === 0) {
+      if (concept === "wall" || concept === "floor") {
+        throw new Error(
+          concept === "wall"
+            ? "The room scanner found no wall in that photo."
+            : "The room scanner found no floor in that photo.",
+        );
+      }
+      continue;
+    }
+    instances.push(
+      ...(await segmentInstances(concept, text, { width: segWidth, height: segHeight })),
+    );
   }
   const photo: PhotoInput = {
     wall,

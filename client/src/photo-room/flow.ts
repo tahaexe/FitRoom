@@ -555,7 +555,12 @@ export class PhotoFlow {
       retry.className = "photo-primary";
       retry.textContent = "Try again";
       retry.addEventListener("click", () => void this.analyse(letter, this.tapFor(letter)));
-      sheet.append(message, retry);
+      const retake = document.createElement("button");
+      retake.type = "button";
+      retake.className = "photo-quiet";
+      retake.textContent = "Retake";
+      retake.addEventListener("click", () => void this.retake(letter));
+      sheet.append(message, retry, retake);
       return sheet;
     }
     if (state.demoMiss) {

@@ -34,8 +34,12 @@ export interface SamInstance {
   mask: SamMask;
 }
 
-/** Frame size from the box tokens (`w=..;h=..`); every token must agree. */
-function frameSizeOfText(text: string): { width: number; height: number } {
+/**
+ * Frame size from the box tokens (`w=..;h=..`); every token must agree.
+ * Returns null when the text names no frame size (an answer with no
+ * instances); answers that do name sizes keep the errors below.
+ */
+function frameSizeOfText(text: string): { width: number; height: number } | null {
   let found: { width: number; height: number } | null = null;
   for (const match of text.matchAll(/w=(\d+);h=(\d+)/g)) {
     const width = Number(match[1]);
@@ -48,9 +52,6 @@ function frameSizeOfText(text: string): { width: number; height: number } {
     } else if (found.width !== width || found.height !== height) {
       throw new Error("The segmentation answer mixes frame sizes.");
     }
-  }
-  if (found === null) {
-    throw new Error("The segmentation answer names no frame size.");
   }
   return found;
 }
@@ -74,11 +75,21 @@ async function* laneEvents(text: string): AsyncIterable<ResponsesEvent> {
 }
 
 /**
- * Decode one segment answer into instances, in output order. Throws when
- * the text is not a completed segmentation lane.
+ * Decode one segment answer into instances, in output order. An empty
+ * answer, or one with no box tokens, holds zero instances of the concept
+ * and decodes to an empty list, never an error. The frame size comes from
+ * the box tokens when there are any; with none, the size of the photo that
+ * was sent stands in as the frame. Throws when the text is not a completed
+ * segmentation lane.
  */
-export async function segmentInstances(concept: string, text: string): Promise<SamInstance[]> {
-  const frame = frameSizeOfText(text);
+export async function segmentInstances(
+  concept: string,
+  text: string,
+  photoSize?: { width: number; height: number },
+): Promise<SamInstance[]> {
+  if (text.trim().length === 0) return [];
+  const frame = frameSizeOfText(text) ?? photoSize ?? null;
+  if (frame === null) return [];
   const result = await parseImageStream(laneEvents(text)).finalResult;
   if (result.outcome.status !== "completed") {
     throw new Error("The segmentation answer did not complete.");
