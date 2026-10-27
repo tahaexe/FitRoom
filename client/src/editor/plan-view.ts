@@ -184,13 +184,7 @@ export class EditorPlanView {
       }
       const inward = inwardOf(wall, centroid);
       const mid = along(wall, opening.offset + opening.width / 2);
-      const labelSide =
-        opening.type === "door"
-          ? opening.swing === "in"
-            ? { x: -inward.x, z: -inward.z }
-            : inward
-          : inward;
-      grow(mid.x + labelSide.x * 60, mid.z + labelSide.z * 60);
+      grow(mid.x + inward.x * 60, mid.z + inward.z * 60);
     }
     // Length pills sit 42 cm outside each wall: include their anchors with
     // room for the whole pill.
@@ -336,14 +330,9 @@ export class EditorPlanView {
       }
     }
 
-    // Labels sit clear of leaves and swing arcs: doors label from the
-    // side opposite their swing, windows keep the inward side.
-    const labelSide =
-      opening.type === "door"
-        ? opening.swing === "in"
-          ? { x: -inward.x, z: -inward.z }
-          : inward
-        : inward;
+    // Labels always sit on the inward side so they never sit under the
+    // outward wall-length pills; the swing arc stays on its own side.
+    const labelSide = inward;
     const label = document.createElementNS(NS, "text");
     label.setAttribute("x", fmt(mid.x + labelSide.x * 34));
     label.setAttribute("y", fmt(-(mid.z + labelSide.z * 34)));

@@ -76,9 +76,7 @@ export class Inspector {
     const sizeW = entry?.size.w ?? 60;
     const sizeD = entry?.size.d ?? 60;
     const clampCentre = (x: number, z: number): { x: number; z: number } =>
-      bounds === null
-        ? { x, z }
-        : clampFootprintToRoom(x, z, sizeW, sizeD, item.rotationY, bounds);
+      bounds === null ? { x, z } : clampFootprintToRoom(x, z, sizeW, sizeD, item.rotationY, bounds);
     const posCol = document.createElement("div");
     posCol.className = "inspector-pos";
     const makeField = (

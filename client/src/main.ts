@@ -217,6 +217,7 @@ class FitRoomApp {
   private editor: RoomEditor | null = null;
   private roomMenu: RoomMenu | null = null;
   private editing = false;
+  private editorBase: RoomLayout | null = null;
   private menuChoice = "sample";
   private menuBeforePhotos = "sample";
   private photoFlow: PhotoFlow | null = null;
@@ -527,7 +528,10 @@ class FitRoomApp {
       this.syncRoomId();
       this.rebuildRoom();
     });
-    this.editor = new RoomEditor(this.editorStore, { onBuild: () => this.finishBuild() });
+    this.editor = new RoomEditor(this.editorStore, {
+      onBuild: () => this.finishBuild(),
+      onCancel: () => this.cancelEditor(),
+    });
     document.body.appendChild(this.editor.element);
     document.getElementById("fit-badge")?.addEventListener("click", () => {
       document.getElementById("fit-list")?.toggleAttribute("hidden");
@@ -613,6 +617,11 @@ class FitRoomApp {
       draft.items.push(instance);
     });
     this.select(instance.instanceId);
+    // The fit engine already picked the nearest spot with no problems when
+    // one exists; when the best spot still has a problem, show the list.
+    if (this.issues.some((issue) => issue.itemIds.includes(instance.instanceId))) {
+      document.getElementById("fit-list")?.removeAttribute("hidden");
+    }
   }
 
   /** Place a recommendation at its checked spot, as one undo step. */
@@ -871,6 +880,7 @@ class FitRoomApp {
 
   private openEditor(): void {
     this.editing = true;
+    this.editorBase = JSON.parse(JSON.stringify(ROOM)) as RoomLayout;
     this.select(null);
     this.showSidePanel("none");
     this.editor?.element.removeAttribute("hidden");
@@ -886,8 +896,23 @@ class FitRoomApp {
   /** Leave the editor for the 3D room view with catalogue and fit checks. */
   private finishBuild(): void {
     this.menuChoice = ROOM.source === "manual" ? "manual" : "sample";
+    this.editorBase = null;
     this.closeEditor();
     this.rebuildRoom();
+    this.refreshMenu();
+  }
+
+  /** Cancel leaves the room with no change: restore the pre-edit layout. */
+  private cancelEditor(): void {
+    const base = this.editorBase;
+    if (base !== null) {
+      applyRoomLayout(ROOM, base);
+      this.editorStore?.load(ROOM);
+      this.syncRoomId();
+      this.rebuildRoom();
+    }
+    this.editorBase = null;
+    this.closeEditor();
     this.refreshMenu();
   }
 
@@ -1059,7 +1084,9 @@ class FitRoomApp {
     const item = this.store.state.items.find((i) => i.instanceId === id);
     if (item === undefined) return;
     this.store.checkpoint();
-    const clamped = this.clampToRoom(item.position.x + dxCm, item.position.z + dzCm);
+    // Same whole-footprint clamp as the Inspector, so nudges never push
+    // half a piece into a wall.
+    const clamped = this.clampToRoom(item.position.x + dxCm, item.position.z + dzCm, id);
     item.position = { x: clamped.x, z: clamped.z };
     const live = this.instances.get(id);
     if (live !== undefined) {
@@ -1168,6 +1195,7 @@ class FitRoomApp {
     const t = this.controls.target;
     t.x = Math.min(maxX, Math.max(minX, t.x));
     t.z = Math.min(maxZ, Math.max(minZ, t.z));
+    t.y = Math.min(0.5, Math.max(0, t.y));
   }
 
   /** Frame the whole room from the default angle (button + Home key). */
@@ -1312,8 +1340,7 @@ class FitRoomApp {
    * the Inspector and arrow keys can never push half a piece into a wall. */
   private clampToRoom(x: number, z: number, id: string | null = null): { x: number; z: number } {
     const b = roomBounds(ROOM);
-    const item =
-      id === null ? undefined : this.store.state.items.find((i) => i.instanceId === id);
+    const item = id === null ? undefined : this.store.state.items.find((i) => i.instanceId === id);
     const entry = item === undefined ? undefined : CATALOG_MAP.get(item.productId);
     if (item === undefined || entry === undefined) {
       return {
@@ -1949,7 +1976,11 @@ class FitRoomApp {
       if (event.key === "Escape") {
         const openDialog = document.querySelector("dialog[open]");
         if (openDialog !== null) return;
-        if (this.photoFlow !== null || this.editing) return;
+        if (this.photoFlow !== null) return;
+        if (this.editing) {
+          this.cancelEditor();
+          return;
+        }
         if (this.renderViewer !== null) {
           // Only close the viewer when it is actually open.
           const host = document.getElementById("render-viewer");

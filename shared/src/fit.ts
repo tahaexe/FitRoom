@@ -1153,8 +1153,7 @@ export class FitEngine {
           const second = pair[1] as string;
           const firstItem = items.find((it) => it.instanceId === first);
           const secondItem = items.find((it) => it.instanceId === second);
-          const subject =
-            firstItem === undefined ? "A piece" : productName(firstItem.productId);
+          const subject = firstItem === undefined ? "A piece" : productName(firstItem.productId);
           const other =
             secondItem === undefined ? "other piece" : productName(secondItem.productId);
           const { depth, nx, nz } = separatingDepth(a, b);

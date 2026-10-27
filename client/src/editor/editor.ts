@@ -15,6 +15,7 @@ import type { PhotoDraftMeta, WallSourceMark } from "../photo-room/flow";
 
 export interface RoomEditorCallbacks {
   onBuild: () => void;
+  onCancel: () => void;
 }
 
 function cloneRoom(room: RoomLayout): RoomLayout {
@@ -88,7 +89,8 @@ export class RoomEditor {
     const addWindow = this.pill("Add window", () => this.addOpening("window"));
     const addPiece = this.pill("Add my own piece", () => this.addPiece());
     this.undoBtn = this.pill("Undo", () => this.store.undo());
-    actions.append(addDoor, addWindow, addPiece, this.undoBtn);
+    const cancel = this.pill("Cancel", () => this.callbacks.onCancel());
+    actions.append(addDoor, addWindow, addPiece, this.undoBtn, cancel);
     this.element.appendChild(actions);
 
     const grid = document.createElement("div");
