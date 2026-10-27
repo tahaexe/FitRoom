@@ -36,7 +36,7 @@ import { loadGatewayConfig, META_MODELS } from "../src/config.js";
 import { gatewayKey } from "../src/meta/keys.js";
 import { assistantKeyInput } from "../src/routes/assistant.js";
 
-const ROUTES = ["recommend", "assistant", "render", "label"];
+const ROUTES = ["recommend", "assistant", "render", "segment", "label"];
 
 function here(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), "..");

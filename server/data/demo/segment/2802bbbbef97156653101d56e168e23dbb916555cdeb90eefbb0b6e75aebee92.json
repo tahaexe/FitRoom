@@ -1,0 +1,13 @@
+{
+  "route": "segment",
+  "model": "sam-3.1",
+  "input": {
+    "concept": "window",
+    "image": "2c29a174403a48db82cfbf88922cd1cc8f37f5400ff23d16a486c1bdf9bf8735"
+  },
+  "response": {
+    "concept": "window",
+    "text": ""
+  },
+  "time": "2026-10-27T20:38:38.155Z"
+}
