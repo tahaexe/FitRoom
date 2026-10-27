@@ -57,10 +57,6 @@ interface Vec3 {
   z: number;
 }
 
-function dot(a: Vec3, b: Vec3): number {
-  return a.x * b.x + a.y * b.y + a.z * b.z;
-}
-
 function norm(a: Vec3): Vec3 {
   const l = Math.hypot(a.x, a.y, a.z) || 1;
   return { x: a.x / l, y: a.y / l, z: a.z / l };
@@ -135,10 +131,26 @@ function baseCamera(room: SynthRoom, wall: WallLetter, opts: SynthPhotoOpts): Ca
     y: r.y * Math.cos(yaw) - f.y * Math.sin(yaw),
     z: r.z * Math.cos(yaw) - f.z * Math.sin(yaw),
   });
-  f = norm({ x: f1.x * Math.cos(pitch) + u.x * Math.sin(pitch), y: f1.y * Math.cos(pitch) + u.y * Math.sin(pitch), z: f1.z * Math.cos(pitch) + u.z * Math.sin(pitch) });
-  u = norm({ x: u.x * Math.cos(pitch) - f1.x * Math.sin(pitch), y: u.y * Math.cos(pitch) - f1.y * Math.sin(pitch), z: u.z * Math.cos(pitch) - f1.z * Math.sin(pitch) });
-  let r2 = norm({ x: r1.x * Math.cos(roll) + u.x * Math.sin(roll), y: r1.y * Math.cos(roll) + u.y * Math.sin(roll), z: r1.z * Math.cos(roll) + u.z * Math.sin(roll) });
-  const u2 = norm({ x: u.x * Math.cos(roll) - r1.x * Math.sin(roll), y: u.y * Math.cos(roll) - r1.y * Math.sin(roll), z: u.z * Math.cos(roll) - r1.z * Math.sin(roll) });
+  f = norm({
+    x: f1.x * Math.cos(pitch) + u.x * Math.sin(pitch),
+    y: f1.y * Math.cos(pitch) + u.y * Math.sin(pitch),
+    z: f1.z * Math.cos(pitch) + u.z * Math.sin(pitch),
+  });
+  u = norm({
+    x: u.x * Math.cos(pitch) - f1.x * Math.sin(pitch),
+    y: u.y * Math.cos(pitch) - f1.y * Math.sin(pitch),
+    z: u.z * Math.cos(pitch) - f1.z * Math.sin(pitch),
+  });
+  let r2 = norm({
+    x: r1.x * Math.cos(roll) + u.x * Math.sin(roll),
+    y: r1.y * Math.cos(roll) + u.y * Math.sin(roll),
+    z: r1.z * Math.cos(roll) + u.z * Math.sin(roll),
+  });
+  const u2 = norm({
+    x: u.x * Math.cos(roll) - r1.x * Math.sin(roll),
+    y: u.y * Math.cos(roll) - r1.y * Math.sin(roll),
+    z: u.z * Math.cos(roll) - r1.z * Math.sin(roll),
+  });
   // Swing the camera so one corner leaves the frame (a rotated camera,
   // not a sheared one: r turns with f, keeping the basis orthonormal).
   const swing = 0.35;
@@ -216,7 +228,14 @@ function makeInstance(
       if (fill(x0 + x, y0 + y)) data[y * w + x] = 1;
     }
   }
-  return { concept, id, box: [x0, y0, x1, y1], imageWidth: imageW, imageHeight: imageH, mask: { width: w, height: h, data } };
+  return {
+    concept,
+    id,
+    box: [x0, y0, x1, y1],
+    imageWidth: imageW,
+    imageHeight: imageH,
+    mask: { width: w, height: h, data },
+  };
 }
 
 export function synthPhoto(
@@ -261,8 +280,18 @@ export function synthPhoto(
       const poly = [
         wallPoint(room, wall, o.offset + WINDOW_FRAME_CM, o.sillHeight + WINDOW_FRAME_CM),
         wallPoint(room, wall, o.offset + o.width - WINDOW_FRAME_CM, o.sillHeight + WINDOW_FRAME_CM),
-        wallPoint(room, wall, o.offset + o.width - WINDOW_FRAME_CM, o.sillHeight + o.height - WINDOW_FRAME_CM),
-        wallPoint(room, wall, o.offset + WINDOW_FRAME_CM, o.sillHeight + o.height - WINDOW_FRAME_CM),
+        wallPoint(
+          room,
+          wall,
+          o.offset + o.width - WINDOW_FRAME_CM,
+          o.sillHeight + o.height - WINDOW_FRAME_CM,
+        ),
+        wallPoint(
+          room,
+          wall,
+          o.offset + WINDOW_FRAME_CM,
+          o.sillHeight + o.height - WINDOW_FRAME_CM,
+        ),
       ].map(proj);
       openingPolys.push({ poly, type: "window" });
     }
@@ -276,7 +305,8 @@ export function synthPhoto(
   const inWall = (x: number, y: number): boolean => {
     if (!pointInPoly(x, y, wallPoly)) return false;
     for (const o of openingPolys) {
-      if (pointInPoly(x + (rand() - 0.5) * ragged, y + (rand() - 0.5) * ragged, o.poly)) return false;
+      if (pointInPoly(x + (rand() - 0.5) * ragged, y + (rand() - 0.5) * ragged, o.poly))
+        return false;
     }
     if (raggedJitter(x, y)) return false;
     return true;
@@ -314,7 +344,8 @@ export function synthPhoto(
   };
   const instances: SamInstance[] = [];
   if (opts.splitWall === true) {
-    const midX = (Math.min(...wallPoly.map((p) => p[0])) + Math.max(...wallPoly.map((p) => p[0]))) / 2;
+    const midX =
+      (Math.min(...wallPoly.map((p) => p[0])) + Math.max(...wallPoly.map((p) => p[0]))) / 2;
     const left = makeInstance("wall", `${wall}-wall-a`, W, H, inWall, { x0: 0, x1: midX + 4 });
     const right = makeInstance("wall", `${wall}-wall-b`, W, H, inWall, { x0: midX - 4, x1: W });
     if (left !== null) instances.push(left);
@@ -348,8 +379,18 @@ export function synthPhoto(
       const gp = [
         wallPoint(room, wall, o.offset + WINDOW_FRAME_CM, o.sillHeight + WINDOW_FRAME_CM),
         wallPoint(room, wall, o.offset + o.width - WINDOW_FRAME_CM, o.sillHeight + WINDOW_FRAME_CM),
-        wallPoint(room, wall, o.offset + o.width - WINDOW_FRAME_CM, o.sillHeight + o.height - WINDOW_FRAME_CM),
-        wallPoint(room, wall, o.offset + WINDOW_FRAME_CM, o.sillHeight + o.height - WINDOW_FRAME_CM),
+        wallPoint(
+          room,
+          wall,
+          o.offset + o.width - WINDOW_FRAME_CM,
+          o.sillHeight + o.height - WINDOW_FRAME_CM,
+        ),
+        wallPoint(
+          room,
+          wall,
+          o.offset + WINDOW_FRAME_CM,
+          o.sillHeight + o.height - WINDOW_FRAME_CM,
+        ),
       ].map(proj);
       const inst = makeInstance("window", `${wall}-window-${String(i)}`, W, H, (x, y) =>
         pointInPoly(x, y, gp),

@@ -61,9 +61,11 @@ import {
   emptyScene,
   hasAutosave,
   itemCorners,
+  loadRoomLayout,
   makeInstanceId,
   nearestFreeSpot,
   roomBounds,
+  saveRoomLayout,
   SceneStore,
   snapToGrid,
 } from "./state";
@@ -225,6 +227,21 @@ class FitRoomApp {
 
   constructor(container: HTMLElement) {
     this.container = container;
+    // `camroom=manual` (dev only) renders the plan-editor room: the saved
+    // manual layout when one survives the reload, else the starter manual
+    // room. Runs before the store so the scene id already matches the room.
+    if (import.meta.env.DEV) {
+      const camroom = ((): string | null => {
+        try {
+          return new URLSearchParams(window.location.search).get("camroom");
+        } catch {
+          return null;
+        }
+      })();
+      if (camroom === "manual" && ROOM.id !== "manual-room") {
+        applyRoomLayout(ROOM, loadRoomLayout("manual-room") ?? createManualRoom());
+      }
+    }
     // First visit (no autosave) opens the furnished demo room — the scene
     // the chips reset to — while returning visits restore the autosave.
     const firstVisit = !hasAutosave(ROOM.id);
@@ -244,14 +261,27 @@ class FitRoomApp {
           return null;
         }
       };
-      const wantsHook = ["camx", "camz", "cameye", "camyaw", "campitch", "camfov", "camitems"].some(
-        (key) => hookParam(key) !== null,
-      );
+      const wantsHook = [
+        "camx",
+        "camz",
+        "cameye",
+        "camyaw",
+        "campitch",
+        "camfov",
+        "camitems",
+        "camroom",
+      ].some((key) => hookParam(key) !== null);
       this.devCam = wantsHook;
       if (wantsHook) {
         const hideAll = hookParam("camitems") === "0";
         const base = JSON.parse(JSON.stringify(validScene)) as SceneState;
         this.store.state = hideAll ? { ...base, items: [] } : base;
+      }
+      if (ROOM.id === "manual-room") this.menuChoice = "manual";
+      if (ROOM.id === "manual-room" && this.store.state.roomId !== ROOM.id) {
+        // Keep the scene's room id with the manual room from the first
+        // frame (assigned directly, so no autosave is written yet).
+        this.store.state = { ...this.store.state, roomId: ROOM.id };
       }
     }
 
@@ -427,6 +457,9 @@ class FitRoomApp {
     this.editorStore = new EditorStore(ROOM);
     this.editorStore.onCommitted((room) => {
       applyRoomLayout(ROOM, room);
+      // Every committed plan edit saves the manual room beside the scene
+      // autosave, so the built room survives a reload.
+      if (ROOM.id === "manual-room") saveRoomLayout(ROOM);
       this.syncRoomId();
       this.rebuildRoom();
     });
@@ -591,10 +624,21 @@ class FitRoomApp {
   /** Stash the live room layout so switching rooms keeps each room's own walls, openings and blocks. */
   private stashRoomLayout(): void {
     this.savedRoomLayouts.set(ROOM.id, JSON.parse(JSON.stringify(ROOM)) as RoomLayout);
+    // The plan-editor room survives a reload: its layout is saved beside
+    // the scene autosave whenever the live room is stashed.
+    if (ROOM.id === "manual-room") saveRoomLayout(ROOM);
   }
 
   /** Stashed layout for a room id, or a fresh layout the first time the room opens. */
   private roomLayoutFor(id: string, fresh: () => RoomLayout): RoomLayout {
+    if (id === "manual-room") {
+      // A reloaded visit restores the plan-editor room from storage.
+      const stored = loadRoomLayout(id);
+      if (stored !== null) {
+        this.savedRoomLayouts.set(id, JSON.parse(JSON.stringify(stored)) as RoomLayout);
+        return stored;
+      }
+    }
     const saved = this.savedRoomLayouts.get(id);
     if (saved !== undefined) return JSON.parse(JSON.stringify(saved)) as RoomLayout;
     return fresh();

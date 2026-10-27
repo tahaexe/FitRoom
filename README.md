@@ -89,12 +89,27 @@ Add any of these URL parameters to frame an eye-level view:
 - `campitch` — pitch in degrees, positive looks up (default 0, level)
 - `camfov` — vertical field of view in degrees (default 60)
 - `camitems` — `0` hides every piece, leaving the empty room shell
+- `camroom` — `manual` renders the plan-editor room instead of the sample
+  room: the saved manual layout when one survives the reload, else the
+  starter manual room
+
+A room built in the plan editor ("Build a room" in the room menu) survives
+a reload: every committed plan edit saves its layout in the browser's local
+storage beside the scene autosave, and reopening the manual room (or the dev
+camera hook with `camroom=manual`) restores it.
 
 Example — stand in the doorway at eye height and face the back wall:
 
 ```sh
 # with `npm run dev` running:
 http://localhost:5173/?dev=1&camx=75&camz=45&cameye=160&camyaw=0&campitch=0&camfov=60
+```
+
+Example — frame the plan-editor room from the same spot:
+
+```sh
+# with `npm run dev` running:
+http://localhost:5173/?dev=1&camroom=manual&camx=200&camz=300&cameye=160&camyaw=180&campitch=0&camfov=60&camitems=0
 ```
 
 The hook renders a 4:3 frame, hides the interface panels and publishes

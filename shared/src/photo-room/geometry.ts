@@ -88,7 +88,9 @@ export function fitLineRansac(
   const rand = lcg(0x9e3779b9 + pts.length * 7919);
   let best: Array<[number, number]> = [];
   const residual = (p: [number, number], m: number, b: number): number =>
-    orientation === "horizontal" ? Math.abs(p[1] - (m * p[0] + b)) : Math.abs(p[0] - (m * p[1] + b));
+    orientation === "horizontal"
+      ? Math.abs(p[1] - (m * p[0] + b))
+      : Math.abs(p[0] - (m * p[1] + b));
   for (let it = 0; it < iterations; it += 1) {
     const i = Math.floor(rand() * pts.length);
     const j = Math.floor(rand() * pts.length);
@@ -133,11 +135,7 @@ export function intersect(l1: LineFit, l2: LineFit): [number, number] {
 }
 
 function cross(a: [number, number, number], b: [number, number, number]): [number, number, number] {
-  return [
-    a[1] * b[2] - a[2] * b[1],
-    a[2] * b[0] - a[0] * b[2],
-    a[0] * b[1] - a[1] * b[0],
-  ];
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
 
 function dot(a: [number, number, number], b: [number, number, number]): number {
@@ -168,20 +166,10 @@ export function widthHeightRatio(
   const c34 = cross(t3, t4);
   const k2 = dot(c14, t3) / dot(c24, t3);
   const k3 = dot(c14, t2) / dot(c34, t2);
-  const n2: [number, number, number] = [
-    k2 * t2[0] - t1[0],
-    k2 * t2[1] - t1[1],
-    k2 * t2[2] - t1[2],
-  ];
-  const n3: [number, number, number] = [
-    k3 * t3[0] - t1[0],
-    k3 * t3[1] - t1[1],
-    k3 * t3[2] - t1[2],
-  ];
-  const num =
-    (n2[0] - u0 * n2[2]) ** 2 + (n2[1] - v0 * n2[2]) ** 2 + fPx * fPx * n2[2] * n2[2];
-  const den =
-    (n3[0] - u0 * n3[2]) ** 2 + (n3[1] - v0 * n3[2]) ** 2 + fPx * fPx * n3[2] * n3[2];
+  const n2: [number, number, number] = [k2 * t2[0] - t1[0], k2 * t2[1] - t1[1], k2 * t2[2] - t1[2]];
+  const n3: [number, number, number] = [k3 * t3[0] - t1[0], k3 * t3[1] - t1[1], k3 * t3[2] - t1[2]];
+  const num = (n2[0] - u0 * n2[2]) ** 2 + (n2[1] - v0 * n2[2]) ** 2 + fPx * fPx * n2[2] * n2[2];
+  const den = (n3[0] - u0 * n3[2]) ** 2 + (n3[1] - v0 * n3[2]) ** 2 + fPx * fPx * n3[2] * n3[2];
   if (!(den > 0) || !(num >= 0)) return NaN;
   return Math.sqrt(num / den);
 }
@@ -211,7 +199,7 @@ function solve8(A: number[][], b: number[]): number[] {
   const x: number[] = [];
   for (let i = 0; i < n; i += 1) {
     const diag = M[i]?.[i] as number;
-    x.push(Math.abs(diag) < 1e-12 ? 0 : ((M[i]?.[n] as number) / diag));
+    x.push(Math.abs(diag) < 1e-12 ? 0 : (M[i]?.[n] as number) / diag);
   }
   return x;
 }
@@ -247,7 +235,17 @@ export function wallHomography(
     b.push(Y);
   }
   const h = solve8(A, b);
-  return [h[0] as number, h[1] as number, h[2] as number, h[3] as number, h[4] as number, h[5] as number, h[6] as number, h[7] as number, 1];
+  return [
+    h[0] as number,
+    h[1] as number,
+    h[2] as number,
+    h[3] as number,
+    h[4] as number,
+    h[5] as number,
+    h[6] as number,
+    h[7] as number,
+    1,
+  ];
 }
 
 /** Apply homography to an image point -> wall cm point. */

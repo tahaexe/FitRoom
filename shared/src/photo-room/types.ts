@@ -86,7 +86,12 @@ export interface PhotoSolution {
   focalSource: FocalSource;
   focal35mm: number;
   lines: { floor: FittedLine; ceiling: FittedLine; left: FittedLine; right: FittedLine };
-  corners: { m1: [number, number]; m2: [number, number]; m3: [number, number]; m4: [number, number] };
+  corners: {
+    m1: [number, number];
+    m2: [number, number];
+    m3: [number, number];
+    m4: [number, number];
+  };
   ratio: number;
   ratioPlusMinus: number;
   heightEstimate: number;

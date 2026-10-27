@@ -29,7 +29,7 @@
  */
 
 /* global console, process */
-import { existsSync, mkdirSync, readdirSync, readFileSync, copyFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, copyFileSync } from "node:fs";
 import { basename, dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { extractSamOutputText } from "../server/src/meta/client.js";
@@ -69,11 +69,7 @@ function check(name: string, pass: boolean, detail?: string): void {
   }
 }
 
-function photo(
-  room: SynthRoom,
-  wall: WallLetter,
-  opts: SynthPhotoOpts,
-): PhotoInput {
+function photo(room: SynthRoom, wall: WallLetter, opts: SynthPhotoOpts): PhotoInput {
   return synthPhoto(room, wall, {
     imageW: 800,
     imageH: 600,
@@ -108,7 +104,9 @@ function truthOpenings(room: SynthRoom): TruthOpening[] {
 }
 
 function printRoomTable(title: string, room: SynthRoom, draft: RoomDraft): void {
-  console.log(`--- ${title} (${room.width}x${room.depth}cm, ceiling truth ${String(room.height)}cm)`);
+  console.log(
+    `--- ${title} (${room.width}x${room.depth}cm, ceiling truth ${String(room.height)}cm)`,
+  );
   for (const letter of ["A", "B", "C", "D"] as const) {
     const got = draft.wallLengths[letter];
     const want = letter === "A" || letter === "C" ? room.tapeA : room.tapeB;
@@ -131,13 +129,20 @@ function printRoomTable(title: string, room: SynthRoom, draft: RoomDraft): void 
   console.log(`openings: got ${String(got.length)}, truth ${String(truth.length)}`);
   for (const o of got) {
     const same = truth.filter((t) => t.wall === o.wall && t.type === o.type);
-    const near = same.length > 0
-      ? same.reduce((a, b) =>
-        Math.abs(b.offset - o.offset.value) < Math.abs(a.offset - o.offset.value) ? b : a,
-      )
-      : undefined;
-    const dOff = near === undefined ? "n/a" : `${(o.offset.value - near.offset >= 0 ? "+" : "") + String(Math.round((o.offset.value - near.offset) * 10) / 10)}cm`;
-    const dW = near === undefined ? "n/a" : `${(o.width.value - near.width >= 0 ? "+" : "") + String(Math.round((o.width.value - near.width) * 10) / 10)}cm`;
+    const near =
+      same.length > 0
+        ? same.reduce((a, b) =>
+            Math.abs(b.offset - o.offset.value) < Math.abs(a.offset - o.offset.value) ? b : a,
+          )
+        : undefined;
+    const dOff =
+      near === undefined
+        ? "n/a"
+        : `${(o.offset.value - near.offset >= 0 ? "+" : "") + String(Math.round((o.offset.value - near.offset) * 10) / 10)}cm`;
+    const dW =
+      near === undefined
+        ? "n/a"
+        : `${(o.width.value - near.width >= 0 ? "+" : "") + String(Math.round((o.width.value - near.width) * 10) / 10)}cm`;
     console.log(
       `  ${o.wall} ${o.type} off ${String(o.offset.value)}±${String(o.offset.plusMinus)} w ${String(o.width.value)}±${String(o.width.plusMinus)} h ${String(o.height.value)} sill ${String(o.sillHeight.value)}${o.hinge === undefined ? "" : ` hinge ${o.hinge}`} | err off ${dOff} w ${dW}`,
     );
@@ -146,16 +151,13 @@ function printRoomTable(title: string, room: SynthRoom, draft: RoomDraft): void 
     `flags (${String(draft.flags.length)}): ${draft.flags.map((f) => `${f.code}${f.wall === undefined ? "" : `@${f.wall}`}`).join(", ") || "none"}`,
   );
   const layoutRes = validateRoomLayout(draft.layout);
-  console.log(`layout validates: ${layoutRes.ok ? "yes" : "NO — " + layoutRes.errors.map((e) => e.message).join("; ")}`);
+  console.log(
+    `layout validates: ${layoutRes.ok ? "yes" : "NO — " + layoutRes.errors.map((e) => e.message).join("; ")}`,
+  );
 }
 
 /** Same bars for synthetic and exact-render tiers. Returns true when all hold. */
-function checkBars(
-  tag: string,
-  room: SynthRoom,
-  draft: RoomDraft,
-  expectedFlags: string[],
-): void {
+function checkBars(tag: string, room: SynthRoom, draft: RoomDraft, expectedFlags: string[]): void {
   for (const letter of ["A", "B", "C", "D"] as const) {
     const want = letter === "A" || letter === "C" ? room.tapeA : room.tapeB;
     check(`${tag}: taped wall ${letter} exact`, draft.wallLengths[letter].value === want);
@@ -172,26 +174,56 @@ function checkBars(
   const got = [...draft.openings].sort((a, b) =>
     a.wall < b.wall ? -1 : a.wall > b.wall ? 1 : a.offset.value - b.offset.value,
   );
-  check(`${tag}: opening count matches`, got.length === truth.length, `got ${String(got.length)} want ${String(truth.length)}`);
+  check(
+    `${tag}: opening count matches`,
+    got.length === truth.length,
+    `got ${String(got.length)} want ${String(truth.length)}`,
+  );
   const n = Math.min(got.length, truth.length);
   for (let i = 0; i < n; i += 1) {
     const g = got[i];
     const t = truth[i];
     if (g === undefined || t === undefined) continue;
-    check(`${tag}: opening ${String(i)} on the right wall`, g.wall === t.wall && g.type === t.type, `got ${g.wall}/${g.type} want ${t.wall}/${t.type}`);
+    check(
+      `${tag}: opening ${String(i)} on the right wall`,
+      g.wall === t.wall && g.type === t.type,
+      `got ${g.wall}/${g.type} want ${t.wall}/${t.type}`,
+    );
     if (g.wall === t.wall && g.type === t.type) {
-      check(`${tag}: opening ${String(i)} offset ±10 cm`, Math.abs(g.offset.value - t.offset) <= 10, `got ${String(g.offset.value)} want ${String(t.offset)}`);
-      check(`${tag}: opening ${String(i)} width ±10 cm`, Math.abs(g.width.value - t.width) <= 10, `got ${String(g.width.value)} want ${String(t.width)}`);
+      check(
+        `${tag}: opening ${String(i)} offset ±10 cm`,
+        Math.abs(g.offset.value - t.offset) <= 10,
+        `got ${String(g.offset.value)} want ${String(t.offset)}`,
+      );
+      check(
+        `${tag}: opening ${String(i)} width ±10 cm`,
+        Math.abs(g.width.value - t.width) <= 10,
+        `got ${String(g.width.value)} want ${String(t.width)}`,
+      );
     }
   }
   // Order along each wall matches truth order.
   for (const letter of ["A", "B", "C", "D"] as const) {
-    const gWalls = got.filter((g) => g.wall === letter).map((g) => `${g.type}@${Math.round(g.offset.value)}`);
+    const gWalls = got
+      .filter((g) => g.wall === letter)
+      .map((g) => `${g.type}@${Math.round(g.offset.value)}`);
     const tWalls = truth.filter((t) => t.wall === letter).map((t) => `${t.type}@${t.offset}`);
-    check(`${tag}: wall ${letter} order [${gWalls.join(", ")}]`, gWalls.length === tWalls.length && gWalls.every((_, i) => got.filter((g) => g.wall === letter)[i]?.type === truth.filter((t) => t.wall === letter)[i]?.type));
+    check(
+      `${tag}: wall ${letter} order [${gWalls.join(", ")}]`,
+      gWalls.length === tWalls.length &&
+        gWalls.every(
+          (_, i) =>
+            got.filter((g) => g.wall === letter)[i]?.type ===
+            truth.filter((t) => t.wall === letter)[i]?.type,
+        ),
+    );
   }
   for (const code of expectedFlags) {
-    check(`${tag}: flag on injected fault (${code})`, draft.flags.some((f) => f.code === code), draft.flags.map((f) => f.code).join(","));
+    check(
+      `${tag}: flag on injected fault (${code})`,
+      draft.flags.some((f) => f.code === code),
+      draft.flags.map((f) => f.code).join(","),
+    );
   }
   const vd = validateRoomDraft(draft);
   check(`${tag}: RoomDraft validates`, vd.ok, vd.errors.join("; "));
@@ -213,20 +245,48 @@ function tierSynthetic(): void {
   // Room 2: asymmetric variant; SAM splits the A wall at the doorway, a
   // sofa hides the B floor line, the door is narrow and a sill is high.
   const r2 = [
-    photo(VARIANT_ROOM_1, "A", { yawDeg: 2.5, pitchDeg: -3, rollDeg: 2, seed: 21, splitWall: true }),
-    photo(VARIANT_ROOM_1, "B", { yawDeg: -3, pitchDeg: -5, rollDeg: 1, seed: 22, hideFloorMiddle: 0.68 }),
+    photo(VARIANT_ROOM_1, "A", {
+      yawDeg: 2.5,
+      pitchDeg: -3,
+      rollDeg: 2,
+      seed: 21,
+      splitWall: true,
+    }),
+    photo(VARIANT_ROOM_1, "B", {
+      yawDeg: -3,
+      pitchDeg: -5,
+      rollDeg: 1,
+      seed: 22,
+      hideFloorMiddle: 0.68,
+    }),
     photo(VARIANT_ROOM_1, "C", { yawDeg: 3, pitchDeg: -4, rollDeg: -2, seed: 23 }),
     photo(VARIANT_ROOM_1, "D", { yawDeg: -2, pitchDeg: -3, rollDeg: 1, seed: 24 }),
   ];
   const d2 = solveRoomFromPhotos({ photos: r2, tapeA: 380, tapeB: 300 });
   printRoomTable("synthetic variant-380x300", VARIANT_ROOM_1, d2);
-  checkBars("synthetic variant-380x300", VARIANT_ROOM_1, d2, ["door-width", "sill-range", "floor-hidden"]);
+  checkBars("synthetic variant-380x300", VARIANT_ROOM_1, d2, [
+    "door-width",
+    "sill-range",
+    "floor-hidden",
+  ]);
 
   // Room 3: asymmetric variant with a hinged door; faults are a cropped
   // corner, a 0.5x photo and a door leaf with no visible opening.
   const r3 = [
-    photo(VARIANT_ROOM_2, "A", { yawDeg: 2, pitchDeg: -4, rollDeg: 1, seed: 31, doorLeafOnly: true }),
-    photo(VARIANT_ROOM_2, "B", { yawDeg: 3, pitchDeg: -3, rollDeg: 0, seed: 32, cornerOutOfFrame: "right" }),
+    photo(VARIANT_ROOM_2, "A", {
+      yawDeg: 2,
+      pitchDeg: -4,
+      rollDeg: 1,
+      seed: 31,
+      doorLeafOnly: true,
+    }),
+    photo(VARIANT_ROOM_2, "B", {
+      yawDeg: 3,
+      pitchDeg: -3,
+      rollDeg: 0,
+      seed: 32,
+      cornerOutOfFrame: "right",
+    }),
     photo(VARIANT_ROOM_2, "C", { yawDeg: -2, pitchDeg: -5, rollDeg: -1, seed: 33, focal35mm: 13 }),
     photo(VARIANT_ROOM_2, "D", { yawDeg: -4, pitchDeg: -2, rollDeg: 3, seed: 34 }),
   ];
@@ -239,7 +299,11 @@ function tierSynthetic(): void {
   check("synthetic variant-450x330: taped wall C exact", d3.wallLengths.C.value === 450);
   check("synthetic variant-450x330: taped wall D exact", d3.wallLengths.D.value === 330);
   const cErr3 = Math.abs(d3.ceilingHeight.value - VARIANT_ROOM_2.height) / VARIANT_ROOM_2.height;
-  check("synthetic variant-450x330: ceiling within ±3 %", cErr3 <= 0.03, `${String(d3.ceilingHeight.value)} vs 265`);
+  check(
+    "synthetic variant-450x330: ceiling within ±3 %",
+    cErr3 <= 0.03,
+    `${String(d3.ceilingHeight.value)} vs 265`,
+  );
   for (const code of ["corner-out-of-frame", "focal-wide", "tap-the-door"]) {
     check(
       `synthetic variant-450x330: flag on injected fault (${code})`,
@@ -249,14 +313,23 @@ function tierSynthetic(): void {
   }
   // Openings on the clean walls still meet the bars.
   for (const o of d3.openings) {
-    const truth = VARIANT_ROOM_2.openings.filter((t) => t.wall === o.wall && t.type === o.type)
+    const truth = VARIANT_ROOM_2.openings
+      .filter((t) => t.wall === o.wall && t.type === o.type)
       .sort((a, b) => a.offset - b.offset);
     if (truth.length === 0) continue;
     const near = truth.reduce((a, b) =>
       Math.abs(b.offset - o.offset.value) < Math.abs(a.offset - o.offset.value) ? b : a,
     );
-    check(`synthetic variant-450x330: ${o.wall}/${o.type} offset ±10 cm`, Math.abs(o.offset.value - near.offset) <= 10, `got ${String(o.offset.value)} want ${String(near.offset)}`);
-    check(`synthetic variant-450x330: ${o.wall}/${o.type} width ±10 cm`, Math.abs(o.width.value - near.width) <= 10, `got ${String(o.width.value)} want ${String(near.width)}`);
+    check(
+      `synthetic variant-450x330: ${o.wall}/${o.type} offset ±10 cm`,
+      Math.abs(o.offset.value - near.offset) <= 10,
+      `got ${String(o.offset.value)} want ${String(near.offset)}`,
+    );
+    check(
+      `synthetic variant-450x330: ${o.wall}/${o.type} width ±10 cm`,
+      Math.abs(o.width.value - near.width) <= 10,
+      `got ${String(o.width.value)} want ${String(near.width)}`,
+    );
   }
   const vd3 = validateRoomDraft(d3);
   check("synthetic variant-450x330: RoomDraft validates", vd3.ok, vd3.errors.join("; "));
@@ -293,7 +366,9 @@ function exactRoom(roomId: string, room: ExactTruth["room"]): SynthRoom {
     tapeB: len("wall-2"),
     openings: room.openings.map((o) => ({
       type: o[1] as "door" | "window",
-      wall: ({ "wall-1": "A", "wall-4": "B", "wall-3": "C", "wall-2": "D" } as const)[o[2] as string] as WallLetter,
+      wall: ({ "wall-1": "A", "wall-4": "B", "wall-3": "C", "wall-2": "D" } as const)[
+        o[2] as string
+      ] as WallLetter,
       offset: o[3] as number,
       width: o[4] as number,
       height: o[5] as number,
@@ -357,9 +432,16 @@ async function tierExact(): Promise<void> {
         const letter = VIEW_LETTER[view];
         if (letter === undefined) continue;
         const prefix = basename(t, ".json");
-        const samFiles = listFiles(join(base, "sam")).filter((f) => f.startsWith(`${prefix}-`) && f.endsWith(".txt"));
-        const flatFiles = listFiles(base).filter((f) => f.startsWith(`${prefix}-`) && f.endsWith(".txt"));
-        const all = [...samFiles.map((f) => join(base, "sam", f)), ...flatFiles.map((f) => join(base, f))];
+        const samFiles = listFiles(join(base, "sam")).filter(
+          (f) => f.startsWith(`${prefix}-`) && f.endsWith(".txt"),
+        );
+        const flatFiles = listFiles(base).filter(
+          (f) => f.startsWith(`${prefix}-`) && f.endsWith(".txt"),
+        );
+        const all = [
+          ...samFiles.map((f) => join(base, "sam", f)),
+          ...flatFiles.map((f) => join(base, f)),
+        ];
         const instances = [];
         for (const f of all.sort()) {
           const concept = basename(f, ".txt").slice(prefix.length + 1);
@@ -369,7 +451,7 @@ async function tierExact(): Promise<void> {
           if (text.trim().length === 0) continue;
           instances.push(...(await segmentInstances(concept, text)));
         }
-        const focal35mm = ((raw.fx + raw.fy) / 2) * 43.27 / Math.hypot(raw.width, raw.height);
+        const focal35mm = (((raw.fx + raw.fy) / 2) * 43.27) / Math.hypot(raw.width, raw.height);
         photos.push({ wall: letter, width: raw.width, height: raw.height, focal35mm, instances });
       }
       if (roomJson === null || photos.length === 0) continue;
@@ -379,7 +461,11 @@ async function tierExact(): Promise<void> {
       checkBars(`exact ${roomId}`, room, draft, []);
       if (base === inboxTruth) copyIntoRepo(used);
     } catch (error) {
-      check(`exact ${roomId}: decodes and solves`, false, error instanceof Error ? error.message : String(error));
+      check(
+        `exact ${roomId}: decodes and solves`,
+        false,
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
 }
@@ -417,12 +503,14 @@ async function tierSmoke(): Promise<void> {
         }
         const first = instances[0];
         const draft = solveRoomFromPhotos({
-          photos: [{
-            wall: "A",
-            width: first?.imageWidth ?? 1280,
-            height: first?.imageHeight ?? 960,
-            instances,
-          }],
+          photos: [
+            {
+              wall: "A",
+              width: first?.imageWidth ?? 1280,
+              height: first?.imageHeight ?? 960,
+              instances,
+            },
+          ],
           tapeA: 420,
           tapeB: 360,
         });
@@ -432,7 +520,11 @@ async function tierSmoke(): Promise<void> {
         const vd = validateRoomDraft(draft);
         check(`smoke ${photoId}: runs and validates`, vd.ok, vd.errors.join("; "));
       } catch (error) {
-        check(`smoke ${photoId}: never throws`, false, error instanceof Error ? error.message : String(error));
+        check(
+          `smoke ${photoId}: never throws`,
+          false,
+          error instanceof Error ? error.message : String(error),
+        );
       }
     }
     return;
@@ -448,12 +540,20 @@ async function tierSmoke(): Promise<void> {
     try {
       const raw = readFileSync(join(streamsDir, s), "utf8");
       const text = extractSamOutputText(raw);
-      const concept = s.endsWith("-door.sse") ? "door" : s.endsWith("-window.sse") ? "window" : "wall";
+      const concept = s.endsWith("-door.sse")
+        ? "door"
+        : s.endsWith("-window.sse")
+          ? "window"
+          : "wall";
       const instances = await segmentInstances(concept, text);
       console.log(`smoke stream ${s}: ${String(instances.length)} ${concept} instances`);
       check(`smoke stream ${s}: decodes`, instances.length > 0);
     } catch (error) {
-      check(`smoke stream ${s}: never throws`, false, error instanceof Error ? error.message : String(error));
+      check(
+        `smoke stream ${s}: never throws`,
+        false,
+        error instanceof Error ? error.message : String(error),
+      );
     }
   }
   try {
@@ -481,7 +581,11 @@ async function tierSmoke(): Promise<void> {
     }
     check("smoke committed streams: solver never throws", true);
   } catch (error) {
-    check("smoke committed streams: solver never throws", false, error instanceof Error ? error.message : String(error));
+    check(
+      "smoke committed streams: solver never throws",
+      false,
+      error instanceof Error ? error.message : String(error),
+    );
   }
 }
 
@@ -501,4 +605,3 @@ void main().catch((error: unknown) => {
   console.error(`check:geometry: ${error instanceof Error ? error.message : String(error)}`);
   process.exit(1);
 });
-

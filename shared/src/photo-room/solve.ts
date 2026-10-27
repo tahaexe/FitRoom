@@ -318,25 +318,22 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
   // Side edges: facing-wall mask left/right boundaries, fitted on clean
   // rows only (a doorway splits the boundary; the lintel and below-sill
   // bands still show the true corners). Falls back to all rows.
-  const yMin = Math.max(
-    0,
-    Math.min(...wallPieces.map((p) => p.box[1])),
-  );
-  const yMax = Math.min(
-    H - 1,
-    Math.max(...wallPieces.map((p) => p.box[3])),
-  );
+  const yMin = Math.max(0, Math.min(...wallPieces.map((p) => p.box[1])));
+  const yMax = Math.min(H - 1, Math.max(...wallPieces.map((p) => p.box[3])));
   const top = Number.isFinite(yMin) ? (yMin as number) : 0;
   const bot = Number.isFinite(yMax) ? (yMax as number) : H - 1;
   const cleanRows: number[] = [];
   for (let y = top; y <= bot; y += 1) {
     if (rowOccupancy(wallPieces, y, colMin, colMax) > 0.9) cleanRows.push(y);
   }
-  const rows = cleanRows.length >= 8 ? cleanRows : (() => {
-    const all: number[] = [];
-    for (let y = top; y <= bot; y += 1) all.push(y);
-    return all;
-  })();
+  const rows =
+    cleanRows.length >= 8
+      ? cleanRows
+      : (() => {
+          const all: number[] = [];
+          for (let y = top; y <= bot; y += 1) all.push(y);
+          return all;
+        })();
   const leftPts: Array<[number, number]> = [];
   const rightPts: Array<[number, number]> = [];
   for (const y of rows) {
@@ -379,8 +376,7 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
   const anchor = (line: FittedLine, side: "left" | "right"): FittedLine => {
     let crease: number | null = null;
     for (const s of pick.side) {
-      const overlap =
-        Math.min(s.box[3], bot) - Math.max(s.box[1], top);
+      const overlap = Math.min(s.box[3], bot) - Math.max(s.box[1], top);
       if (overlap < 0.3 * (bot - top)) continue;
       if (side === "left" && s.box[2] <= colMin + 12 && s.box[2] >= colMin - 40) {
         const x = s.box[2] + 1;
@@ -445,12 +441,17 @@ function findDoorGap(
   colMin: number,
   colMax: number,
 ): { x0: number; x1: number } | null {
+  if (wallPieces.length === 0) return null;
   const occ = wallOccupancy(wallPieces, floor, ceiling, colMin, colMax);
-  const edgeMargin = 10;
-  const consider = (x0: number, x1: number, best: { x0: number; x1: number } | null): { x0: number; x1: number } | null => {
-    // Ragged mask borders dip at the column range ends: a doorway never
-    // sits exactly at the facing wall's outer edge.
-    if (x0 <= colMin + edgeMargin || x1 >= colMax - edgeMargin) return best;
+  const consider = (
+    x0: number,
+    x1: number,
+    best: { x0: number; x1: number } | null,
+  ): { x0: number; x1: number } | null => {
+    // No edge rejection here: a real doorway can sit near the facing
+    // wall's corner (its leaf spills past the jamb), while ragged mask
+    // borders are narrow. Edge proximity is decided by the leaf check at
+    // the call site, not by geometry.
     if (x1 - x0 <= 25) return best;
     if (best === null || x1 - x0 > best.x1 - best.x0) return { x0, x1 };
     return best;
@@ -541,10 +542,7 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     if (!Number.isFinite(ratio) || ratio <= 0.2 || ratio > 8) {
       ratio = wallLen / DEFAULT_CEILING_CM;
     }
-    const wallPxH = Math.max(
-      1,
-      Math.abs((m3[1] + m4[1]) / 2 - (m1[1] + m2[1]) / 2),
-    );
+    const wallPxH = Math.max(1, Math.abs((m3[1] + m4[1]) / 2 - (m1[1] + m2[1]) / 2));
     const lineNoise = (bounds.floor.rmse + bounds.ceiling.rmse) / 2;
     const ratioUnc = ratio * Math.max(0.01, (lineNoise + 1.5) / wallPxH);
     const height = wallLen / ratio;
@@ -660,12 +658,28 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     // spills past its jamb). Non-seed merged pieces of partial height
     // touching the gap or a leaf are the frame next to it and delimit the
     // doorway instead.
-    const gap = findDoorGap(wallPieces, sol.lines.floor, sol.lines.ceiling, pick.colMin, pick.colMax);
+    //
+    // Physical door rule: a door is a gap in the facing wall's structural
+    // plane (the seed and full-height merged pieces — never a partial-height
+    // frame fragment, whatever thin piece covers the gap's lowest
+    // centimetres) that reaches the fitted floor line, confirmed by a door
+    // instance (the leaf) beside or inside that gap. A radiator or furniture
+    // leaves the structural wall above it intact, so its run stays short and
+    // it is no door even when a leaf-shaped raster sits nearby.
     const seed = wallPieces.length > 0 ? wallPieces[0] : undefined;
     const seedH = seed === undefined ? 1 : seed.box[3] - seed.box[1] + 1;
+    const structural = wallPieces.filter(
+      (p) => p === seed || p.box[3] - p.box[1] + 1 >= 0.8 * seedH,
+    );
+    const gap = findDoorGap(
+      structural,
+      sol.lines.floor,
+      sol.lines.ceiling,
+      pick.colMin,
+      pick.colMax,
+    );
     const touchesGapOrLeaf = (p: SamInstance): boolean => {
-      const nearGap =
-        gap !== null && p.box[0] <= gap.x1 + 4 && p.box[2] >= gap.x0 - 4;
+      const nearGap = gap !== null && p.box[0] <= gap.x1 + 4 && p.box[2] >= gap.x0 - 4;
       const nearLeaf = doors.some((d) => boxesTouch(p, d, 8));
       return gap !== null ? nearGap && nearLeaf : nearLeaf;
     };
@@ -696,10 +710,15 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
         imgHi = Math.max(imgHi, gap.x1);
       }
       for (const f of frame) {
-        west.push(Math.min(uAt(f.box[0]), uAt(f.box[2])) - FRAME_MARGIN_CM);
-        east.push(Math.max(uAt(f.box[0]), uAt(f.box[2])) + FRAME_MARGIN_CM);
-        imgLo = Math.min(imgLo, f.box[0]);
-        imgHi = Math.max(imgHi, f.box[2]);
+        // Frame evidence must lie inside the doorway span: a fragment
+        // jutting past the gap is wall beyond the jamb, not the jamb.
+        const c0 = gap !== null ? Math.max(f.box[0], gap.x0) : f.box[0];
+        const c1 = gap !== null ? Math.min(f.box[2], gap.x1) : f.box[2];
+        if (c1 < c0) continue;
+        west.push(Math.min(uAt(c0), uAt(c1)) - FRAME_MARGIN_CM);
+        east.push(Math.max(uAt(c0), uAt(c1)) + FRAME_MARGIN_CM);
+        imgLo = Math.min(imgLo, c0);
+        imgHi = Math.max(imgHi, c1);
       }
       let lo = Math.max(...west);
       let hi = Math.max(...east);
@@ -709,15 +728,22 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
       }
       // A low occlusion (radiator, furniture) also opens the lower band
       // but never runs up the wall: without tall floor-to-lintel columns
-      // there is no door.
+      // in the structural plane there is no door. The run ignores
+      // partial-height frame fragments, so a fragment covering the gap's
+      // lowest centimetres cannot veto a real doorway. A tall gap still
+      // needs its leaf beside or inside the span to confirm it.
       const tallShare = doorwayTallColumns(
-        wallPieces,
+        structural,
         sol.lines.floor,
         sol.lines.ceiling,
         imgLo,
         imgHi,
       );
-      if (tallShare < 0.4) {
+      const leafConfirms =
+        Number.isFinite(imgLo) &&
+        Number.isFinite(imgHi) &&
+        doors.some((d) => d.box[0] <= imgHi + 12 && d.box[2] >= imgLo - 12);
+      if (tallShare < 0.4 || !leafConfirms) {
         if (doors.length > 0) {
           flags.push({
             code: "tap-the-door",
@@ -726,45 +752,43 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
           });
         }
       } else {
-      // Wall runs left -> right from its start: offset is measured from
-      // the start (image left).
-      const width = Math.max(20, hi - lo);
-      const off = Math.max(0, Math.min(wallLen - width, lo));
-      // Hinge in room terms from the leaf beside the gap: room left is
-      // the wall-end side (image right), so a leaf east of the gap means
-      // a left hinge.
-      let hinge: "left" | "right" = "left";
-      if (doors.length > 0 && (gap !== null || frame.length > 0)) {
-        const leaf = doors.reduce((a, b) =>
-          b.box[2] - b.box[0] > a.box[2] - a.box[0] ? b : a,
-        );
-        const leafCx = (leaf.box[0] + leaf.box[2]) / 2;
-        const refCx = gap !== null ? (gap.x0 + gap.x1) / 2 : (lo + hi) / 2;
-        hinge = leafCx > refCx ? "left" : "right";
-      } else if (photo.wall === "A") {
-        hinge = "left";
-      }
-      doorN += 1;
-      const wUnc = Math.max(3, (sol.lines.floor.rmse + 2) * (wallLen / photo.width) * 2);
-      openings.push({
-        id: `door-${String(doorN)}`,
-        wall: photo.wall,
-        wallId: LETTER_TO_WALL_ID[photo.wall],
-        type: "door",
-        offset: unc(off, wUnc, "photo"),
-        width: unc(width, wUnc, "photo"),
-        height: unc(210, 8, "photo"),
-        sillHeight: unc(0, 1, "photo"),
-        hinge,
-        swing: "in",
-      });
-      if (width < 70 || width > 100) {
-        flags.push({
-          code: "door-width",
-          message: `Wall ${photo.wall}: door is ${String(Math.round(width))} cm wide (70-100 cm expected).`,
+        // Wall runs left -> right from its start: offset is measured from
+        // the start (image left).
+        const width = Math.max(20, hi - lo);
+        const off = Math.max(0, Math.min(wallLen - width, lo));
+        // Hinge in room terms from the leaf beside the gap: room left is
+        // the wall-end side (image right), so a leaf east of the gap means
+        // a left hinge.
+        let hinge: "left" | "right" = "left";
+        if (doors.length > 0 && (gap !== null || frame.length > 0)) {
+          const leaf = doors.reduce((a, b) => (b.box[2] - b.box[0] > a.box[2] - a.box[0] ? b : a));
+          const leafCx = (leaf.box[0] + leaf.box[2]) / 2;
+          const refCx = gap !== null ? (gap.x0 + gap.x1) / 2 : (lo + hi) / 2;
+          hinge = leafCx > refCx ? "left" : "right";
+        } else if (photo.wall === "A") {
+          hinge = "left";
+        }
+        doorN += 1;
+        const wUnc = Math.max(3, (sol.lines.floor.rmse + 2) * (wallLen / photo.width) * 2);
+        openings.push({
+          id: `door-${String(doorN)}`,
           wall: photo.wall,
+          wallId: LETTER_TO_WALL_ID[photo.wall],
+          type: "door",
+          offset: unc(off, wUnc, "photo"),
+          width: unc(width, wUnc, "photo"),
+          height: unc(210, 8, "photo"),
+          sillHeight: unc(0, 1, "photo"),
+          hinge,
+          swing: "in",
         });
-      }
+        if (width < 70 || width > 100) {
+          flags.push({
+            code: "door-width",
+            message: `Wall ${photo.wall}: door is ${String(Math.round(width))} cm wide (70-100 cm expected).`,
+            wall: photo.wall,
+          });
+        }
       }
     } else if (doors.length > 0) {
       flags.push({
@@ -885,7 +909,10 @@ export function draftToRoomLayout(
   room.openings = draft.openings.map((o) => {
     const len = wallLenOf(o.wallId);
     const width = Math.min(Math.max(1, Math.round(o.width.value)), Math.max(1, Math.round(len)));
-    const offset = Math.min(Math.max(0, Math.round(o.offset.value)), Math.max(0, Math.round(len) - width));
+    const offset = Math.min(
+      Math.max(0, Math.round(o.offset.value)),
+      Math.max(0, Math.round(len) - width),
+    );
     if (o.type === "door") {
       return {
         id: o.id,
@@ -900,7 +927,10 @@ export function draftToRoomLayout(
       };
     }
     const height = Math.min(Math.max(1, Math.round(o.height.value)), ceilCm);
-    const sillHeight = Math.min(Math.max(0, Math.round(o.sillHeight.value)), Math.max(0, ceilCm - height));
+    const sillHeight = Math.min(
+      Math.max(0, Math.round(o.sillHeight.value)),
+      Math.max(0, ceilCm - height),
+    );
     return {
       id: o.id,
       wallId: o.wallId,

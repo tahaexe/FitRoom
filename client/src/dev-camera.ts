@@ -13,6 +13,9 @@ import type { RoomLayout } from "@fitroom/shared";
  * - campitch: pitch in degrees, positive looks up (default 0 = level)
  * - camfov: vertical field of view in degrees (default 60)
  * - camitems: when "0", every piece is hidden (the room shell stays)
+ * - camroom: when "manual", the hook renders the plan-editor room (the saved
+ *   manual layout when one survives the reload, else the starter manual
+ *   room) instead of the sample room.
  *
  * When any cam* parameter is present the hook frames a 4:3 view, hides the
  * interface panels and publishes the calibrated camera on
@@ -55,7 +58,16 @@ declare global {
   }
 }
 
-const PARAMS = ["camx", "camz", "cameye", "camyaw", "campitch", "camfov", "camitems"] as const;
+const PARAMS = [
+  "camx",
+  "camz",
+  "cameye",
+  "camyaw",
+  "campitch",
+  "camfov",
+  "camitems",
+  "camroom",
+] as const;
 
 /** True when the URL requests the hook view (any cam* parameter present). */
 export function wantsDevCamera(search: string): boolean {

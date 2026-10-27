@@ -4,5 +4,6 @@ package-lock.json
 client/public/assets/
 .tmp/
 .inbox/
+shared/fixtures/
 server/src/meta/bundled-data.ts
 wrangler.deploy.jsonc
