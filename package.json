@@ -20,6 +20,7 @@
     "check:gateway": "npm run check:gateway -w @fitroom/server",
     "check:recommend": "npm run check:recommend -w @fitroom/server",
     "check:assistant": "npm run check:assistant -w @fitroom/server",
+    "check:render": "npm run check:render -w @fitroom/server",
     "demo:record": "npm run demo:record -w @fitroom/server",
     "demo:import": "npm run demo:import -w @fitroom/server",
     "start": "npm run start -w @fitroom/server"
