@@ -673,10 +673,18 @@
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  min-height: 0;
 }
 
 .photo-stage {
   position: relative;
+  /* Shrink-wrap the photo: the box is exactly the fitted image, so the
+     whole photo stays visible, the handles/edges/boxes follow it at any
+     scale, and the pills plus "Build my room" fit without scrolling. */
+  width: fit-content;
+  max-width: 100%;
+  align-self: center;
+  min-height: 0;
   border-radius: var(--radius);
   overflow: hidden;
   border: 1px solid var(--border-color);
@@ -686,8 +694,10 @@
 
 .photo-stage-img {
   display: block;
-  width: 100%;
+  width: auto;
+  max-width: 100%;
   height: auto;
+  max-height: min(50vh, 560px);
   user-select: none;
 }
 
