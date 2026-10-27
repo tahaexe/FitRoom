@@ -52,6 +52,15 @@ import {
   openingBoxText,
   wallCardStatus,
 } from "../src/editor/photo-confirm.js";
+import {
+  detectDefaultUnit,
+  detectSlip,
+  echoFor,
+  parseLengthToCm,
+  resolveFirstOpen,
+  validateCeiling,
+  validateSide,
+} from "../src/room-units.js";
 
 let failures = 0;
 
@@ -554,6 +563,99 @@ for (const [slug, author] of creditPhotos) {
     `${slug} by ${author}`,
   );
 }
+
+// ---- Room size units: every accepted format, slips, limits, echo text ----
+check("units:bare-cm", parseLengthToCm("420") === 420, String(parseLengthToCm("420")));
+check("units:cm-suffix", parseLengthToCm("420 cm") === 420);
+check("units:metres", parseLengthToCm("4.2 m") === 420);
+check("units:metres-comma", parseLengthToCm("4,2 m") === 420);
+check(
+  "units:feet-inches-quote",
+  parseLengthToCm(`13'9"`) === 419,
+  String(parseLengthToCm(`13'9"`)),
+);
+check("units:feet-inches-space", parseLengthToCm(`13' 9"`) === 419);
+check("units:feet-inches-bare", parseLengthToCm("13 9") === 419);
+check("units:inches-only", parseLengthToCm(`165"`) === 419, String(parseLengthToCm(`165"`)));
+check("units:feet-decimal", parseLengthToCm("13.75 ft") === 419);
+check(
+  "units:slip-message",
+  detectSlip("4.2", 4, "side")?.message === "4.2 cm? Did you mean 4.2 m (420 cm)?",
+  detectSlip("4.2", 4, "side")?.message,
+);
+check("units:slip-action", detectSlip("4.2", 4, "side")?.action === "Use 420 cm");
+check("units:slip-suggests", detectSlip("4.2", 4, "side")?.suggestedCm === 420);
+check("units:no-slip-normal", detectSlip("420", 420, "side") === null);
+check(
+  "units:side-limit-cm",
+  validateSide("width", 50, "cm") === `Width must be 1-15 m (3'3"-49'2")`,
+  validateSide("width", 50, "cm") ?? "",
+);
+check(
+  "units:side-limit-ft",
+  validateSide("width", 50, "ftin") === `Width must be 3'3"-49'2" (1-15 m)`,
+  validateSide("width", 50, "ftin") ?? "",
+);
+check("units:side-ok", validateSide("width", 420, "cm") === null);
+check(
+  "units:ceiling-limit-cm",
+  validateCeiling(150, "cm") === "Ceiling height must be 2-4 m (6'7\"-13'1\")",
+);
+check("units:ceiling-ok", validateCeiling(250, "cm") === null);
+check("units:echo-cm", echoFor(419, "ftin") === "= 419 cm", echoFor(419, "ftin"));
+check("units:echo-ft", echoFor(419, "cm") === `= 13'9"`, echoFor(419, "cm"));
+check("units:default-en-us", detectDefaultUnit("en-US") === "ftin");
+check("units:default-de", detectDefaultUnit("de-DE") === "cm");
+check("units:default-en-gb", detectDefaultUnit("en-GB") === "cm");
+
+// ---- First-open choice: saved room, ?room=sample, none ----
+check(
+  "firstopen:sample-param",
+  resolveFirstOpen({ hasSavedRoom: false, roomParam: "sample" }) === "sample",
+);
+check(
+  "firstopen:sample-wins",
+  resolveFirstOpen({ hasSavedRoom: true, roomParam: "sample" }) === "sample",
+);
+check("firstopen:returning", resolveFirstOpen({ hasSavedRoom: true, roomParam: null }) === "room");
+check("firstopen:fresh", resolveFirstOpen({ hasSavedRoom: false, roomParam: null }) === "setup");
+
+// ---- First-open screen reads correctly in the built app ----
+const firstOpenSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "first-open.ts"),
+  "utf8",
+);
+check("firstopen:title", firstOpenSource.includes("Set up your room"));
+check("firstopen:main-card", firstOpenSource.includes("Enter my room size"));
+check("firstopen:photos-live", firstOpenSource.includes("Uses Live AI"));
+check("firstopen:sample-size", firstOpenSource.includes("420 × 360 cm"));
+check("firstopen:measure-hint", firstOpenSource.includes("Measure wall to wall at floor level."));
+check(
+  "firstopen:not-rectangle",
+  firstOpenSource.includes("Not a rectangle? Shape it in the plan editor"),
+);
+check(
+  "firstopen:door-tip",
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "main.ts"),
+    "utf8",
+  ).includes("Add your door and windows; clearance checks use them."),
+);
+check(
+  "firstopen:more-ceiling",
+  firstOpenSource.includes("More") && firstOpenSource.includes("Ceiling height"),
+);
+check(
+  "firstopen:phone-css",
+  readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "style.css"),
+    "utf8",
+  ).includes("@media (max-width: 720px)"),
+);
+check(
+  "firstopen:inputmode",
+  firstOpenSource.includes('inputmode", "decimal') || firstOpenSource.includes("inputmode"),
+);
 
 if (failures > 0) process.exit(1);
 console.log("guidance: all checks passed");

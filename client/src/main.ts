@@ -22,6 +22,7 @@ import {
   dollhouseWallView,
   isHealthResponse,
   orientedFootprint,
+  setRectangleWallLength,
   wallDisplayHex,
   type RenderWallView,
 } from "@fitroom/shared";
@@ -59,6 +60,8 @@ import { RoomEditor } from "./editor/editor";
 import { RoomMenu } from "./editor/room-menu";
 import { PhotoFlow, type PhotoFlowDone } from "./photo-room/flow";
 import { clearAllPhotos, loadPhoto } from "./photo-room/photo-store";
+import { FirstOpen, type RoomSize } from "./first-open";
+import { resolveFirstOpen } from "./room-units";
 import "./photo-room/photo-room.css";
 import "./editor/editor.css";
 import {
@@ -256,6 +259,8 @@ class FitRoomApp {
   private menuChoice = "sample";
   private menuBeforePhotos = "sample";
   private photoFlow: PhotoFlow | null = null;
+  private firstOpen: FirstOpen | null = null;
+  private firstOpenSetup = false;
   /** Photo-built draft kept while its editor session is open (photos + solver output). */
   private photoDraft: import("@fitroom/shared").RoomDraft | null = null;
   private photoMeta: import("./photo-room/flow").PhotoFlowDone["meta"] | null = null;
@@ -297,17 +302,48 @@ class FitRoomApp {
         applyRoomLayout(ROOM, loadRoomLayout("manual-room") ?? createManualRoom());
       }
     }
-    // A saved photo-built room reopens with its pieces; the sample room
-    // opens only when no built room is saved. Runs before the store so the
-    // scene id already matches the room.
+    // A saved built room reopens with its pieces; with no saved room the
+    // first visit shows the setup screen over the softly blurred sample
+    // room. Runs before the store so the scene id already matches the room.
+    const roomParam = ((): string | null => {
+      try {
+        return new URLSearchParams(window.location.search).get("room");
+      } catch {
+        return null;
+      }
+    })();
+    const storedManualRoom = ROOM.id === "manual-room" ? null : loadRoomLayout("manual-room");
     const storedPhotosRoom = ROOM.id === "photos-room" ? null : loadRoomLayout("photos-room");
-    if (storedPhotosRoom !== null) {
+    let hasSavedScene = false;
+    for (const id of [ROOM.id, SAMPLE_ROOM.id, "manual-room", "photos-room"]) {
+      try {
+        if (hasAutosave(id)) {
+          hasSavedScene = true;
+          break;
+        }
+      } catch {
+        // Storage may be unavailable; treat as a first visit.
+      }
+    }
+    const hasSavedRoom = storedManualRoom !== null || storedPhotosRoom !== null || hasSavedScene;
+    const firstChoice = resolveFirstOpen({ hasSavedRoom, roomParam });
+    this.firstOpenSetup = firstChoice === "setup";
+    if (roomParam === "sample") {
+      if (ROOM.id !== SAMPLE_ROOM.id) {
+        applyRoomLayout(ROOM, JSON.parse(JSON.stringify(SAMPLE_ROOM)) as RoomLayout);
+      }
+      this.menuChoice = "sample";
+    } else if (storedManualRoom !== null) {
+      applyRoomLayout(ROOM, storedManualRoom);
+      this.menuChoice = "manual";
+    } else if (storedPhotosRoom !== null) {
       applyRoomLayout(ROOM, storedPhotosRoom);
       this.menuChoice = "photos";
     }
-    // First visit (no autosave) opens the furnished demo room — the scene
-    // the chips reset to — while returning visits restore the autosave.
-    const firstVisit = !hasAutosave(ROOM.id);
+    // First visit (no saved room) opens the furnished demo room behind the
+    // setup screen — the scene the chips reset to — while returning visits
+    // restore the autosave.
+    const firstVisit = firstChoice !== "room";
     this.store = new SceneStore(ROOM.id, validScene as unknown as SceneState);
     // Developer camera hook: a known scene, never the saved shopper state.
     // The scene menu still works on top; `camitems=0` hides every piece.
@@ -595,6 +631,23 @@ class FitRoomApp {
     this.updateTopBar();
     this.maybeShowCoachMarks();
     this.updateUndoRedo();
+    this.firstOpen = new FirstOpen({
+      onUsePhotos: () => {
+        this.firstOpen?.hide();
+        if (this.menuChoice !== "photos") this.menuBeforePhotos = this.menuChoice;
+        this.menuChoice = "photos";
+        this.openPhotoFlow();
+      },
+      onExploreSample: () => {
+        this.firstOpen?.hide();
+        this.menuChoice = "sample";
+        this.refreshMenu();
+      },
+      onBuildRoom: (size) => this.buildRoomAtSize(size),
+      onShapeInEditor: (size) => this.shapeInEditor(size),
+    });
+    document.body.appendChild(this.firstOpen.element);
+    if (this.firstOpenSetup && roomParam !== "sample") this.firstOpen.showCards();
     // Render on demand: frames only while the camera moves, after scene or
     // selection changes, or when a texture finishes loading. No idle loop.
     this.requestRender();
@@ -796,30 +849,14 @@ class FitRoomApp {
     void clearAllPhotos();
   }
 
-  /** Header room menu: sample room, manual build, or reopen the editor. Each room keeps its own placed pieces. */
+  /** Header room menu: sample room, size-built room, or reopen the editor. Each room keeps its own placed pieces. */
   private pickRoom(id: string): void {
     if (id === "manual") {
-      if (ROOM.id !== "manual-room") {
-        // Leaving a photo-built plan editor by the room menu drops the
-        // photo session as Cancel does (Build is the only way to keep it).
-        if (this.photoDraft !== null || ROOM.id === "photos-room") this.discardPhotoSession();
-        this.stashRoomLayout();
-        applyRoomLayout(
-          ROOM,
-          this.roomLayoutFor("manual-room", () => createManualRoom()),
-        );
-        this.store.switchRoom(ROOM.id, emptyScene(ROOM.id));
-        this.select(null);
-        this.rebuildRoom();
-        this.editorStore?.load(ROOM);
-        this.editor?.setPhotoDraft(null);
-        this.openEditor();
-        this.menuChoice = "manual";
-      } else {
-        this.editorStore?.load(ROOM);
-        this.editor?.setPhotoDraft(null);
-        this.openEditor();
-      }
+      // "Build a room" opens the same size screen as first open instead of
+      // the fixed start: Enter builds the plan editor at the typed size.
+      this.closeEditor();
+      this.firstOpen?.showSize();
+      this.menuChoice = "manual";
     } else if (id === "edit") {
       this.editorStore?.load(ROOM);
       this.openEditor();
@@ -909,7 +946,7 @@ class FitRoomApp {
         {
           id: "manual",
           label: "Build a room",
-          hint: "Draw your own 400 × 350 cm room in the plan editor",
+          hint: "Enter your room size, then shape it in the plan editor",
         },
         { id: "edit", label: "Edit plan", hint: "Reopen the plan editor for the current room" },
         {
@@ -922,6 +959,80 @@ class FitRoomApp {
     );
   }
 
+  /** Build a rectangle room at the typed size, then shape it in the plan editor. */
+  private sizedBase(size: RoomSize): RoomLayout {
+    let base = createManualRoom();
+    base = setRectangleWallLength(base, "wall-1", size.widthCm);
+    base = setRectangleWallLength(base, "wall-2", size.lengthCm);
+    for (const wall of base.walls) wall.height = size.ceilingCm;
+    return base;
+  }
+
+  /** "Build my room": the size screen opens the plan editor at those sizes. */
+  private buildRoomAtSize(size: RoomSize): void {
+    if (this.photoDraft !== null || ROOM.id === "photos-room") this.discardPhotoSession();
+    this.stashRoomLayout();
+    const base = this.sizedBase(size);
+    const sameRoom = ROOM.id === base.id;
+    applyRoomLayout(ROOM, base);
+    if (sameRoom) {
+      this.store.replace({ ...emptyScene(ROOM.id), camera: this.store.state.camera });
+    } else {
+      this.store.switchRoom(ROOM.id, emptyScene(ROOM.id));
+    }
+    this.select(null);
+    this.rebuildRoom();
+    this.editorStore?.load(ROOM);
+    this.editor?.setPhotoDraft(null);
+    this.openEditor();
+    this.firstOpen?.hide();
+    this.menuChoice = "manual";
+    this.refreshMenu();
+  }
+
+  /** "Not a rectangle?": open the editor at the typed size for shaping. */
+  private shapeInEditor(size: RoomSize | null): void {
+    const at = size ?? { widthCm: 420, lengthCm: 360, ceilingCm: 250 };
+    this.buildRoomAtSize(at);
+  }
+
+  /** One dismissible tip after the first build, shown once. */
+  private maybeShowDoorTip(): void {
+    const seen = ((): boolean => {
+      try {
+        return window.localStorage.getItem("fitroom.doors-tip-seen") === "1";
+      } catch {
+        return true;
+      }
+    })();
+    if (seen) return;
+    let tip = document.getElementById("door-tip");
+    if (tip === null) {
+      tip = document.createElement("div");
+      tip.id = "door-tip";
+      tip.className = "door-tip";
+      tip.setAttribute("role", "status");
+      const text = document.createElement("span");
+      text.textContent = "Add your door and windows; clearance checks use them.";
+      const dismiss = document.createElement("button");
+      dismiss.type = "button";
+      dismiss.className = "door-tip-dismiss";
+      dismiss.textContent = "Got it";
+      dismiss.addEventListener("click", () => {
+        try {
+          window.localStorage.setItem("fitroom.doors-tip-seen", "1");
+        } catch {
+          // Private mode: the tip simply shows again next visit.
+        }
+        tip?.remove();
+      });
+      tip.append(text, dismiss);
+      this.container.appendChild(tip);
+    } else {
+      tip.removeAttribute("hidden");
+    }
+  }
+
   /** "From photos": the capture flow floats above everything. */
   private openPhotoFlow(): void {
     this.closePhotoFlow();
@@ -931,6 +1042,13 @@ class FitRoomApp {
         this.closePhotoFlow();
         this.menuChoice = this.menuBeforePhotos;
         this.refreshMenu();
+        if (
+          this.firstOpenSetup &&
+          loadRoomLayout("manual-room") === null &&
+          loadRoomLayout("photos-room") === null
+        ) {
+          this.firstOpen?.showCards();
+        }
       },
     });
     this.photoFlow = flow;
@@ -1032,6 +1150,7 @@ class FitRoomApp {
     this.closeEditor();
     this.rebuildRoom();
     this.refreshMenu();
+    this.maybeShowDoorTip();
   }
 
   /** Cancel leaves the room with no change: restore the pre-edit layout. */
