@@ -11,7 +11,13 @@
 
 import { analyzeFreeSpace, backToWallRotationY } from "../recommend/free-space.js";
 import { wallDisplayName } from "../recommend/walls.js";
-import { checkFit, footprintOf } from "../fit.js";
+import {
+  checkFit,
+  footprintOf,
+  orientedFootprint,
+  swingDoorIds,
+  triggeredWindowId,
+} from "../fit.js";
 import type { CatalogItem, FitIssue, RoomLayout, SceneItem, SceneState } from "../types.js";
 import { wallLengthCm } from "../units.js";
 import { isAssistantToolName } from "./tools.js";
@@ -47,8 +53,10 @@ function needNumber(args: Record<string, unknown>, key: string): number | null {
 
 function productsOf(
   ctx: AssistantContext,
-): Map<string, { size: { w: number; d: number; h: number }; category: string }> {
-  return new Map(ctx.catalog.map((c) => [c.id, { size: { ...c.size }, category: c.category }]));
+): Map<string, { size: { w: number; d: number; h: number }; category: string; name: string }> {
+  return new Map(
+    ctx.catalog.map((c) => [c.id, { size: { ...c.size }, category: c.category, name: c.name }]),
+  );
 }
 
 /** Exact cos/sin at multiples of 90° (mirrors the fit engine). */
@@ -86,19 +94,44 @@ export const ASSISTANT_READY_LINE =
  * trying the check without each item); pass the draft for that detail, or
  * omit it for the generic text.
  */
+/**
+ * Footprint of a draft item for door/window lookups (null when unknown).
+ */
+function draftFootprint(
+  ctx: AssistantContext,
+  draft: SceneState,
+  instanceId: string,
+): { rect: ReturnType<typeof orientedFootprint>; height: number } | null {
+  const item = draft.items.find((i) => i.instanceId === instanceId);
+  if (item === undefined) return null;
+  const entry = ctx.byId.get(item.productId);
+  const size = entry?.size ?? { w: 60, d: 60, h: 60 };
+  return { rect: orientedFootprint(size, item.position, item.rotationY), height: size.h };
+}
+
 export function describeIssueForAssistant(
   ctx: AssistantContext,
   issue: FitIssue,
   draft?: SceneState,
 ): string {
+  // The verdict text carries measurements, never ids: resolve doors and
+  // windows geometrically (first hit in room order, like the engine) so the
+  // assistant names walls exactly as before.
+  const firstId = issue.itemIds[0];
+  const placed =
+    draft !== undefined && firstId !== undefined ? draftFootprint(ctx, draft, firstId) : null;
   if (issue.type === "door-swing") {
-    const doorId = issue.message.match(/swing of (\S+)/)?.[1];
+    const inSwing = ctx.room.openings.filter((o) => o.type === "door" && o.swing === "in");
+    const hit = placed === null ? null : swingDoorIds(ctx.room, placed.rect)[0];
+    const doorId = hit ?? (inSwing.length === 1 ? inSwing[0]?.id : undefined);
     const door = ctx.room.openings.find((o) => o.id === doorId);
     const wall = door === undefined ? "the door wall" : `the ${openingWallName(ctx, door.wallId)}`;
     return `Inside the swing of the door on ${wall}`;
   }
   if (issue.type === "window") {
-    const windowId = issue.message.match(/close to (\S+)/)?.[1];
+    const hit = placed === null ? null : triggeredWindowId(ctx.room, placed.rect, placed.height);
+    const alone = ctx.room.openings.filter((o) => o.type === "window");
+    const windowId = hit ?? (alone.length === 1 ? alone[0]?.id : undefined);
     const opening = ctx.room.openings.find((o) => o.id === windowId);
     const wall =
       opening === undefined ? "a window wall" : `the ${openingWallName(ctx, opening.wallId)}`;
@@ -111,7 +144,15 @@ export function describeIssueForAssistant(
       itemIds: [...issue.itemIds],
       message: issue.message,
     };
-    return walkwayDetail(ctx, draft, view) ?? issue.message;
+    const fallback =
+      issue.type === "walkway" ? "No walkway access to this seat" : "Entrance is blocked";
+    return walkwayDetail(ctx, draft, view) ?? fallback;
+  }
+  if (issue.type === "overlap") {
+    return issue.itemIds.length > 1 ? "Pieces overlap" : "Piece overlaps a fixed fixture";
+  }
+  if (issue.type === "outside") {
+    return "Piece extends outside the room";
   }
   return issue.message;
 }
@@ -156,7 +197,7 @@ function hintFor(
   const hints: string[] = [];
   for (const issue of fit) {
     if (issue.severity !== "error" || !issue.itemIds.includes(instanceId)) continue;
-    if (issue.type === "overlap" && issue.message.includes("fixture")) {
+    if (issue.type === "overlap" && issue.itemIds.length === 1) {
       const depths = ctx.room.fixtures.map((f) => `${f.id} ${String(f.depth)} cm deep`).join(", ");
       hints.push(
         `Overlaps a wall fixture (${depths}): pull the piece off the wall by the fixture depth.`,
