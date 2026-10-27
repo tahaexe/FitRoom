@@ -14,8 +14,8 @@ import type { RoomLayout } from "@fitroom/shared";
  * - camfov: vertical field of view in degrees (default 60)
  * - camitems: when "0", every piece is hidden (the room shell stays)
  *
- * When any cam* parameter is present the hook frames a 4:3 view, hides the
- * interface panels and publishes the calibrated camera on
+ * When any cam* parameter is present the hook fills the whole container,
+ * hides the interface panels and publishes the calibrated camera on
  * `window.__fitroomCamera` ({ width, height, fx, fy, cx, cy in pixels,
  * position in metres, yawDeg, pitchDeg, fovDeg, room }). The host keeps the
  * pose frozen afterwards: no controls update, framing or animation may
@@ -68,6 +68,15 @@ export function wantsDevCamera(search: string): boolean {
   return PARAMS.some((key) => params.get(key) !== null);
 }
 
+/** True when the hook URL asks for the empty room shell (`camitems=0`). */
+export function wantsEmptyScene(search: string): boolean {
+  try {
+    return new URLSearchParams(search).get("camitems") === "0";
+  } catch {
+    return false;
+  }
+}
+
 function param(search: URLSearchParams, key: string, fallback: number): number {
   const raw = search.get(key);
   if (raw === null) return fallback;
@@ -86,7 +95,7 @@ function hideChrome(): void {
     ".fit-issue-labels, .plan-overlay, .measure { display: none !important; }",
     "#scene-container { top: 0 !important; left: 0 !important; right: 0 !important;",
     "bottom: 0 !important; border: 0 !important; border-radius: 0 !important;",
-    "display: grid !important; place-items: center !important; background: #111 !important; }",
+    "display: block !important; background: #111 !important; }",
   ].join("\n");
   document.head.appendChild(style);
 }
@@ -129,19 +138,18 @@ export function initDevCamera(deps: DevCameraDeps): void {
   const room = JSON.parse(JSON.stringify(deps.room)) as RoomLayout;
 
   const frame = (): void => {
-    // Exact 1:1 pixels so the published intrinsics match the image.
+    // Exact 1:1 pixels over the whole container so the published
+    // intrinsics match every pixel of the image (no letterbox band).
     deps.renderer.setPixelRatio(1);
-    const fullW = Math.max(1, deps.container.clientWidth);
-    const fullH = Math.max(1, deps.container.clientHeight);
-    const frameW = Math.max(2, Math.floor(Math.min(fullW, (fullH * 4) / 3)));
-    const frameH = Math.max(2, Math.floor((frameW * 3) / 4));
+    const frameW = Math.max(1, deps.container.clientWidth);
+    const frameH = Math.max(1, deps.container.clientHeight);
     deps.renderer.setSize(frameW, frameH, false);
     const canvas = deps.renderer.domElement;
     canvas.style.width = `${String(frameW)}px`;
     canvas.style.height = `${String(frameH)}px`;
 
     deps.camera.fov = fovDeg;
-    deps.camera.aspect = 4 / 3;
+    deps.camera.aspect = frameW / frameH;
     deps.camera.updateProjectionMatrix();
 
     const size = deps.renderer.getDrawingBufferSize(new THREE.Vector2());
@@ -149,8 +157,8 @@ export function initDevCamera(deps: DevCameraDeps): void {
     const h = size.y;
     const halfVFov = (fovDeg * Math.PI) / 180 / 2;
     const fy = h / 2 / Math.tan(halfVFov);
-    // Square pixels: both focal lengths derive from the same pixel pitch, so
-    // fx equals fy (the 4:3 frame keeps the horizontal field consistent).
+    // Square pixels: both focal lengths derive from the same pixel pitch,
+    // so fx equals fy for the full-container frame.
     const fx = fy;
     window.__fitroomCamera = {
       width: w,
