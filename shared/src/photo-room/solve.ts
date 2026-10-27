@@ -72,6 +72,39 @@ interface WallPick {
   colMin: number;
   colMax: number;
   centreCovered: boolean;
+  /** Full-height occluder (wardrobe) abutting the range on a side. */
+  occluder: { side: "left" | "right"; inst: SamInstance } | null;
+}
+
+/**
+ * A full-height occluder standing against the facing wall at a corner:
+ * a non-wall instance abutting (not covering) the facing pieces. Side
+ * walls abut too, but they read as wall; anything else is furniture.
+ */
+function findOccluder(
+  photo: PhotoInput,
+  pieces: SamInstance[],
+  colMin: number,
+  colMax: number,
+): { side: "left" | "right"; inst: SamInstance } | null {
+  const span = Math.max(1, colMax - colMin + 1);
+  const mid = (colMin + colMax) / 2;
+  // Full height means full wall height (the wall need not fill the frame).
+  const wallTop = Math.min(...pieces.map((p) => p.box[1]));
+  const wallBot = Math.max(...pieces.map((p) => p.box[3]));
+  const wallH = Math.max(1, (Number.isFinite(wallBot) ? wallBot : 0) - (Number.isFinite(wallTop) ? wallTop : 0) + 1);
+  for (const inst of photo.instances) {
+    if (inst.concept === "wall" || inst.concept === "floor" || inst.concept === "ceiling") {
+      continue;
+    }
+    if (inst.box[3] - inst.box[1] + 1 < 0.85 * wallH) continue;
+    if (!pieces.some((p) => boxesTouch(inst, p, 12))) continue;
+    const overlap = Math.max(0, Math.min(inst.box[2], colMax) - Math.max(inst.box[0], colMin) + 1);
+    if (overlap >= 0.05 * span) continue;
+    const cx = (inst.box[0] + inst.box[2]) / 2;
+    return { side: cx < mid ? "left" : "right", inst };
+  }
+  return null;
 }
 
 function verticalOverlap(a: SamInstance, b: SamInstance): number {
@@ -127,6 +160,119 @@ function rowOccupancy(
   return total === 0 ? 0 : fill / total;
 }
 
+/** Least-squares y = m x + b residual sum over points. */
+function lsSqErr(pts: Array<{ x: number; y: number }>): number {
+  const n = pts.length;
+  if (n < 2) return 0;
+  let sx = 0;
+  let sy = 0;
+  let sxx = 0;
+  let sxy = 0;
+  for (const p of pts) {
+    sx += p.x;
+    sy += p.y;
+    sxx += p.x * p.x;
+    sxy += p.x * p.y;
+  }
+  const denom = n * sxx - sx * sx;
+  const m = denom === 0 ? 0 : (n * sxy - sx * sy) / denom;
+  const b = (sy - m * sx) / n;
+  let se = 0;
+  for (const p of pts) {
+    const e = p.y - (m * p.x + b);
+    se += e * e;
+  }
+  return se;
+}
+
+/**
+ * Best single breakpoint fit over ordered points: returns the split column
+ * and the two-segment residual over the one-segment residual. Each side
+ * must hold at least a quarter of the points.
+ */
+function bestBreakpoint(pts: Array<{ x: number; y: number }>): { at: number; ratio: number } {
+  const one = lsSqErr(pts);
+  let best = { at: pts[Math.floor(pts.length / 2)]?.x ?? 0, ratio: 1 };
+  if (!(one > 0) || pts.length < 24) return best;
+  const lo = Math.floor(pts.length * 0.25);
+  const hi = Math.ceil(pts.length * 0.75);
+  for (let i = lo; i <= hi; i += 4) {
+    const left = pts.slice(0, i);
+    const right = pts.slice(i);
+    if (left.length < 6 || right.length < 6) continue;
+    const two = lsSqErr(left) + lsSqErr(right);
+    if (two / one < best.ratio) best = { at: pts[i]?.x ?? best.at, ratio: two / one };
+  }
+  return best;
+}
+
+/** Least-squares slope y(x) over points. */
+function lsSlope(pts: Array<{ x: number; y: number }>): number | null {
+  if (pts.length < 6) return null;
+  let sx = 0;
+  let sy = 0;
+  let sxx = 0;
+  let sxy = 0;
+  for (const p of pts) {
+    sx += p.x;
+    sy += p.y;
+    sxx += p.x * p.x;
+    sxy += p.x * p.y;
+  }
+  const denom = pts.length * sxx - sx * sx;
+  if (denom === 0) return null;
+  return (pts.length * sxy - sx * sy) / denom;
+}
+
+/**
+ * One wall instance covering two planes bends where the planes meet. The
+ * upper edge leads (doorways never notch it); the lower edge confirms
+ * locally, since a doorway notch elsewhere must not veto the true kink.
+ * Returns the corner column, else null.
+ */
+function twoPlaneCorner(inst: SamInstance, imageW: number, cx: number): number | null {
+  const x0 = Math.max(0, inst.box[0]);
+  const x1 = Math.min(imageW - 1, inst.box[2]);
+  if (x1 - x0 < 0.4 * imageW) return null;
+  const bots: Array<{ x: number; y: number }> = [];
+  const tops: Array<{ x: number; y: number }> = [];
+  for (let x = x0; x <= x1; x += 2) {
+    let bot: number | null = null;
+    let top: number | null = null;
+    for (let y = inst.box[3]; y >= inst.box[1]; y -= 1) {
+      if (maskAt(inst, x, y)) {
+        bot = y;
+        break;
+      }
+    }
+    for (let y = inst.box[1]; y <= inst.box[3]; y += 1) {
+      if (maskAt(inst, x, y)) {
+        top = y;
+        break;
+      }
+    }
+    if (bot !== null && top !== null) {
+      bots.push({ x, y: bot });
+      tops.push({ x, y: top });
+    }
+  }
+  if (bots.length < 40 || tops.length < 40) return null;
+  const st = bestBreakpoint(tops);
+  if (st.ratio > 0.35) return null;
+  // The lower edge confirms around the candidate: its local slopes must
+  // differ across it (a corner), far from any doorway notch.
+  const at = st.at;
+  const left = bots.filter((p) => p.x >= at - 60 && p.x <= at - 8);
+  const right = bots.filter((p) => p.x >= at + 8 && p.x <= at + 60);
+  const ml = lsSlope(left);
+  const mr = lsSlope(right);
+  if (ml === null || mr === null || Math.abs(ml - mr) < 0.02) return null;
+  const corner = Math.round(at);
+  const keepW = cx < corner ? corner - x0 : x1 - corner;
+  if (keepW < 0.25 * (x1 - x0)) return null;
+  return corner;
+}
+
 function pickFacingWall(photo: PhotoInput): WallPick {
   const W = photo.width;
   const cx = Math.floor(W / 2);
@@ -145,13 +291,13 @@ function pickFacingWall(photo: PhotoInput): WallPick {
   }
   if (seed === null) {
     const windows = byConcept(photo.instances, "window");
-    if (windows.length > 0 && walls.length > 0) {
-      // No wall covers the centre but windows do: build the plane from
-      // wall and window pieces together.
+    if (windows.length > 0) {
+      // A glazed wall has no wall instance: build its plane from the
+      // window and wall pieces around it.
       const pieces = [...walls, ...windows];
       const colMin = Math.max(0, Math.min(...pieces.map((p) => p.box[0])));
       const colMax = Math.min(W - 1, Math.max(...pieces.map((p) => p.box[2])));
-      return { pieces, side: [], colMin, colMax, centreCovered: false };
+      return { pieces, side: [], colMin, colMax, centreCovered: false, occluder: null };
     }
     if (walls.length > 0) {
       seed = walls.reduce((a, b) => {
@@ -160,7 +306,14 @@ function pickFacingWall(photo: PhotoInput): WallPick {
         return bb > aa ? b : a;
       });
     } else {
-      return { pieces: [], side: [], colMin: 0, colMax: W - 1, centreCovered: false };
+      return {
+        pieces: [],
+        side: [],
+        colMin: 0,
+        colMax: W - 1,
+        centreCovered: false,
+        occluder: null,
+      };
     }
   }
   const picked = seed as SamInstance;
@@ -183,11 +336,28 @@ function pickFacingWall(photo: PhotoInput): WallPick {
       pieces.push(w);
     }
   }
-  const colMin = Math.max(0, Math.min(...pieces.map((p) => p.box[0])));
-  const colMax = Math.min(W - 1, Math.max(...pieces.map((p) => p.box[2])));
+  let colMin = Math.max(0, Math.min(...pieces.map((p) => p.box[0])));
+  let colMax = Math.min(W - 1, Math.max(...pieces.map((p) => p.box[2])));
+  // One instance may cover two planes (SAM merges across a corner): split
+  // it where the floor and ceiling boundaries bend, keeping the plane that
+  // holds the image centre.
+  if (pieces.length === 1 && walls.length === 1 && pieces[0] !== undefined) {
+    const corner = twoPlaneCorner(pieces[0], W, cx);
+    if (corner !== null) {
+      if (cx < corner) colMax = Math.min(colMax, corner);
+      else colMin = Math.max(colMin, corner);
+    }
+  }
+  // The range runs to the occluder's outer edge: the true corner hides
+  // behind it, and its face anchors the side edge.
+  const occluder = findOccluder(photo, pieces, colMin, colMax);
+  if (occluder !== null) {
+    if (occluder.side === "left") colMin = Math.max(0, Math.min(colMin, occluder.inst.box[0]));
+    else colMax = Math.min(W - 1, Math.max(colMax, occluder.inst.box[2]));
+  }
   const covered = cx >= colMin && cx <= colMax;
   const side = walls.filter((w) => !pieces.includes(w));
-  return { pieces, side, colMin, colMax, centreCovered: covered };
+  return { pieces, side, colMin, colMax, centreCovered: covered, occluder };
 }
 
 function toFitted(fit: LineFit, points: number, hiddenFraction: number): FittedLine {
@@ -206,6 +376,37 @@ interface Boundaries {
   right: FittedLine;
   floorHidden: number;
   ceilHidden: number;
+  floorUsable: boolean;
+  ceilUsable: boolean;
+  floorConfirmed: boolean;
+}
+
+/**
+ * The floor (ceiling) line lives only where the wall mask touches the
+ * floor (ceiling) mask within this many pixels. Furniture and cabinets
+ * draw straight false edges with no opposite mask touching them, so
+ * columns without contact vote nothing.
+ */
+const ADJ_TOL_PX = 12;
+/** A boundary disagreeing this far from its expected direction is refit. */
+const SLOPE_TOL_RAD = 0.3;
+
+function dirOfHoriz(line: FittedLine): [number, number] {
+  const m = Math.abs(line.b) < 1e-9 ? 0 : -line.a / line.b;
+  const n = Math.hypot(1, m);
+  return [1 / n, m / n];
+}
+
+function dirOfVert(line: FittedLine): [number, number] {
+  const m = Math.abs(line.a) < 1e-9 ? 0 : -line.b / line.a;
+  const n = Math.hypot(m, 1);
+  return [m / n, 1 / n];
+}
+
+/** Directionless angle between two directions, folded to [0, 90 deg]. */
+function angDiff(d1: [number, number], d2: [number, number]): number {
+  const dot = Math.min(1, Math.max(-1, d1[0] * d2[0] + d1[1] * d2[1]));
+  return Math.acos(Math.abs(dot));
 }
 
 function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
@@ -216,13 +417,18 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
   const colMin = pick.colMin;
   const colMax = pick.colMax;
   const wallPieces = pick.pieces.filter((p) => p.concept === "wall");
+  const hasWall = wallPieces.length > 0;
+  // A glazed wall proxies its plane on the window pieces.
+  const proxy = hasWall ? wallPieces : pick.pieces;
+  // An occluder's outer face anchors the side edge on its side.
+  const proxySide =
+    pick.occluder === null ? proxy : [...proxy, pick.occluder.inst];
 
-  // Floor-wall: the lower of the floor mask's upper boundary and the wall
-  // mask's lower edge per column (masks overlap by a few pixels; the
-  // minimum is the wall's true extent), RANSACed so a doorway's lintel
-  // never wins. Never the wall edge alone: furniture hides it.
+  // Floor-wall: only columns where the wall mask meets the floor mask
+  // vote. Sofa backs, headboards, radiators and wardrobes draw straight
+  // false edges with no floor mask touching them, so they vote nothing.
   const floorPts: Array<[number, number]> = [];
-  let floorMissing = 0;
+  let floorSkip = 0;
   let floorTotal = 0;
   for (let x = colMin; x <= colMax; x += 1) {
     floorTotal += 1;
@@ -233,7 +439,11 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
         break;
       }
     }
-    if (top === null) floorMissing += 1;
+    if (!hasWall) {
+      if (top !== null) floorPts.push([x, top]);
+      else floorSkip += 1;
+      continue;
+    }
     let bot: number | null = null;
     for (let y = H - 1; y >= 0; y -= 1) {
       if (unionAt(wallPieces, x, y)) {
@@ -241,20 +451,25 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
         break;
       }
     }
-    if (top !== null && bot !== null) floorPts.push([x, Math.min(top, bot)]);
-    else if (top !== null) floorPts.push([x, top]);
-    else if (bot !== null) floorPts.push([x, bot]);
+    if (top !== null && bot !== null && Math.abs(top - bot) <= ADJ_TOL_PX) {
+      floorPts.push([x, Math.min(top, bot)]);
+    } else {
+      floorSkip += 1;
+    }
   }
-  const floorHidden = floorTotal === 0 ? 1 : floorMissing / floorTotal;
-  // A sofa can hide the middle: points covering under 30 % of the column
-  // range cannot anchor a line, so the wall mask's own lower edge stands
-  // in (the hidden flag stays set above).
+  const floorHidden = floorTotal === 0 ? 1 : floorSkip / floorTotal;
+  // Points must cover the range: a count below a quarter of the columns
+  // (or a narrow span) cannot anchor a line, so the wall mask's own lower
+  // edge stands in and the height leans on the ceiling line.
   const spanOf = (pts: Array<[number, number]>): number => {
     if (pts.length === 0) return 0;
     return Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0]));
   };
   const colSpan = Math.max(1, colMax - colMin);
-  const floorUsable = floorPts.length >= 10 && spanOf(floorPts) >= 0.3 * colSpan;
+  const floorUsable =
+    floorPts.length >= 10 &&
+    spanOf(floorPts) >= 0.3 * colSpan &&
+    floorPts.length >= 0.25 * (colMax - colMin + 1);
   let floorPtsFinal = floorPts;
   if (!floorUsable) {
     // Furniture hides the floor line: fall back to the wall pieces'
@@ -272,10 +487,11 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
     }
     if (fb.length >= 2) floorPtsFinal = fb;
   }
-  // Ceiling-wall: the higher of the ceiling mask's lower boundary and
-  // the wall mask's upper edge per column, RANSACed the same way.
+  // Ceiling-wall: only columns where the ceiling mask meets the wall
+  // mask vote. Rails and top cabinets draw straight false edges with no
+  // ceiling mask touching them, so they vote nothing.
   const ceilPts: Array<[number, number]> = [];
-  let ceilMissing = 0;
+  let ceilSkip = 0;
   let ceilTotal = 0;
   for (let x = colMin; x <= colMax; x += 1) {
     ceilTotal += 1;
@@ -286,7 +502,11 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
         break;
       }
     }
-    if (low === null) ceilMissing += 1;
+    if (!hasWall) {
+      if (low !== null) ceilPts.push([x, low]);
+      else ceilSkip += 1;
+      continue;
+    }
     let up: number | null = null;
     for (let y = 0; y < H; y += 1) {
       if (unionAt(wallPieces, x, y)) {
@@ -294,12 +514,17 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
         break;
       }
     }
-    if (low !== null && up !== null) ceilPts.push([x, Math.max(low, up)]);
-    else if (low !== null) ceilPts.push([x, low]);
-    else if (up !== null) ceilPts.push([x, up]);
+    if (low !== null && up !== null && Math.abs(low - up) <= ADJ_TOL_PX) {
+      ceilPts.push([x, Math.max(low, up)]);
+    } else {
+      ceilSkip += 1;
+    }
   }
-  const ceilHidden = ceilTotal === 0 ? 1 : ceilMissing / ceilTotal;
-  const ceilUsable = ceilPts.length >= 10 && spanOf(ceilPts) >= 0.3 * colSpan;
+  const ceilHidden = ceilTotal === 0 ? 1 : ceilSkip / ceilTotal;
+  const ceilUsable =
+    ceilPts.length >= 10 &&
+    spanOf(ceilPts) >= 0.3 * colSpan &&
+    ceilPts.length >= 0.25 * (colMax - colMin + 1);
   let ceilPtsFinal = ceilPts;
   if (!ceilUsable) {
     const cb: Array<[number, number]> = [];
@@ -315,16 +540,19 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
     }
     if (cb.length >= 2) ceilPtsFinal = cb;
   }
-  // Side edges: facing-wall mask left/right boundaries, fitted on clean
+  // Side edges: facing-plane mask left/right boundaries, fitted on clean
   // rows only (a doorway splits the boundary; the lintel and below-sill
-  // bands still show the true corners). Falls back to all rows.
-  const yMin = Math.max(0, Math.min(...wallPieces.map((p) => p.box[1])));
-  const yMax = Math.min(H - 1, Math.max(...wallPieces.map((p) => p.box[3])));
+  // bands still show the true corners). Falls back to all rows. A glazed
+  // wall proxies on its window pieces.
+  const yMin = Math.max(0, Math.min(...proxySide.map((p) => p.box[1])));
+  const yMax = Math.min(H - 1, Math.max(...proxySide.map((p) => p.box[3])));
   const top = Number.isFinite(yMin) ? (yMin as number) : 0;
   const bot = Number.isFinite(yMax) ? (yMax as number) : H - 1;
   const cleanRows: number[] = [];
   for (let y = top; y <= bot; y += 1) {
-    if (rowOccupancy(wallPieces, y, colMin, colMax) > 0.9) cleanRows.push(y);
+    if (proxySide.length > 0 && rowOccupancy(proxySide, y, colMin, colMax) > 0.9) {
+      cleanRows.push(y);
+    }
   }
   const rows =
     cleanRows.length >= 8
@@ -340,7 +568,7 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
     let l: number | null = null;
     let r: number | null = null;
     for (let x = colMin; x <= colMax; x += 1) {
-      if (unionAt(wallPieces, x, y)) {
+      if (unionAt(proxySide, x, y)) {
         if (l === null) l = x;
         r = x;
       }
@@ -348,26 +576,25 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
     if (l !== null) leftPts.push([l as number, y]);
     if (r !== null) rightPts.push([r as number, y]);
   }
-  const floor = toFitted(
-    fitLineRansac(floorPtsFinal.length > 0 ? floorPtsFinal : [[colMin, H - 1]], "horizontal"),
-    floorPtsFinal.length,
-    floorHidden,
+  const floorFit = fitLineRansac(
+    floorPtsFinal.length > 0 ? floorPtsFinal : [[colMin, H - 1]],
+    "horizontal",
   );
-  const ceiling = toFitted(
-    fitLineRansac(ceilPtsFinal.length > 0 ? ceilPtsFinal : [[colMin, 0]], "horizontal"),
-    ceilPtsFinal.length,
-    ceilHidden,
+  const ceilFit = fitLineRansac(
+    ceilPtsFinal.length > 0 ? ceilPtsFinal : [[colMin, 0]],
+    "horizontal",
   );
-  let left = toFitted(
-    fitLineRansac(leftPts.length > 0 ? leftPts : [[colMin, 0]], "vertical"),
-    leftPts.length,
-    0,
-  );
-  let right = toFitted(
-    fitLineRansac(rightPts.length > 0 ? rightPts : [[colMax, 0]], "vertical"),
-    rightPts.length,
-    0,
-  );
+  const leftFit = fitLineRansac(leftPts.length > 0 ? leftPts : [[colMin, 0]], "vertical");
+  const rightFit = fitLineRansac(rightPts.length > 0 ? rightPts : [[colMax, 0]], "vertical");
+  // Reject a candidate that disagrees with the vertical vanishing point
+  // (the side edges) and with the other boundary's slope, then refit
+  // without its inliers: a sofa back or cabinet edge can still win a
+  // consensus when most contact columns are hidden.
+  const checked = checkBoundaries(floorFit, ceilFit, leftFit, rightFit, floorPtsFinal, ceilPtsFinal);
+  const floor = toFitted(checked.floor, floorPtsFinal.length, floorHidden);
+  const ceiling = toFitted(checked.ceiling, ceilPtsFinal.length, ceilHidden);
+  let left = toFitted(checked.left, leftPts.length, 0);
+  let right = toFitted(checked.right, rightPts.length, 0);
   // Anchor each side edge at the crease where the facing wall meets the
   // side walls: a rejected side fragment abutting the column range marks
   // the crease, while the facing mask edge is eroded by a few pixels.
@@ -393,7 +620,92 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
   void W;
   left = anchor(left, "left");
   right = anchor(right, "right");
-  return { floor, ceiling, left, right, floorHidden, ceilHidden };
+  // A wall-edge fallback stands in for a hidden floor line: trust it only
+  // when the surviving contact columns confirm it (they sit on the fitted
+  // line). A sofa-top edge fails this; an intact wall base passes it.
+  let floorConfirmed = floorUsable;
+  if (!floorUsable && floorPts.length >= 8) {
+    // Contact points sit up to ADJ_TOL_PX off the wall-edge line (they
+    // mark the wall's true extent); a sofa-top edge sits further off.
+    let near = 0;
+    for (const p of floorPts) {
+      if (horizResid(checked.floor, p) <= ADJ_TOL_PX + 2) near += 1;
+    }
+    floorConfirmed = near / floorPts.length >= 0.5;
+  }
+  return {
+    floor,
+    ceiling,
+    left,
+    right,
+    floorHidden,
+    ceilHidden,
+    floorUsable,
+    ceilUsable,
+    floorConfirmed,
+  };
+}
+
+/**
+ * Residual of a point to a horizontal line fit (ax + by + c = 0).
+ */
+function horizResid(fit: LineFit, p: [number, number]): number {
+  return Math.abs(fit.a * p[0] + fit.b * p[1] + fit.c) / Math.max(1e-9, Math.hypot(fit.a, fit.b));
+}
+
+/**
+ * A boundary candidate must agree with the vertical vanishing point
+ * (run across the side edges, i.e. perpendicular to them) and with the
+ * other boundary's slope (both image parallel 3D lines). A candidate
+ * failing either is refit without its inliers; the refit wins only when
+ * it passes the same checks.
+ */
+function checkBoundaries(
+  floorFit: LineFit,
+  ceilFit: LineFit,
+  leftFit: LineFit,
+  rightFit: LineFit,
+  floorPts: Array<[number, number]>,
+  ceilPts: Array<[number, number]>,
+): { floor: LineFit; ceiling: LineFit; left: LineFit; right: LineFit } {
+  const sideDir = dirOfVert(toFitted(leftFit, 0, 0));
+  const sideDir2 = dirOfVert(toFitted(rightFit, 0, 0));
+  let sx = sideDir[0] + sideDir2[0];
+  let sy = sideDir[1] + sideDir2[1];
+  const sn = Math.hypot(sx, sy) || 1;
+  sx /= sn;
+  sy /= sn;
+  const across: [number, number] = [-sy, sx];
+  const refit = (
+    fit: LineFit,
+    other: LineFit,
+    pts: Array<[number, number]>,
+  ): LineFit => {
+    const dir = dirOfHoriz(toFitted(fit, 0, 0));
+    const otherDir = dirOfHoriz(toFitted(other, 0, 0));
+    if (angDiff(dir, across) <= SLOPE_TOL_RAD && angDiff(dir, otherDir) <= SLOPE_TOL_RAD) {
+      return fit;
+    }
+    const rest = pts.filter((p) => horizResid(fit, p) > 3);
+    if (rest.length < 12) return fit;
+    const xs = rest.map((p) => p[0]);
+    if (Math.max(...xs) - Math.min(...xs) < 0.3 * (Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0]))) + 1) {
+      return fit;
+    }
+    const again = fitLineRansac(rest, "horizontal");
+    const againDir = dirOfHoriz(toFitted(again, 0, 0));
+    if (angDiff(againDir, across) <= SLOPE_TOL_RAD && angDiff(againDir, otherDir) <= SLOPE_TOL_RAD) {
+      return again;
+    }
+    return fit;
+  };
+  // Check the worse fit first so the better line anchors the comparison.
+  if (floorFit.rmse >= ceilFit.rmse) {
+    const floor = refit(floorFit, ceilFit, floorPts);
+    return { floor, ceiling: refit(ceilFit, floor, ceilPts), left: leftFit, right: rightFit };
+  }
+  const ceiling = refit(ceilFit, floorFit, ceilPts);
+  return { floor: refit(floorFit, ceiling, floorPts), ceiling, left: leftFit, right: rightFit };
 }
 
 function unc(value: number, plusMinus: number, source: Uncertain["source"]): Uncertain {
@@ -515,15 +827,194 @@ function boxesTouch(a: SamInstance, b: SamInstance, pad = 3): boolean {
   );
 }
 
+/**
+ * Window pieces overlapping one opening (panes) merge into one opening.
+ * Panes touch or nearly touch with a large vertical overlap; separate
+ * windows stand further apart.
+ */
+function xOverlap(a: SamInstance, b: SamInstance): number {
+  return Math.max(0, Math.min(a.box[2], b.box[2]) - Math.max(a.box[0], b.box[0]) + 1);
+}
+
+function yGap(a: SamInstance, b: SamInstance): number {
+  if (a.box[3] < b.box[1]) return b.box[1] - a.box[3];
+  if (b.box[3] < a.box[1]) return a.box[1] - b.box[3];
+  return 0;
+}
+
+/** Panes of one opening: touching side by side, or stacked in one column. */
+function sameOpening(a: SamInstance, b: SamInstance): boolean {
+  if (boxesTouch(a, b, 10) && verticalOverlap(a, b) >= 0.25) return true;
+  const minW = Math.min(a.box[2] - a.box[0], b.box[2] - b.box[0]) + 1;
+  const minH = Math.min(a.box[3] - a.box[1], b.box[3] - b.box[1]) + 1;
+  return xOverlap(a, b) >= 0.5 * minW && yGap(a, b) <= 2 * minH;
+}
+
+function groupFootprint(g: SamInstance[]): SamInstance {
+  const first = g[0] as SamInstance;
+  return {
+    ...first,
+    box: [
+      Math.min(...g.map((m) => m.box[0])),
+      Math.min(...g.map((m) => m.box[1])),
+      Math.max(...g.map((m) => m.box[2])),
+      Math.max(...g.map((m) => m.box[3])),
+    ],
+  };
+}
+
+function mergePanes(windows: SamInstance[]): SamInstance[] {
+  // Fixpoint: a pane joining a group grows its footprint, which can pull
+  // in a further pane (a tall stack split by several mullions).
+  let groups: SamInstance[][] = windows.map((w) => [w]);
+  let changed = true;
+  while (changed) {
+    changed = false;
+    outer: for (let i = 0; i < groups.length; i += 1) {
+      for (let j = i + 1; j < groups.length; j += 1) {
+        const a = groupFootprint(groups[i] as SamInstance[]);
+        const b = groupFootprint(groups[j] as SamInstance[]);
+        if (sameOpening(a, b)) {
+          (groups[i] as SamInstance[]).push(...(groups[j] as SamInstance[]));
+          groups = [...groups.slice(0, j), ...groups.slice(j + 1)];
+          changed = true;
+          break outer;
+        }
+      }
+    }
+  }
+  return groups.map((g) =>
+    g.length === 1 || g[0] === undefined ? (g[0] as SamInstance) : unionInstances(g),
+  );
+}
+
+/** Union of member masks over their joint box, as one instance. */
+function unionInstances(members: SamInstance[]): SamInstance {
+  const first = members[0] as SamInstance;
+  const box: [number, number, number, number] = [
+    Math.min(...members.map((m) => m.box[0])),
+    Math.min(...members.map((m) => m.box[1])),
+    Math.max(...members.map((m) => m.box[2])),
+    Math.max(...members.map((m) => m.box[3])),
+  ];
+  const w = box[2] - box[0] + 1;
+  const h = box[3] - box[1] + 1;
+  const data = new Uint8Array(w * h);
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      if (members.some((m) => maskAt(m, box[0] + x, box[1] + y))) data[y * w + x] = 1;
+    }
+  }
+  return {
+    concept: "window",
+    id: `${first.id}+${String(members.length - 1)}`,
+    box,
+    imageWidth: first.imageWidth,
+    imageHeight: first.imageHeight,
+    mask: { width: w, height: h, data },
+  };
+}
+
+/** Wall occupancy per x over the top band near the ceiling. */
+function topOccupancy(
+  wallPieces: SamInstance[],
+  floor: FittedLine,
+  ceiling: FittedLine,
+  colMin: number,
+  colMax: number,
+): Array<{ x: number; occ: number }> {
+  const out: Array<{ x: number; occ: number }> = [];
+  for (let x = colMin; x <= colMax; x += 2) {
+    const yf = yOfLine(floor, x);
+    const yc = yOfLine(ceiling, x);
+    if (!Number.isFinite(yf) || !Number.isFinite(yc)) {
+      out.push({ x, occ: 1 });
+      continue;
+    }
+    const top = Math.min(yf, yc);
+    const bot = Math.max(yf, yc);
+    const bandBot = top + (bot - top) * 0.15;
+    let fill = 0;
+    let total = 0;
+    for (let y = Math.ceil(top); y <= Math.floor(bandBot); y += 2) {
+      total += 1;
+      if (unionAt(wallPieces, x, y)) fill += 1;
+    }
+    out.push({ x, occ: total === 0 ? 1 : fill / total });
+  }
+  return out;
+}
+
+/**
+ * A full-height occluder standing clear of the facing wall at an image
+ * edge (a wardrobe reads as wall but never touches the facing pieces):
+ * side-wall fragments do touch them, so adjacency tells them apart.
+ */
+function edgeOccluder(photo: PhotoInput, pick: WallPick): "left" | "right" | null {
+  const W = photo.width;
+  const H = photo.height;
+  const band = Math.max(8, 0.02 * W);
+  for (const side of ["left", "right"] as const) {
+    const found = photo.instances.some((i) => {
+      if (i.concept === "floor" || i.concept === "ceiling") return false;
+      if (side === "left" ? i.box[0] > band : i.box[2] < W - 1 - band) return false;
+      if (i.box[3] - i.box[1] + 1 < 0.85 * H) return false;
+      return !pick.pieces.some((p) => boxesTouch(i, p, 12));
+    });
+    if (found) return side;
+  }
+  return null;
+}
+
+/**
+ * A full-height occluder (wardrobe) at a corner: wall occupancy stays low
+ * over an edge span in both the bottom and the top band.
+ */
+function cornerOcclusion(
+  wallPieces: SamInstance[],
+  floor: FittedLine,
+  ceiling: FittedLine,
+  colMin: number,
+  colMax: number,
+): "left" | "right" | null {
+  if (wallPieces.length === 0) return null;
+  const width = colMax - colMin + 1;
+  const edge = Math.max(24, 0.08 * width);
+  const bottom = wallOccupancy(wallPieces, floor, ceiling, colMin, colMax);
+  const top = topOccupancy(wallPieces, floor, ceiling, colMin, colMax);
+  const occOf = (rows: Array<{ x: number; occ: number }>, x: number): number => {
+    let near = rows[0];
+    for (const r of rows) {
+      if (near === undefined || Math.abs(r.x - x) < Math.abs(near.x - x)) near = r;
+    }
+    return near?.occ ?? 1;
+  };
+  for (const side of ["left", "right"] as const) {
+    const x0 = side === "left" ? colMin : colMax - edge;
+    const x1 = side === "left" ? colMin + edge : colMax;
+    let low = 0;
+    let total = 0;
+    for (let x = Math.ceil(x0); x <= Math.floor(x1); x += 2) {
+      total += 1;
+      if (occOf(bottom, x) < 0.4 && occOf(top, x) < 0.4) low += 1;
+    }
+    if (total > 0 && low / total > 0.7) return side;
+  }
+  return null;
+}
+
 export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
   const flags: DraftFlag[] = [];
   const photos: PhotoSolution[] = [];
-  const perWallHeight: Array<{ wall: WallLetter; h: number; w: number }> = [];
+  const perWallHeight: Array<{ wall: WallLetter; h: number; w: number; t: boolean }> = [];
+  const photoWide: boolean[] = [];
 
   for (const photo of input.photos) {
     const focal35mm = photo.focal35mm ?? DEFAULT_FOCAL_35MM;
     const focalSource = photo.focal35mm === undefined ? "default" : "exif";
-    if (focal35mm < 18) {
+    const wide = focal35mm < 18;
+    photoWide.push(wide);
+    if (wide) {
       flags.push({
         code: "focal-wide",
         message: `Wall ${photo.wall}: focal length ${String(focal35mm)} mm looks like a 0.5x photo.`,
@@ -544,7 +1035,9 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     }
     const wallPxH = Math.max(1, Math.abs((m3[1] + m4[1]) / 2 - (m1[1] + m2[1]) / 2));
     const lineNoise = (bounds.floor.rmse + bounds.ceiling.rmse) / 2;
-    const ratioUnc = ratio * Math.max(0.01, (lineNoise + 1.5) / wallPxH);
+    // A 0.5x photo's estimates carry a wider ±: the pinhole fit bends.
+    const wideMul = wide ? 2.5 : 1;
+    const ratioUnc = ratio * Math.max(0.01, (lineNoise + 1.5) / wallPxH) * wideMul;
     const height = wallLen / ratio;
     const heightUnc = Math.max(1.5, height * (ratioUnc / ratio));
     // A side edge at the image border means a corner out of frame: judge
@@ -574,10 +1067,46 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
         wall: photo.wall,
       });
     }
+    // Trusted while contact columns confirm the floor line (a direct fit
+    // or a confirmed wall-edge fallback); otherwise the height leans on
+    // the ceiling line alone.
+    const trusted = bounds.floorUsable || bounds.floorConfirmed;
+    if (!trusted && bounds.ceilUsable) {
+      flags.push({
+        code: "height-from-ceiling",
+        message: `Wall ${photo.wall}: the floor line is hidden, so the height comes from the ceiling line alone.`,
+        wall: photo.wall,
+      });
+    }
+    // The range-edge rule needs structural wall pieces: a glazed wall's
+    // glass floats above the floor, which is not an occlusion.
+    const structuralPieces = pick.pieces.filter((p) => p.concept === "wall");
+    const occluded =
+      pick.occluder?.side ??
+      edgeOccluder(photo, pick) ??
+      cornerOcclusion(
+        structuralPieces,
+        bounds.floor,
+        bounds.ceiling,
+        pick.colMin,
+        pick.colMax,
+      );
+    if (
+      occluded !== null &&
+      !flags.some((f) => f.code === "corner-occluded" && f.wall === photo.wall)
+    ) {
+      flags.push({
+        code: "corner-occluded",
+        message: `Wall ${photo.wall}: a full-height occluder covers the ${occluded} corner.`,
+        wall: photo.wall,
+      });
+    }
     const both = Number.isFinite(m1[0]) && Number.isFinite(m4[0]);
-    if (both && !outOfFrame) {
-      const w = 1 / (1 + lineNoise * lineNoise);
-      perWallHeight.push({ wall: photo.wall, h: height, w });
+    // An untrusted height stays out of the blend when a trusted one
+    // exists; a 0.5x photo weighs almost nothing either way.
+    if (both && !outOfFrame && (trusted || !bounds.ceilUsable)) {
+      const w = (1 / (1 + lineNoise * lineNoise)) * (trusted ? 1 : 1 / 16) * (wide ? 1 / 16 : 1);
+      perWallHeight.push({ wall: photo.wall, h: height, w, t: trusted });
     }
     photos.push({
       wall: photo.wall,
@@ -600,24 +1129,28 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
   }
 
   // One ceiling height: inverse-variance blend over walls showing both
-  // corners and both lines.
+  // corners and both lines. Untrusted heights (floor line hidden) stay
+  // out while a trusted one exists; with none trusted the default stands.
+  const trustedHeights = perWallHeight.filter((e) => e.t);
+  const contributors = trustedHeights.length > 0 ? trustedHeights : [];
   let ceiling = DEFAULT_CEILING_CM;
   let ceilingUnc = 15;
   let ceilingSource: Uncertain["source"] = "default";
-  if (perWallHeight.length > 0) {
+  if (contributors.length > 0) {
     let sw = 0;
     let sh = 0;
-    for (const e of perWallHeight) {
+    for (const e of contributors) {
       sw += e.w;
       sh += e.h * e.w;
     }
     ceiling = sh / sw;
     const mean = ceiling;
     let spread = 0;
-    for (const e of perWallHeight) spread = Math.max(spread, Math.abs(e.h - mean));
+    for (const e of contributors) spread = Math.max(spread, Math.abs(e.h - mean));
     ceilingUnc = Math.max(2, spread / 2 + 2);
+    if (photoWide.some(Boolean)) ceilingUnc = Math.max(ceilingUnc * 1.5, 6);
     ceilingSource = "photo";
-    if (spread > 0.03 * mean && perWallHeight.length > 1) {
+    if (spread > 0.03 * mean && contributors.length > 1) {
       flags.push({
         code: "ceiling-spread",
         message: `Ceiling heights from different walls differ by ${String(Math.round((spread / mean) * 100))}%.`,
@@ -651,7 +1184,10 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
       return cx >= pick.colMin && cx <= pick.colMax;
     };
     const doors = byConcept(photo.instances, "door").filter((d) => inRange(d.box));
-    const windows = byConcept(photo.instances, "window").filter((w) => inRange(w.box));
+    // Window pieces overlapping one opening (panes) merge into one; a
+    // glass strip inside a door's leaf is the door glazing, not a window.
+    const windows = mergePanes(byConcept(photo.instances, "window").filter((w) => inRange(w.box)));
+    const uncMul = photoWide[pi] === true ? 2.5 : 1;
 
     // Door gap in the wall mask (the doorway); the door instance is often
     // just the open leaf beside it and never joins the span (an ajar leaf
@@ -671,13 +1207,13 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     const structural = wallPieces.filter(
       (p) => p === seed || p.box[3] - p.box[1] + 1 >= 0.8 * seedH,
     );
-    const gap = findDoorGap(
-      structural,
-      sol.lines.floor,
-      sol.lines.ceiling,
-      pick.colMin,
-      pick.colMax,
-    );
+    // The gap search skips the occluder span: its face is wall-free over
+    // the full height and would read as a doorway.
+    const gapLo =
+      pick.occluder?.side === "left" ? pick.occluder.inst.box[2] + 1 : pick.colMin;
+    const gapHi =
+      pick.occluder?.side === "right" ? pick.occluder.inst.box[0] - 1 : pick.colMax;
+    const gap = findDoorGap(structural, sol.lines.floor, sol.lines.ceiling, gapLo, gapHi);
     const touchesGapOrLeaf = (p: SamInstance): boolean => {
       const nearGap = gap !== null && p.box[0] <= gap.x1 + 4 && p.box[2] >= gap.x0 - 4;
       const nearLeaf = doors.some((d) => boxesTouch(p, d, 8));
@@ -756,20 +1292,49 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
         // the start (image left).
         const width = Math.max(20, hi - lo);
         const off = Math.max(0, Math.min(wallLen - width, lo));
-        // Hinge in room terms from the leaf beside the gap: room left is
-        // the wall-end side (image right), so a leaf east of the gap means
-        // a left hinge.
+        // Hinge in room terms from where the leaf meets the doorway's
+        // jamb. A flat-open leaf lies beside the gap on its hinge side.
+        // A concept filling the gap is the open void itself: it reads
+        // largest away from the swung leaf, so the hinge is opposite its
+        // bulk side. Room left is the wall-end side (image east on every
+        // wall: the camera runs from the wall start to the wall end). A
+        // leaf covering the whole gap carries no signal and keeps the
+        // default.
         let hinge: "left" | "right" = "left";
-        if (doors.length > 0 && (gap !== null || frame.length > 0)) {
+        if (doors.length > 0 && Number.isFinite(imgLo) && Number.isFinite(imgHi)) {
           const leaf = doors.reduce((a, b) => (b.box[2] - b.box[0] > a.box[2] - a.box[0] ? b : a));
-          const leafCx = (leaf.box[0] + leaf.box[2]) / 2;
-          const refCx = gap !== null ? (gap.x0 + gap.x1) / 2 : (lo + hi) / 2;
-          hinge = leafCx > refCx ? "left" : "right";
-        } else if (photo.wall === "A") {
-          hinge = "left";
+          const glo = imgLo as number;
+          const ghi = imgHi as number;
+          const covers = leaf.box[0] <= glo + 6 && leaf.box[2] >= ghi - 6;
+          const toRoom = (hingeEast: boolean): "left" | "right" =>
+            hingeEast ? "left" : "right";
+          if (!covers) {
+            // The door concept is either the leaf beside the gap (small
+            // overlap) or the open void itself (large overlap): opposite
+            // readings, told apart by the cover ratio.
+            const overlap =
+              Math.max(0, Math.min(leaf.box[2], ghi) - Math.max(leaf.box[0], glo) + 1) /
+              Math.max(1, leaf.box[2] - leaf.box[0] + 1);
+            if (overlap >= 0.5) {
+              // The void reads largest away from the swung leaf, so the
+              // hinge is opposite its bulk side.
+              const leafCx = (leaf.box[0] + leaf.box[2]) / 2;
+              const gapCx = (glo + ghi) / 2;
+              if (leafCx < gapCx - 12) hinge = toRoom(true);
+              else if (leafCx > gapCx + 12) hinge = toRoom(false);
+            } else {
+              const overEast = leaf.box[2] - ghi;
+              const overWest = glo - leaf.box[0];
+              if (Math.max(overEast, overWest) >= 12) {
+                // A flat-open leaf lies beside the gap on its hinge side.
+                hinge = toRoom(overEast > overWest);
+              }
+            }
+          }
         }
         doorN += 1;
-        const wUnc = Math.max(3, (sol.lines.floor.rmse + 2) * (wallLen / photo.width) * 2);
+        const wUnc =
+          Math.max(3, (sol.lines.floor.rmse + 2) * (wallLen / photo.width) * 2) * uncMul;
         openings.push({
           id: `door-${String(doorN)}`,
           wall: photo.wall,
@@ -836,7 +1401,8 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
       const height = Math.max(10, top - bot);
       const sill = Math.max(0, bot);
       winN += 1;
-      const wUnc = Math.max(3, (sol.lines.floor.rmse + 2) * (wallLen / photo.width) * 2);
+      const wUnc =
+        Math.max(3, (sol.lines.floor.rmse + 2) * (wallLen / photo.width) * 2) * uncMul;
       openings.push({
         id: `window-${String(winN)}`,
         wall: photo.wall,
@@ -844,7 +1410,7 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
         type: "window",
         offset: unc(off, wUnc, "photo"),
         width: unc(width, wUnc, "photo"),
-        height: unc(height, Math.max(4, height * 0.05), "photo"),
+        height: unc(height, Math.max(4, height * 0.05) * uncMul, "photo"),
         sillHeight: unc(sill, Math.max(3, wUnc), "photo"),
       });
       if (sill < 0 || sill > 120) {

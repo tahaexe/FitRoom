@@ -29,6 +29,8 @@ export interface SynthPhotoOpts {
   pitchDeg?: number;
   rollDeg?: number;
   focal35mm?: number;
+  /** Focal length the solver sees; null omits it (the default applies). */
+  reportedFocal35mm?: number | null;
   imageW?: number;
   imageH?: number;
   eyeCm?: number;
@@ -36,6 +38,19 @@ export interface SynthPhotoOpts {
   distFraction?: number;
   splitWall?: boolean;
   hideFloorMiddle?: number;
+  /** Sofa back: straight false edge above the floor line, hiding the floor
+   * over this fraction of the image width (wall and floor carved). */
+  sofaEdge?: number;
+  /** Full-height wardrobe carve at a corner (wall, floor, ceiling). */
+  wardrobeCorner?: "left" | "right";
+  /** One wall instance covers the facing wall and the neighbour on a side. */
+  mergedWall?: "left" | "right";
+  /** Glazed wall: no wall instance, glass only. */
+  noWall?: boolean;
+  /** Split each window's glass into this many side-by-side panes. */
+  panes?: number;
+  /** Radial barrel (k < 0) distortion on the normalized radius. */
+  distortK?: number;
   doorLeafOnly?: boolean;
   cornerOutOfFrame?: "left" | "right" | null;
   cornerNoisePx?: number;
@@ -248,6 +263,49 @@ export function synthPhoto(
   const rand = lcg(opts.seed ?? 1234 + wall.charCodeAt(0) * 97);
   const cam = baseCamera(room, wall, opts);
   const L = wallLengthOf(room, wall);
+  const trueFocal = opts.focal35mm ?? 26;
+  const distortK = opts.distortK ?? 0;
+  const cx0 = W / 2;
+  const cy0 = H / 2;
+  const normR = Math.hypot(W, H) / 2;
+  const distort = (x: number, y: number): [number, number] => {
+    if (distortK === 0) return [x, y];
+    const dx = (x - cx0) / normR;
+    const dy = (y - cy0) / normR;
+    const s = 1 + distortK * (dx * dx + dy * dy);
+    return [cx0 + dx * s * normR, cy0 + dy * s * normR];
+  };
+  // Sofa back: straight false edge above the wall base with its own tilt.
+  const sofaF = opts.sofaEdge ?? 0;
+  const inSofaBand = (x: number): boolean =>
+    sofaF > 0 && Math.abs(x / W - 0.5) < sofaF / 2;
+  let sofaM = 0;
+  let sofaB = 0;
+  if (sofaF > 0) {
+    const pa = project(cam, wallPoint(room, wall, L * (0.5 - sofaF / 2), 0));
+    const pb = project(cam, wallPoint(room, wall, L * (0.5 + sofaF / 2), 0));
+    const [ax, ay] = distort(pa[0], pa[1]);
+    const [bx, by] = distort(pb[0], pb[1]);
+    const m = bx === ax ? 0 : (by - ay) / (bx - ax);
+    sofaM = m + 0.02;
+    sofaB = ay - sofaM * ax - 18;
+  }
+  const sofaTopY = (x: number): number => sofaM * x + sofaB;
+  const ward = opts.wardrobeCorner;
+  // The carve span (relative to the facing wall's image span) is set
+  // below, once the wall corners are projected.
+  let wardLo = 0;
+  let wardHi = -1;
+  const inWardrobe = (x: number): boolean =>
+    ward !== undefined && x > wardLo && x <= wardHi;
+  // Merged wall: the neighbour's plane joins the facing polygon in the
+  // single wall instance (image left is the wall start on every wall).
+  const neighborOf = (w: WallLetter, side: "left" | "right"): WallLetter => {
+    if (w === "A") return side === "left" ? "B" : "D";
+    if (w === "B") return side === "left" ? "C" : "A";
+    if (w === "C") return side === "left" ? "D" : "B";
+    return side === "left" ? "A" : "C";
+  };
   // Proper ring order (no bowtie): start-top, end-top, end-bottom,
   // start-bottom in wall terms.
   const wallCorners: Vec3[] = [
@@ -260,9 +318,55 @@ export function synthPhoto(
   const jitter = (): number => (rand() - 0.5) * 2 * noise;
   const proj = (p: Vec3): [number, number] => {
     const [x, y] = project(cam, p);
-    return [x + jitter(), y + jitter()];
+    const [dx, dy] = distort(x, y);
+    return [dx + jitter(), dy + jitter()];
   };
+  let neighborPoly: Array<[number, number]> | null = null;
+  if (opts.mergedWall !== undefined) {
+    const n = neighborOf(wall, opts.mergedWall);
+    const nL = wallLengthOf(room, n);
+    // The neighbour can run behind the camera: clamp its span to stay a
+    // few centimetres in front (depth is linear along the wall).
+    const zcAt = (s: number): number => {
+      const p = wallPoint(room, n, s, 0);
+      const vx = p.x - cam.pos.x;
+      const vy = p.y - cam.pos.y;
+      const vz = p.z - cam.pos.z;
+      return vx * cam.f.x + vy * cam.f.y + vz * cam.f.z;
+    };
+    const z0 = zcAt(0);
+    const z1 = zcAt(nL);
+    const margin = 5;
+    let s0 = 0;
+    let s1 = nL;
+    if (z0 <= margin && z1 <= margin) {
+      neighborPoly = null;
+    } else {
+      if (z0 <= margin) s0 = (nL * (margin - z0)) / (z1 - z0);
+      if (z1 <= margin) s1 = (nL * (margin - z1)) / (z0 - z1);
+      if (s1 > s0 + 1) {
+        neighborPoly = [
+          wallPoint(room, n, s0, room.height),
+          wallPoint(room, n, s1, room.height),
+          wallPoint(room, n, s1, 0),
+          wallPoint(room, n, s0, 0),
+        ].map(proj);
+      }
+    }
+  }
   const wallPoly = wallCorners.map(proj);
+  if (ward !== undefined) {
+    const span = wallPoly.map((p) => p[0]);
+    const x0 = Math.min(...span);
+    const x1 = Math.max(...span);
+    if (ward === "right") {
+      wardLo = x1 - 0.15 * (x1 - x0);
+      wardHi = x1;
+    } else {
+      wardLo = x0;
+      wardHi = x0 + 0.15 * (x1 - x0);
+    }
+  }
   const openings = room.openings.filter((o) => o.wall === wall);
   // Opening image polygons (doorway full, window glass inset by frame).
   const openingPolys: Array<{ poly: Array<[number, number]>; type: string }> = [];
@@ -303,7 +407,11 @@ export function synthPhoto(
     return rand() < 0.02;
   };
   const inWall = (x: number, y: number): boolean => {
-    if (!pointInPoly(x, y, wallPoly)) return false;
+    const inFacing = pointInPoly(x, y, wallPoly);
+    const inNeigh = neighborPoly !== null && pointInPoly(x, y, neighborPoly);
+    if (!inFacing && !inNeigh) return false;
+    if (inSofaBand(x) && y > sofaTopY(x)) return false;
+    if (inWardrobe(x)) return false;
     for (const o of openingPolys) {
       if (pointInPoly(x + (rand() - 0.5) * ragged, y + (rand() - 0.5) * ragged, o.poly))
         return false;
@@ -331,6 +439,8 @@ export function synthPhoto(
   const inFloor = (x: number, y: number): boolean => {
     if (!pointInPoly(x, y, floorPoly)) return false;
     if (pointInPoly(x, y, wallPoly)) return false;
+    if (inSofaBand(x)) return false;
+    if (inWardrobe(x)) return false;
     if (hideMid > 0) {
       const fx = x / W;
       if (fx > 0.5 - hideMid / 2 && fx < 0.5 + hideMid / 2) return false;
@@ -340,10 +450,13 @@ export function synthPhoto(
   const inCeil = (x: number, y: number): boolean => {
     if (!pointInPoly(x, y, ceilPoly)) return false;
     if (pointInPoly(x, y, wallPoly)) return false;
+    if (inWardrobe(x)) return false;
     return true;
   };
   const instances: SamInstance[] = [];
-  if (opts.splitWall === true) {
+  if (opts.noWall === true) {
+    // Glazed wall: glass only, no wall instance.
+  } else if (opts.splitWall === true) {
     const midX =
       (Math.min(...wallPoly.map((p) => p[0])) + Math.max(...wallPoly.map((p) => p[0]))) / 2;
     const left = makeInstance("wall", `${wall}-wall-a`, W, H, inWall, { x0: 0, x1: midX + 4 });
@@ -353,6 +466,32 @@ export function synthPhoto(
   } else {
     const w = makeInstance("wall", `${wall}-wall`, W, H, inWall);
     if (w !== null) instances.push(w);
+  }
+  if (ward !== undefined) {
+    // The wardrobe itself: a full-height front over the carved corner,
+    // standing slightly past it.
+    const sC = ward === "right" ? L : 0;
+    const ct = proj(wallPoint(room, wall, sC, room.height));
+    const cb = proj(wallPoint(room, wall, sC, 0));
+    const wx0 = Math.max(0, Math.floor(ward === "right" ? wardLo : Math.min(ct[0], cb[0]) - 2));
+    const wx1 = Math.min(
+      W - 1,
+      Math.ceil(ward === "right" ? Math.max(ct[0], cb[0]) + 2 : wardHi),
+    );
+    const wy0 = Math.max(0, Math.floor(Math.min(ct[1], cb[1])));
+    const wy1 = Math.min(H - 1, Math.ceil(Math.max(ct[1], cb[1])));
+    if (wx1 > wx0 && wy1 > wy0) {
+      const mw = wx1 - wx0 + 1;
+      const mh = wy1 - wy0 + 1;
+      instances.push({
+        concept: "wardrobe",
+        id: `${wall}-wardrobe`,
+        box: [wx0, wy0, wx1, wy1],
+        imageWidth: W,
+        imageHeight: H,
+        mask: { width: mw, height: mh, data: new Uint8Array(mw * mh).fill(1) },
+      });
+    }
   }
   const f = makeInstance("floor", `${wall}-floor`, W, H, inFloor);
   if (f !== null) instances.push(f);
@@ -392,13 +531,42 @@ export function synthPhoto(
           o.sillHeight + o.height - WINDOW_FRAME_CM,
         ),
       ].map(proj);
-      const inst = makeInstance("window", `${wall}-window-${String(i)}`, W, H, (x, y) =>
-        pointInPoly(x, y, gp),
-      );
-      if (inst !== null) instances.push(inst);
+      const nPanes = Math.max(1, Math.round(opts.panes ?? 1));
+      let paneX0 = Infinity;
+      let paneX1 = -Infinity;
+      for (const [gx] of gp) {
+        if (gx < paneX0) paneX0 = gx;
+        if (gx > paneX1) paneX1 = gx;
+      }
+      for (let k = 0; k < nPanes; k += 1) {
+        const seg = (paneX1 - paneX0 + 1) / nPanes;
+        const clip =
+          nPanes === 1
+            ? undefined
+            : {
+                x0: k === 0 ? paneX0 : paneX0 + k * seg + 1.5,
+                x1: k === nPanes - 1 ? paneX1 : paneX0 + (k + 1) * seg - 1.5,
+              };
+        const inst = makeInstance(
+          "window",
+          `${wall}-window-${String(i)}-p${String(k)}`,
+          W,
+          H,
+          (x, y) => pointInPoly(x, y, gp),
+          clip,
+        );
+        if (inst !== null) instances.push(inst);
+      }
     }
   }
-  return { wall, width: W, height: H, focal35mm: opts.focal35mm ?? 26, instances };
+  const reported = opts.reportedFocal35mm === undefined ? trueFocal : opts.reportedFocal35mm;
+  return {
+    wall,
+    width: W,
+    height: H,
+    ...(reported === null ? {} : { focal35mm: reported }),
+    instances,
+  };
 }
 
 export const SAMPLE_SYNTH_ROOM: SynthRoom = {

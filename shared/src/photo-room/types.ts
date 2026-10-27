@@ -103,7 +103,9 @@ export type DraftFlagCode =
   | "sill-range"
   | "ceiling-spread"
   | "corner-out-of-frame"
+  | "corner-occluded"
   | "floor-hidden"
+  | "height-from-ceiling"
   | "focal-wide"
   | "tap-the-door";
 

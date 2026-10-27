@@ -4,10 +4,16 @@
  * Tier 1 (synthetic): the generator in `shared/src/photo-room/synthetic.ts`
  * projects known rooms through a pinhole camera into SAM-shaped instances
  * (sample room + two asymmetric variants, one with a sofa hiding the floor
- * line), with yaw/pitch, roll, corner noise and ragged mask edges. Bars:
- * taped walls exact, ceiling height ±3 %, every opening on the right wall
- * in the right order with offset and width ±10 cm, and a flag on every
- * injected fault.
+ * line), with yaw/pitch, roll, corner noise and ragged mask edges. Extra
+ * fixtures cover 25° yaw, a sofa back's false edge (half and full width),
+ * a full-height wardrobe at a corner, two walls in one instance, a glazed
+ * wall with no wall instance, a window in three panes, a +20 % focal
+ * length, a missing focal length (default 26 mm) and a 0.5x photo with
+ * barrel distortion. Bars: taped walls exact, ceiling height ±3 %, every
+ * opening on the right wall in the right order with offset and width
+ * ±10 cm, the door hinge on every room with truth, and a flag on every
+ * injected fault (where the bar cannot hold — full sofa cover, 0.5x —
+ * the expected flags plus a validating draft stand in).
  *
  * Tier 2 (exact renders): `.inbox/truth/` (git-ignored) holds four renders
  * of the sample room `living-420x360` (one per wall, `.jpg`), their truth
@@ -22,7 +28,13 @@
  * real CC0 photos at 1280 px (`<photo>-<concept>.txt`, no truth; the photo
  * size is in each box line): it runs, prints counts and flags, never throws.
  * What the check needs is copied to `shared/fixtures/photo-room-smoke/`.
- * Without the inbox it decodes the committed SAM streams instead.
+ * Without the inbox it solves the committed fixtures instead, so the mask
+ * review expectations below run everywhere; without either it decodes the
+ * committed SAM streams. Expectations: `apartment-granada-artchapiz` and
+ * `living-room-zaher-rio` flag `floor-hidden`; `living-room-houseplants`
+ * gives a plane or a flag; `market-house-reading-room` gives at most 3
+ * window openings; `hostel-twin-room-wardrobe` flags `corner-occluded` at
+ * its right edge; in `apartment-hotel-nice` no window opening is emitted.
  *
  * Prints PASS/FAIL per check plus one table per room, exits non-zero on
  * any FAIL. No Meta calls, no browser.
@@ -225,6 +237,22 @@ function checkBars(tag: string, room: SynthRoom, draft: RoomDraft, expectedFlags
       draft.flags.map((f) => f.code).join(","),
     );
   }
+  // Hinge on every tier that has truth: the nearest door on the same wall
+  // must read the truth hinge side (room terms, seen from inside).
+  for (const t of truth.filter((t) => t.type === "door" && t.hinge !== undefined)) {
+    const cands = got.filter((g) => g.wall === t.wall && g.type === "door");
+    const near =
+      cands.length > 0
+        ? cands.reduce((a, b) =>
+            Math.abs(b.offset.value - t.offset) < Math.abs(a.offset.value - t.offset) ? b : a,
+          )
+        : undefined;
+    check(
+      `${tag}: door hinge on wall ${t.wall}`,
+      near?.hinge === t.hinge,
+      `got ${near?.hinge ?? "none"} want ${t.hinge}`,
+    );
+  }
   const vd = validateRoomDraft(draft);
   check(`${tag}: RoomDraft validates`, vd.ok, vd.errors.join("; "));
 }
@@ -333,6 +361,230 @@ function tierSynthetic(): void {
   }
   const vd3 = validateRoomDraft(d3);
   check("synthetic variant-450x330: RoomDraft validates", vd3.ok, vd3.errors.join("; "));
+
+  // 25° yaw: a deep hall keeps both corners framed at a strong yaw.
+  const yawRoom: SynthRoom = {
+    id: "yaw-420x1400",
+    width: 420,
+    depth: 1400,
+    height: 260,
+    tapeA: 420,
+    tapeB: 1400,
+    openings: [
+      { type: "door", wall: "A", offset: 300, width: 90, height: 210, sillHeight: 0, hinge: "right" },
+    ],
+  };
+  const dYaw = solveRoomFromPhotos({
+    photos: [photo(yawRoom, "A", { yawDeg: 25, pitchDeg: -3, rollDeg: 0, seed: 150 })],
+    tapeA: 420,
+    tapeB: 1400,
+  });
+  printRoomTable("synthetic yaw25", yawRoom, dYaw);
+  checkBars("synthetic yaw25", yawRoom, dYaw, []);
+
+  // Sofa back: a straight false edge just above the floor line (the wall
+  // meets the floor only at the sides).
+  const sofaRoom: SynthRoom = {
+    id: "sofa-420x360",
+    width: 420,
+    depth: 360,
+    height: 260,
+    tapeA: 420,
+    tapeB: 360,
+    openings: [
+      { type: "window", wall: "C", offset: 80, width: 160, height: 140, sillHeight: 90 },
+    ],
+  };
+  const dSofa = solveRoomFromPhotos({
+    photos: [
+      photo(sofaRoom, "C", { yawDeg: 1, pitchDeg: -5, rollDeg: 0.5, seed: 102, sofaEdge: 0.5 }),
+    ],
+    tapeA: 420,
+    tapeB: 360,
+  });
+  printRoomTable("synthetic sofa-edge", sofaRoom, dSofa);
+  checkBars("synthetic sofa-edge", sofaRoom, dSofa, ["floor-hidden"]);
+
+  // Sofa wall to wall: no floor line survives, so the bar cannot hold —
+  // the expected flags plus a validating draft stand in for it.
+  const dSofaFull = solveRoomFromPhotos({
+    photos: [
+      photo(sofaRoom, "C", { yawDeg: 1, pitchDeg: -5, rollDeg: 0.5, seed: 103, sofaEdge: 0.95 }),
+    ],
+    tapeA: 420,
+    tapeB: 360,
+  });
+  printRoomTable("synthetic sofa-full", sofaRoom, dSofaFull);
+  for (const code of ["floor-hidden", "height-from-ceiling"]) {
+    check(
+      `synthetic sofa-full: flag on injected fault (${code})`,
+      dSofaFull.flags.some((f) => f.code === code),
+      dSofaFull.flags.map((f) => f.code).join(","),
+    );
+  }
+  const vdSofaFull = validateRoomDraft(dSofaFull);
+  check("synthetic sofa-full: RoomDraft validates", vdSofaFull.ok, vdSofaFull.errors.join("; "));
+
+  // Full-height wardrobe at a corner (square-on, so its face sits where
+  // the corner hides).
+  const wardRoom: SynthRoom = {
+    id: "wardrobe-380x300",
+    width: 380,
+    depth: 300,
+    height: 250,
+    tapeA: 380,
+    tapeB: 300,
+    openings: [
+      { type: "window", wall: "B", offset: 40, width: 150, height: 120, sillHeight: 85 },
+    ],
+  };
+  const dWard = solveRoomFromPhotos({
+    photos: [
+      photo(wardRoom, "B", {
+        yawDeg: 0.5,
+        pitchDeg: -3,
+        rollDeg: 0,
+        seed: 104,
+        wardrobeCorner: "right",
+      }),
+    ],
+    tapeA: 380,
+    tapeB: 300,
+  });
+  printRoomTable("synthetic wardrobe", wardRoom, dWard);
+  checkBars("synthetic wardrobe", wardRoom, dWard, ["corner-occluded"]);
+
+  // Two walls in one instance: SAM merges across the corner; the solver
+  // splits where the floor and ceiling boundaries bend.
+  const mergeRoom: SynthRoom = {
+    id: "merged-420x360",
+    width: 420,
+    depth: 360,
+    height: 260,
+    tapeA: 420,
+    tapeB: 360,
+    openings: [
+      { type: "door", wall: "A", offset: 30, width: 90, height: 210, sillHeight: 0, hinge: "left" },
+    ],
+  };
+  const dMerge = solveRoomFromPhotos({
+    photos: [
+      photo(mergeRoom, "A", { yawDeg: 1.5, pitchDeg: -3, rollDeg: 1, seed: 105, mergedWall: "right" }),
+    ],
+    tapeA: 420,
+    tapeB: 360,
+  });
+  printRoomTable("synthetic merged-wall", mergeRoom, dMerge);
+  checkBars("synthetic merged-wall", mergeRoom, dMerge, []);
+
+  // Glazed wall: no wall instance; the plane comes from the glass.
+  const glazeRoom: SynthRoom = {
+    id: "glazed-420x360",
+    width: 420,
+    depth: 360,
+    height: 260,
+    tapeA: 420,
+    tapeB: 360,
+    openings: [
+      { type: "door", wall: "A", offset: 30, width: 90, height: 210, sillHeight: 0, hinge: "left" },
+      { type: "window", wall: "C", offset: 0, width: 420, height: 200, sillHeight: 30 },
+      { type: "window", wall: "D", offset: 120, width: 120, height: 140, sillHeight: 90 },
+    ],
+  };
+  const dGlaze = solveRoomFromPhotos({
+    photos: [
+      photo(glazeRoom, "A", { yawDeg: 1.5, pitchDeg: -3, rollDeg: 1, seed: 106 }),
+      photo(glazeRoom, "C", { yawDeg: 1, pitchDeg: -5, rollDeg: 0.5, seed: 107, noWall: true }),
+      photo(glazeRoom, "D", { yawDeg: -1, pitchDeg: -3, rollDeg: -0.5, seed: 108 }),
+    ],
+    tapeA: 420,
+    tapeB: 360,
+  });
+  printRoomTable("synthetic glazed", glazeRoom, dGlaze);
+  checkBars("synthetic glazed", glazeRoom, dGlaze, []);
+
+  // Window in panes: three glass pieces merge into one opening.
+  const paneRoom: SynthRoom = {
+    id: "panes-420x360",
+    width: 420,
+    depth: 360,
+    height: 260,
+    tapeA: 420,
+    tapeB: 360,
+    openings: [
+      { type: "window", wall: "D", offset: 120, width: 120, height: 140, sillHeight: 90 },
+    ],
+  };
+  const dPanes = solveRoomFromPhotos({
+    photos: [
+      photo(paneRoom, "D", { yawDeg: -1, pitchDeg: -3, rollDeg: -0.5, seed: 109, panes: 3 }),
+    ],
+    tapeA: 420,
+    tapeB: 360,
+  });
+  printRoomTable("synthetic panes", paneRoom, dPanes);
+  checkBars("synthetic panes", paneRoom, dPanes, []);
+
+  // Wrong focal (+20 %) and missing focal (default 26 mm): the bars hold.
+  const focalPosed = (
+    reportedFocal35mm: number | null,
+  ): [PhotoInput, PhotoInput, PhotoInput, PhotoInput] => [
+    photo(SAMPLE_SYNTH_ROOM, "A", { yawDeg: 1.5, pitchDeg: -3, rollDeg: 1, seed: 11, reportedFocal35mm }),
+    photo(SAMPLE_SYNTH_ROOM, "B", { yawDeg: -1.5, pitchDeg: -4, rollDeg: -1, seed: 12, reportedFocal35mm }),
+    photo(SAMPLE_SYNTH_ROOM, "C", { yawDeg: 1, pitchDeg: -5, rollDeg: 0.5, seed: 13, reportedFocal35mm }),
+    photo(SAMPLE_SYNTH_ROOM, "D", { yawDeg: -1, pitchDeg: -3, rollDeg: -0.5, seed: 14, reportedFocal35mm }),
+  ];
+  const dFocalHigh = solveRoomFromPhotos({ photos: focalPosed(28.8), tapeA: 420, tapeB: 360 });
+  printRoomTable("synthetic focal+20", SAMPLE_SYNTH_ROOM, dFocalHigh);
+  checkBars("synthetic focal+20", SAMPLE_SYNTH_ROOM, dFocalHigh, []);
+  const dFocalNone = solveRoomFromPhotos({ photos: focalPosed(null), tapeA: 420, tapeB: 360 });
+  printRoomTable("synthetic focal-none", SAMPLE_SYNTH_ROOM, dFocalNone);
+  checkBars("synthetic focal-none", SAMPLE_SYNTH_ROOM, dFocalNone, []);
+
+  // 0.5x photo with barrel distortion: the bar cannot hold — the expected
+  // flags plus wider ± values stand in for it.
+  const dWide = solveRoomFromPhotos({
+    photos: [
+      photo(SAMPLE_SYNTH_ROOM, "A", { yawDeg: 1.5, pitchDeg: -3, rollDeg: 1, seed: 110 }),
+      photo(SAMPLE_SYNTH_ROOM, "B", { yawDeg: -1.5, pitchDeg: -4, rollDeg: -1, seed: 111 }),
+      photo(SAMPLE_SYNTH_ROOM, "C", {
+        yawDeg: 1,
+        pitchDeg: -5,
+        rollDeg: 0.5,
+        seed: 112,
+        focal35mm: 13,
+        distortK: -0.3,
+      }),
+      photo(SAMPLE_SYNTH_ROOM, "D", { yawDeg: -1, pitchDeg: -3, rollDeg: -0.5, seed: 113 }),
+    ],
+    tapeA: 420,
+    tapeB: 360,
+  });
+  printRoomTable("synthetic wide-05x", SAMPLE_SYNTH_ROOM, dWide);
+  check(
+    "synthetic wide-05x: flag on injected fault (focal-wide)",
+    dWide.flags.some((f) => f.code === "focal-wide"),
+    dWide.flags.map((f) => f.code).join(","),
+  );
+  const wideC = dWide.photos.find((p) => p.wall === "C");
+  check(
+    "synthetic wide-05x: wider height ±",
+    (wideC?.heightPlusMinus ?? 0) >= 5,
+    `±${String(wideC?.heightPlusMinus ?? 0)}`,
+  );
+  const wideWin = dWide.openings.find((o) => o.wall === "C");
+  check(
+    "synthetic wide-05x: wider opening ±",
+    (wideWin?.offset.plusMinus ?? 0) >= 6,
+    `±${String(wideWin?.offset.plusMinus ?? 0)}`,
+  );
+  check(
+    "synthetic wide-05x: wider ceiling ±",
+    dWide.ceilingHeight.plusMinus >= 5,
+    `±${String(dWide.ceilingHeight.plusMinus)}`,
+  );
+  const vdWide = validateRoomDraft(dWide);
+  check("synthetic wide-05x: RoomDraft validates", vdWide.ok, vdWide.errors.join("; "));
 }
 
 /** Truth file schema in `.inbox/truth/` (and copied fixtures). */
@@ -470,9 +722,54 @@ async function tierExact(): Promise<void> {
   }
 }
 
+/**
+ * Mask-review expectations for the 8 real smoke photos (no truth): each
+ * photo solves alone as wall A and must meet its reviewed bar.
+ */
+function smokeExpectations(photoId: string, draft: RoomDraft): void {
+  const has = (code: string): boolean => draft.flags.some((f) => f.code === code);
+  if (photoId === "apartment-granada-artchapiz" || photoId === "living-room-zaher-rio") {
+    // A sofa covers the floor line.
+    check(`smoke ${photoId}: floor-hidden flag`, has("floor-hidden"), "no floor-hidden flag");
+  }
+  if (photoId === "living-room-houseplants") {
+    // A glazed wall (SAM finds no wall): a plane or a flag, never a throw.
+    check(
+      `smoke ${photoId}: plane or flag`,
+      draft.flags.length > 0 || draft.openings.length > 0,
+      "neither flags nor openings",
+    );
+  }
+  if (photoId === "market-house-reading-room") {
+    // 7 window panes merge into at most 3 window openings.
+    const windows = draft.openings.filter((o) => o.type === "window").length;
+    check(`smoke ${photoId}: at most 3 window openings`, windows <= 3, `${String(windows)} windows`);
+  }
+  if (photoId === "hostel-twin-room-wardrobe") {
+    // The full-height wardrobe at the right edge is flagged.
+    check(
+      `smoke ${photoId}: wardrobe flagged at its right edge`,
+      draft.flags.some((f) => f.code === "corner-occluded" && f.message.includes("right")),
+      draft.flags.map((f) => f.code).join(","),
+    );
+  }
+  if (photoId === "apartment-hotel-nice") {
+    // The glass strip inside the door's leaf is not a window.
+    const windows = draft.openings.filter((o) => o.type === "window").length;
+    check(`smoke ${photoId}: no window openings`, windows === 0, `${String(windows)} windows`);
+  }
+}
+
 async function tierSmoke(): Promise<void> {
   console.log("== tier 3: smoke ==");
-  const files = listFiles(inboxSmoke).filter((f) => f.endsWith(".txt"));
+  // Prefer the git-ignored inbox; fall back to the committed fixtures so
+  // the expectations run everywhere.
+  let base = inboxSmoke;
+  let files = listFiles(inboxSmoke).filter((f) => f.endsWith(".txt"));
+  if (files.length === 0) {
+    files = listFiles(smokeFixtureDir).filter((f) => f.endsWith(".txt"));
+    base = smokeFixtureDir;
+  }
   if (files.length > 0) {
     // Group by photo prefix (<photo>-<concept>.txt); the wall letter is
     // unknown without truth, so each photo solves alone as wall A.
@@ -491,14 +788,16 @@ async function tierSmoke(): Promise<void> {
       try {
         const instances = [];
         for (const part of parts) {
-          const text = readFileSync(join(inboxSmoke, part.file), "utf8");
+          const text = readFileSync(join(base, part.file), "utf8");
           // An empty text means SAM found no instance of the concept.
           if (text.trim().length === 0) continue;
           instances.push(...(await segmentInstances(part.concept, text)));
-          try {
-            copyFileSync(join(inboxSmoke, part.file), join(smokeFixtureDir, part.file));
-          } catch {
-            // Copy failures never fail the smoke bars.
+          if (base === inboxSmoke) {
+            try {
+              copyFileSync(join(base, part.file), join(smokeFixtureDir, part.file));
+            } catch {
+              // Copy failures never fail the smoke bars.
+            }
           }
         }
         const first = instances[0];
@@ -519,6 +818,7 @@ async function tierSmoke(): Promise<void> {
         );
         const vd = validateRoomDraft(draft);
         check(`smoke ${photoId}: runs and validates`, vd.ok, vd.errors.join("; "));
+        smokeExpectations(photoId, draft);
       } catch (error) {
         check(
           `smoke ${photoId}: never throws`,
