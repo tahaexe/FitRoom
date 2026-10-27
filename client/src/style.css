@@ -1102,7 +1102,12 @@ body:has(#assistant-panel:not([hidden])) #scene-container {
 
 .render-compare {
   position: relative;
-  width: 100%;
+  /* The capture is 4:3, so the box is at most ~212px of chrome short of
+   * the stage height: keep the whole card (image, slider, buttons, credit)
+   * on screen without scrolling at 1898x948, 1440x900 and 1366x768. */
+  width: min(100%, calc((100vh - 340px) * 4 / 3));
+  max-height: calc(100vh - 340px);
+  margin-inline: auto;
   overflow: hidden;
   border-radius: 8px;
   background: var(--panel-bg);
@@ -1185,7 +1190,9 @@ body:has(#assistant-panel:not([hidden])) #scene-container {
 }
 
 .render-progress-thumb {
-  width: 100%;
+  display: block;
+  width: min(100%, calc((100vh - 340px) * 4 / 3));
+  margin-inline: auto;
   border-radius: 8px;
   object-fit: contain;
   background: var(--panel-bg);
