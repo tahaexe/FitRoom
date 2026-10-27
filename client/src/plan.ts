@@ -42,6 +42,10 @@ export class PlanOverlay {
       this.openingChips.push(chip);
       const t = document.createElementNS(NS, "text");
       t.setAttribute("class", "plan-opening-label");
+      // The label's y marks the chip's vertical centre while SVG text
+      // draws from its baseline: shift down ~0.35em so cap-height text
+      // sits centred in the chip instead of on its top edge.
+      t.setAttribute("dy", "0.35em");
       t.textContent = openingLabel(o.type, o.width);
       this.svg.appendChild(t);
       this.openingTexts.push(t);
