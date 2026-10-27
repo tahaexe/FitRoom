@@ -46,6 +46,8 @@ export interface SparkCallOptions {
   jsonSchema?: { name: string; schema: Record<string, unknown> };
   tools?: unknown[];
   maxTokens?: number;
+  /** JPEG data URLs, sent as `image_url` parts on the last user message. */
+  images?: string[];
 }
 
 export interface ImageCallOptions {
@@ -116,9 +118,13 @@ export async function callSpark(
   apiKey: string,
   options: SparkCallOptions,
 ): Promise<UpstreamResult> {
+  const messages: unknown[] =
+    options.images === undefined || options.images.length === 0
+      ? options.messages
+      : withImageParts(options.messages, options.images);
   const body: Record<string, unknown> = {
     model: META_MODELS.spark,
-    messages: options.messages,
+    messages,
     max_tokens: Math.max(options.maxTokens ?? 0, SPARK_MIN_MAX_TOKENS),
   };
   if (options.jsonSchema !== undefined) {
@@ -141,6 +147,26 @@ export async function callSpark(
   if (toolCalls.length > 0) data["toolCalls"] = toolCalls;
   const finishReason = typeof first["finish_reason"] === "string" ? first["finish_reason"] : null;
   return { data, usage: usageFromUpstream(record["usage"], 0), finishReason };
+}
+
+/**
+ * Attach JPEG data URLs as `image_url` parts to the last user message
+ * (OpenAI chat shape). Text-only history keeps working: without images the
+ * messages pass through untouched.
+ */
+function withImageParts(messages: ChatMessage[], images: string[]): unknown[] {
+  const out: unknown[] = messages.map((message) => ({ ...message }));
+  for (let i = out.length - 1; i >= 0; i -= 1) {
+    const message = out[i] as Record<string, unknown>;
+    if (message["role"] !== "user") continue;
+    const text = typeof message["content"] === "string" ? message["content"] : "";
+    message["content"] = [
+      { type: "text", text },
+      ...images.map((image) => ({ type: "image_url", image_url: { url: image } })),
+    ];
+    break;
+  }
+  return out;
 }
 
 function dataUrlJpeg(bytes: Uint8Array): string {
@@ -252,6 +278,107 @@ export async function callImage(
   return {
     data: { imageBase64, format: "webp", width, height },
     usage: usageFromUpstream(record["usage"], 1),
+  };
+}
+
+export const SAM_FRIENDLY_ERROR =
+  "The room scanner couldn't segment that photo just now. Please try again.";
+
+export interface SamCallOptions {
+  /** One short noun concept: wall, floor, ceiling, door or window. */
+  concept: string;
+  /** The room photo as a JPEG data URL. */
+  imageDataUrl: string;
+}
+
+/**
+ * Pull the segmentation output text out of a SAM 3.1 SSE stream.
+ *
+ * Only the `data` of `response.output_text.delta` events is JSON-parsed
+ * (their `delta`s joined in order); every other event is picked by its
+ * `event:` line alone and never parsed, since those carry full copies of
+ * the same text. Requires a `response.completed` event: `response.failed`,
+ * `response.incomplete` or `error` — or a missing completion — throws the
+ * route's friendly error. The server never decodes masks.
+ */
+export function extractSamOutputText(raw: string): string {
+  const billed = { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, images: 1 };
+  const fail = (): never => {
+    throw new UpstreamFriendlyError(SAM_FRIENDLY_ERROR, billed);
+  };
+  const chunks: string[] = [];
+  let completed = false;
+  for (const block of raw.split(/\r?\n\r?\n/)) {
+    let event: string | null = null;
+    const dataLines: string[] = [];
+    for (const line of block.split(/\r?\n/)) {
+      if (line.startsWith("event:")) {
+        event = line.slice("event:".length).trim();
+      } else if (line.startsWith("data:")) {
+        dataLines.push(line.slice("data:".length).replace(/^ /, ""));
+      }
+    }
+    if (event === null) continue;
+    if (event === "response.completed") {
+      completed = true;
+      continue;
+    }
+    if (event === "response.failed" || event === "response.incomplete" || event === "error") {
+      fail();
+    }
+    if (event !== "response.output_text.delta") continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(dataLines.join("\n")) as unknown;
+    } catch {
+      fail();
+    }
+    const delta =
+      typeof parsed === "object" && parsed !== null
+        ? (parsed as Record<string, unknown>)["delta"]
+        : undefined;
+    if (typeof delta !== "string") fail();
+    chunks.push(delta as string);
+  }
+  if (!completed) fail();
+  return chunks.join("");
+}
+
+/**
+ * SAM 3.1 segmentation: one concept over one room photo, streamed.
+ *
+ * Facts checked with real calls: `POST /responses` with
+ * `{ model: "sam-3.1", stream: true, input: [{ type: "message", role:
+ * "user", content: [{ type: "input_text", text }, { type: "input_image",
+ * image_url }] }] }` and `Accept: text/event-stream`. Billing is one
+ * image per request.
+ */
+export async function callSam(apiKey: string, options: SamCallOptions): Promise<UpstreamResult> {
+  const res = await fetch(`${META_BASE_URL}/responses`, {
+    method: "POST",
+    headers: { ...authHeaders(apiKey), Accept: "text/event-stream" },
+    body: JSON.stringify({
+      model: META_MODELS.sam,
+      stream: true,
+      input: [
+        {
+          type: "message",
+          role: "user",
+          content: [
+            { type: "input_text", text: options.concept },
+            { type: "input_image", image_url: options.imageDataUrl },
+          ],
+        },
+      ],
+    }),
+  });
+  if (!res.ok) {
+    throw new Error(`Meta API /responses answered HTTP ${String(res.status)}`);
+  }
+  const text = extractSamOutputText(await res.text());
+  return {
+    data: { concept: options.concept, text },
+    usage: { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, images: 1 },
   };
 }
 

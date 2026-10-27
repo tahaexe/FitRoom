@@ -77,8 +77,13 @@ export interface GatewayStore {
   appendCost(line: CostLine): Promise<void>;
   /** Sum of `upstream` USD (the global budget). */
   upstreamTotalUsd(): Promise<number>;
-  /** Sliding-window per-IP rate check; records the hit when allowed. */
-  checkRateLimit(ip: string, limitPerMinute: number, nowMs: number): Promise<boolean>;
+  /** Sliding-window per-IP rate check; records the weighted hit when allowed. */
+  checkRateLimit(
+    ip: string,
+    limitPerMinute: number,
+    nowMs: number,
+    weight?: number,
+  ): Promise<boolean>;
   /** Session + global-budget check before a generation. */
   checkGenerationCap(
     sessionId: string,
@@ -86,9 +91,15 @@ export interface GatewayStore {
     sessionMaxCalls: number,
     sessionMaxUsd: number,
     globalBudgetUsd: number,
+    weight?: number,
   ): Promise<CapVerdict>;
-  /** Count one generation toward the session caps. */
-  noteGeneration(sessionId: string, usd: number, isUpstream: boolean): Promise<void>;
+  /** Count one generation toward the session caps (USD always in full). */
+  noteGeneration(
+    sessionId: string,
+    usd: number,
+    isUpstream: boolean,
+    weight?: number,
+  ): Promise<void>;
 }
 
 // ---- Node file implementation ---------------------------------------------
@@ -136,8 +147,8 @@ export function createNodeStore(options: NodeStoreOptions): GatewayStore {
     upstreamTotalUsd(): Promise<number> {
       return Promise.resolve(loadUpstreamTotal());
     },
-    checkRateLimit(ip, limitPerMinute, nowMs): Promise<boolean> {
-      return Promise.resolve(checkNodeRateLimit(caps, limitPerMinute, ip, nowMs));
+    checkRateLimit(ip, limitPerMinute, nowMs, weight = 1): Promise<boolean> {
+      return Promise.resolve(checkNodeRateLimit(caps, limitPerMinute, ip, nowMs, weight));
     },
     checkGenerationCap(
       sessionId,
@@ -145,6 +156,7 @@ export function createNodeStore(options: NodeStoreOptions): GatewayStore {
       sessionMaxCalls,
       sessionMaxUsd,
       globalBudgetUsd,
+      weight = 1,
     ): Promise<CapVerdict> {
       return Promise.resolve(
         checkNodeGenerationCap(
@@ -157,11 +169,12 @@ export function createNodeStore(options: NodeStoreOptions): GatewayStore {
           },
           sessionId,
           isMock,
+          weight,
         ),
       );
     },
-    noteGeneration(sessionId, usd, isUpstream): Promise<void> {
-      noteNodeGeneration(caps, sessionId, usd);
+    noteGeneration(sessionId, usd, isUpstream, weight = 1): Promise<void> {
+      noteNodeGeneration(caps, sessionId, usd, weight);
       if (isUpstream && upstreamTotalUsd !== null) {
         upstreamTotalUsd = Math.round((upstreamTotalUsd + usd) * 1_000_000) / 1_000_000;
       }
@@ -219,7 +232,10 @@ function parseSessionCounter(raw: string | null): SessionCounter {
     const generations = typeof record["generations"] === "number" ? record["generations"] : 0;
     const usd = typeof record["usd"] === "number" ? record["usd"] : 0;
     return {
-      generations: Number.isFinite(generations) && generations > 0 ? Math.floor(generations) : 0,
+      generations:
+        Number.isFinite(generations) && generations > 0
+          ? Math.round(generations * 1_000_000) / 1_000_000
+          : 0,
       usd: Number.isFinite(usd) && usd > 0 ? usd : 0,
     };
   } catch {
@@ -227,14 +243,40 @@ function parseSessionCounter(raw: string | null): SessionCounter {
   }
 }
 
-function parseRateHits(raw: string | null): number[] {
+interface RateHit {
+  at: number;
+  weight: number;
+}
+
+/**
+ * Stored rate hits: weighted `{ at, weight }` objects, with plain numbers
+ * (weight 1) accepted for rows written before weights existed.
+ */
+function parseRateHits(raw: string | null): RateHit[] {
   if (raw === null) return [];
   try {
     const parsed: unknown = JSON.parse(raw);
     if (!Array.isArray(parsed)) return [];
-    return parsed.filter(
-      (entry): entry is number => typeof entry === "number" && Number.isFinite(entry),
-    );
+    const out: RateHit[] = [];
+    for (const entry of parsed) {
+      if (typeof entry === "number" && Number.isFinite(entry) && entry > 0) {
+        out.push({ at: entry, weight: 1 });
+      } else if (typeof entry === "object" && entry !== null) {
+        const record = entry as Record<string, unknown>;
+        const at = record["at"];
+        const weight = record["weight"];
+        if (
+          typeof at === "number" &&
+          Number.isFinite(at) &&
+          typeof weight === "number" &&
+          Number.isFinite(weight) &&
+          weight > 0
+        ) {
+          out.push({ at, weight });
+        }
+      }
+    }
+    return out;
   } catch {
     return [];
   }
@@ -342,11 +384,14 @@ export function createD1Store(db: D1DatabaseLike, bundled: BundledGatewayData): 
         ? Math.round(total * 1_000_000) / 1_000_000
         : 0;
     },
-    async checkRateLimit(ip, limitPerMinute, nowMs): Promise<boolean> {
+    async checkRateLimit(ip, limitPerMinute, nowMs, weight = 1): Promise<boolean> {
       const windowStart = nowMs - 60_000;
-      const hits = parseRateHits(await readCounter(db, "rate", ip)).filter((t) => t > windowStart);
-      if (hits.length >= limitPerMinute) return false;
-      hits.push(nowMs);
+      const hits = parseRateHits(await readCounter(db, "rate", ip)).filter(
+        (hit) => hit.at > windowStart,
+      );
+      const spent = hits.reduce((sum, hit) => sum + hit.weight, 0);
+      if (spent + weight > limitPerMinute + 1e-9) return false;
+      hits.push({ at: nowMs, weight });
       await writeCounter(db, "rate", ip, JSON.stringify(hits), nowMs);
       return true;
     },
@@ -356,9 +401,12 @@ export function createD1Store(db: D1DatabaseLike, bundled: BundledGatewayData): 
       sessionMaxCalls,
       sessionMaxUsd,
       globalBudgetUsd,
+      weight = 1,
     ): Promise<CapVerdict> {
       const session = parseSessionCounter(await readCounter(db, "session", sessionId));
-      if (session.generations >= sessionMaxCalls) return { ok: false, reason: "session-calls" };
+      if (session.generations + weight > sessionMaxCalls + 1e-9) {
+        return { ok: false, reason: "session-calls" };
+      }
       if (session.usd >= sessionMaxUsd) return { ok: false, reason: "session-usd" };
       if (!isMock) {
         const row = await db
@@ -369,11 +417,16 @@ export function createD1Store(db: D1DatabaseLike, bundled: BundledGatewayData): 
       }
       return { ok: true };
     },
-    async noteGeneration(sessionId, usd): Promise<void> {
+    async noteGeneration(
+      sessionId: string,
+      usd: number,
+      _isUpstream: boolean,
+      weight = 1,
+    ): Promise<void> {
       const nowMs = Date.now();
       const session = parseSessionCounter(await readCounter(db, "session", sessionId));
       const next: SessionCounter = {
-        generations: session.generations + 1,
+        generations: Math.round((session.generations + weight) * 1_000_000) / 1_000_000,
         usd: Math.round((session.usd + usd) * 1_000_000) / 1_000_000,
       };
       await writeCounter(db, "session", sessionId, JSON.stringify(next), nowMs);

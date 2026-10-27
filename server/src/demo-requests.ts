@@ -14,9 +14,11 @@
 
 import { buildAssistantDemoRequests } from "./assistant-demo.js";
 import { buildRecommendDemoRequests } from "./recommend-demo.js";
+import { buildRoomLabelDemoRequests } from "./room-label-demo.js";
 
-export const DEMO_REQUESTS: Record<"recommend" | "assistant" | "render", unknown[]> = {
+export const DEMO_REQUESTS: Record<"recommend" | "assistant" | "render" | "label", unknown[]> = {
   recommend: buildRecommendDemoRequests(),
   assistant: buildAssistantDemoRequests(),
   render: [],
+  label: buildRoomLabelDemoRequests(),
 };

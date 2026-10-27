@@ -44,6 +44,17 @@ export interface RouteDef {
   /** False until the route gets its real prompt: live answers 501. */
   liveReady: boolean;
   /**
+   * Fractional cost of one generation toward the session call cap and the
+   * per-IP rate limit (default 1). A SAM request weighs 0.2: a photo's five
+   * concepts make one call. USD always counts in full.
+   */
+  callWeight?: number;
+  /**
+   * Whether an upstream answer may be cached (default true). A SAM text
+   * over 512 KB is returned but not cached.
+   */
+  cacheable?: (data: unknown) => boolean;
+  /**
    * Validate the raw JSON body: an error string, or the route's typed input
    * (without the `live` flag, so demo/live share one key).
    */
@@ -222,7 +233,8 @@ export async function serveGatewayRequest(
   // 5. Rate limit plus caps before any generation. Demo-store and cache
   // hits are free and never count: only a live request that missed both may
   // go upstream, so replaying the demo chips never sees the capped message.
-  if (!(await store.checkRateLimit(clientIp(c), config.ratePerMinutePerIp, Date.now()))) {
+  const weight = def.callWeight ?? 1;
+  if (!(await store.checkRateLimit(clientIp(c), config.ratePerMinutePerIp, Date.now(), weight))) {
     return c.json(capped(), 429);
   }
   const isMock = config.mock;
@@ -232,6 +244,7 @@ export async function serveGatewayRequest(
     config.sessionMaxCalls,
     config.sessionMaxUsd,
     config.globalBudgetUsd,
+    weight,
   );
   if (!cap.ok) {
     return c.json(capped(), 429);
@@ -264,7 +277,7 @@ export async function serveGatewayRequest(
         // — with the usage Meta reported — is still written.
         const usage = error.usage ?? emptyUsage();
         const failedUsd = costUsd(def.model, usage);
-        await store.noteGeneration(sessionId, failedUsd, true);
+        await store.noteGeneration(sessionId, failedUsd, true, weight);
         await store.appendCost({
           time: new Date().toISOString(),
           session: sessionId,
@@ -286,13 +299,18 @@ export async function serveGatewayRequest(
   const usd = costUsd(def.model, result.usage);
 
   // 7. Cache write, then (development only) the recorded copy of upstream.
-  await store.writeCache(def.route, def.model, key, keyInput, result.data);
+  // A route may refuse the cache for some answers (a SAM text over 512 KB
+  // is returned but not cached); the metering line below still records the
+  // generation, so the missing cache row shows in the costs.
+  if (def.cacheable === undefined || def.cacheable(result.data)) {
+    await store.writeCache(def.route, def.model, key, keyInput, result.data);
+  }
   if (config.record && source === "upstream" && deps.recordUpstream !== undefined) {
     deps.recordUpstream(def.route, def.model, key, keyInput, result.data);
   }
 
   // 8. Metering.
-  await store.noteGeneration(sessionId, usd, source === "upstream");
+  await store.noteGeneration(sessionId, usd, source === "upstream", weight);
   await store.appendCost({
     time: new Date().toISOString(),
     session: sessionId,

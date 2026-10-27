@@ -2,6 +2,15 @@
 
 All assets below are CC0-1.0. Credits are a courtesy.
 
+## Code: @meta-sam/parser
+
+- Package: `@meta-sam/parser` (used by `client/src/capture/sam.ts` to turn
+  SAM 3.1 segmentation text into mask instances)
+- Source: npm (`https://www.npmjs.com/package/@meta-sam/parser`)
+- License: SAM License (Meta's own, royalty-free; a copy ships with the app)
+- Files:
+  - client/public/licenses/SAM-LICENSE.txt
+
 ## sofa_02
 
 - Credit: Sofa 02 by Kirill Sannikov, Poly Haven (CC0)

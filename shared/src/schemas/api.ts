@@ -1,8 +1,9 @@
 /**
  * Gateway contracts for the small, safe Meta-model gateway.
  *
- * The gateway fronts three JSON routes (`POST /api/recommend`,
- * `POST /api/assistant`, `POST /api/render`) with one shared pipeline:
+ * The gateway fronts five JSON routes (`POST /api/recommend`,
+ * `POST /api/assistant`, `POST /api/render`, `POST /api/room/segment`,
+ * `POST /api/room/label`) with one shared pipeline:
  * demo store, cache, caps, upstream, cache write, metering.
  *
  * Until the follow-up tasks define each route's real request, prompt and
@@ -11,7 +12,7 @@
  * stable and will not change when the per-route bodies grow.
  */
 
-export type GatewayRoute = "recommend" | "assistant" | "render";
+export type GatewayRoute = "recommend" | "assistant" | "render" | "segment" | "label";
 
 /** Where an answer came from. Only `upstream` costs money. */
 export type GatewaySource = "upstream" | "cache" | "demo" | "mock";

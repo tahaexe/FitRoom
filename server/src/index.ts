@@ -14,6 +14,8 @@ import { createNodeStore } from "./meta/store.js";
 import { assistantRoutes, setAssistantCatalog } from "./routes/assistant.js";
 import { recommendRoutes } from "./routes/recommend.js";
 import { renderRoutes } from "./routes/render.js";
+import { roomLabelRoutes } from "./routes/room-label.js";
+import { roomSegmentRoutes } from "./routes/room-segment.js";
 
 function loadCatalog(): CatalogItem[] {
   const here = dirname(fileURLToPath(import.meta.url));
@@ -103,6 +105,8 @@ const gatewayDeps: PipelineDeps = {
 app.route("/api", recommendRoutes(gatewayDeps));
 app.route("/api", assistantRoutes(gatewayDeps));
 app.route("/api", renderRoutes(gatewayDeps));
+app.route("/api", roomSegmentRoutes(gatewayDeps));
+app.route("/api", roomLabelRoutes(gatewayDeps));
 
 const clientDistDir = fileURLToPath(new URL("../../client/dist/", import.meta.url));
 const clientIndexFile = resolve(clientDistDir, "index.html");

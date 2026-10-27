@@ -43,12 +43,14 @@ import { costUsd } from "../src/meta/pricing.js";
 import { assistantDef } from "../src/routes/assistant.js";
 import { recommendDef } from "../src/routes/recommend.js";
 import { renderDef } from "../src/routes/render.js";
+import { labelDef } from "../src/routes/room-label.js";
 import type { RouteDef } from "../src/meta/pipeline.js";
 
 const DEFS: Record<string, RouteDef> = {
   recommend: recommendDef,
   assistant: assistantDef,
   render: renderDef,
+  label: labelDef,
 };
 
 function fail(message: string): never {
@@ -161,7 +163,9 @@ async function main(): Promise<void> {
   const route = process.argv[2];
   const def = route === undefined ? undefined : DEFS[route];
   if (route === undefined || def === undefined) {
-    fail("usage: npm run demo:record -- <recommend|assistant|render> [1-based request numbers]");
+    fail(
+      "usage: npm run demo:record -- <recommend|assistant|render|label> [1-based request numbers]",
+    );
   }
   const only = new Set<number>();
   for (const arg of process.argv.slice(3)) {

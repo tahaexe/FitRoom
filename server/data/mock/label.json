@@ -1,0 +1,32 @@
+{
+  "data": {
+    "style": {
+      "tags": ["calm", "bright"],
+      "dominantColors": ["#E8E0D0", "#8A7A60"]
+    },
+    "floor": {
+      "family": "wood",
+      "description": "pale oak planks"
+    },
+    "walls": {
+      "family": "paint",
+      "description": "warm white paint"
+    },
+    "photos": [
+      {
+        "wall": "A",
+        "doors": 1,
+        "openDoorways": 0,
+        "windows": 0,
+        "glassDoors": 0,
+        "lookalikes": 0
+      }
+    ],
+    "uncertain": "The entrance door wall is plain and bright."
+  },
+  "usage": {
+    "prompt_tokens": 2400,
+    "completion_tokens": 8300,
+    "images": 1
+  }
+}

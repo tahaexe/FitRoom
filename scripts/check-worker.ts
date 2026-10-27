@@ -8,9 +8,10 @@
  * - `/` serves the app and a deep link falls back to it;
  * - `/api/health`;
  * - demo mode answers a stored request of each route from the bundle, and
- *   an unknown request of each route gets `demo-miss`;
+ *   an unknown request of each route gets `demo-miss` (segment answers
+ *   never enter the store, so every segment request is a miss);
  * - the same mock request twice writes one `mock` row then one `cache` row
- *   in D1;
+ *   in D1 (render plus both room routes);
  * - a session over its call cap gets 429 with the friendly text;
  * - the budget sum counts `upstream` rows only (mock SUM ignored, an
  *   inserted `upstream` row trips the global budget for live requests while
@@ -364,6 +365,24 @@ function sqlQuote(value: string): string {
   return `'${value.replace(/'/g, "''")}'`;
 }
 
+/** Synthetic test photos (same bytes as the server's room-label demo). */
+const TEST_JPEG_A = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAA=";
+const TEST_JPEG_B = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAE=";
+const TEST_JPEG_UNKNOWN = "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAI=";
+
+function roomSegmentBody(): unknown {
+  return { concept: "wall", image: TEST_JPEG_A };
+}
+
+function roomLabelDemoBody(): unknown {
+  return {
+    photos: [
+      { wall: "A", image: TEST_JPEG_A },
+      { wall: "B", image: TEST_JPEG_B },
+    ],
+  };
+}
+
 function missBody(route: string): unknown {
   if (route === "recommend") {
     return {
@@ -385,6 +404,12 @@ function missBody(route: string): unknown {
         readFileSync(join(repoRoot, "shared", "samples", "fit-tests", "valid.json"), "utf8"),
       ),
     };
+  }
+  if (route === "segment") {
+    return roomSegmentBody();
+  }
+  if (route === "label") {
+    return { photos: [{ wall: "A", image: TEST_JPEG_UNKNOWN }] };
   }
   return { prompt: "no such demo answer 000000" };
 }
@@ -538,6 +563,9 @@ async function main(): Promise<void> {
     }
 
     // 4c. Demo mode answers every route from the bundle; unknown is a miss.
+    // (The label demo input holds key hashes, so it replays from the
+    // shared test photos instead of the stored input; segment answers never
+    // enter the store, so every segment request is a miss.)
     {
       const routes = ["recommend", "assistant", "render"] as const;
       let demoOk = 0;
@@ -563,10 +591,32 @@ async function main(): Promise<void> {
           );
         }
       }
-      check("demo mode answers all three routes from the bundle", demoOk === 3);
+      const labelDemo = await jar.post("room/label", roomLabelDemoBody());
+      if (
+        labelDemo.status === 200 &&
+        isRecord(labelDemo.json) &&
+        labelDemo.json["status"] === "ok" &&
+        labelDemo.json["source"] === "demo"
+      ) {
+        demoOk += 1;
+      } else {
+        check(
+          "demo mode answers label from the bundle",
+          false,
+          JSON.stringify(labelDemo.json)?.slice(0, 200),
+        );
+      }
+      check("demo mode answers all four routes from the bundle", demoOk === 4);
       let missOk = 0;
-      for (const route of routes) {
-        const res = await jar.post(route, missBody(route));
+      const missRoutes = [
+        ["recommend", "recommend"],
+        ["assistant", "assistant"],
+        ["render", "render"],
+        ["room/segment", "segment"],
+        ["room/label", "label"],
+      ] as const;
+      for (const [path, route] of missRoutes) {
+        const res = await jar.post(path, missBody(route));
         if (
           res.status === 200 &&
           isRecord(res.json) &&
@@ -577,7 +627,7 @@ async function main(): Promise<void> {
           missOk += 1;
         }
       }
-      check("unknown demo requests get demo-miss", missOk === 3, `miss=${String(missOk)}`);
+      check("unknown demo requests get demo-miss", missOk === 5, `miss=${String(missOk)}`);
     }
 
     // 4d. Same mock request twice: mock, then cache.
@@ -598,6 +648,39 @@ async function main(): Promise<void> {
       );
     }
     const mockSession = (mockJar.cookie.split(";")[0] ?? "").replace("fitroom_sid=", "");
+
+    // 4d2. Both room routes answer mock then cache on the Worker too.
+    {
+      const roomJar = new Jar(base);
+      const segFirst = await roomJar.post("room/segment", roomSegmentBody(), { live: true });
+      const segSecond = await roomJar.post("room/segment", roomSegmentBody(), { live: true });
+      check(
+        "same segment request gives mock then cache",
+        segFirst.status === 200 &&
+          isRecord(segFirst.json) &&
+          segFirst.json["source"] === "mock" &&
+          isRecord(segFirst.json["data"]) &&
+          typeof (segFirst.json["data"] as Record<string, unknown>)["text"] === "string" &&
+          segSecond.status === 200 &&
+          isRecord(segSecond.json) &&
+          segSecond.json["source"] === "cache",
+        JSON.stringify({ first: segFirst.json, second: segSecond.json }).slice(0, 200),
+      );
+      // A non-demo body: the demo body would hit the demo store first.
+      const labBody = { photos: [{ wall: "C", image: TEST_JPEG_UNKNOWN }] };
+      const labFirst = await roomJar.post("room/label", labBody, { live: true });
+      const labSecond = await roomJar.post("room/label", labBody, { live: true });
+      check(
+        "same label request gives mock then cache",
+        labFirst.status === 200 &&
+          isRecord(labFirst.json) &&
+          labFirst.json["source"] === "mock" &&
+          labSecond.status === 200 &&
+          isRecord(labSecond.json) &&
+          labSecond.json["source"] === "cache",
+        JSON.stringify({ first: labFirst.json, second: labSecond.json }).slice(0, 200),
+      );
+    }
 
     // 4e. A session over its call cap gets 429.
     {

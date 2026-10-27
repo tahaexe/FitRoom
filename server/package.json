@@ -14,6 +14,7 @@
     "check:recommend": "tsx scripts/check-recommend.ts",
     "check:assistant": "tsx scripts/check-assistant.ts",
     "check:render": "tsx scripts/check-render.ts",
+    "check:room-api": "tsx scripts/check-room-api.ts",
     "demo:record": "tsx scripts/record-demo.ts",
     "demo:import": "tsx scripts/import-demo.ts"
   },

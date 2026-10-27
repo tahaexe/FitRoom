@@ -9,7 +9,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:f
 import { join } from "node:path";
 import { loadGatewayConfig } from "../src/config.js";
 
-const ROUTES = ["recommend", "assistant", "render"];
+const ROUTES = ["recommend", "assistant", "render", "label"];
 
 function main(): void {
   const config = loadGatewayConfig();

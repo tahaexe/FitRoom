@@ -31,3 +31,4 @@ export * from "./schemas/index.js";
 export * from "./validate.js";
 export * from "./recommend/index.js";
 export * from "./render/index.js";
+export * from "./room-label.js";

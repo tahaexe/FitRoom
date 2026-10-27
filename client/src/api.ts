@@ -59,7 +59,7 @@ function toResult(payload: GatewayResponse): ApiResult {
 }
 
 async function postGateway(
-  route: "recommend" | "assistant" | "render",
+  route: "recommend" | "assistant" | "render" | "room/segment" | "room/label",
   body: Record<string, unknown>,
 ): Promise<ApiResult> {
   let res: Response;
@@ -100,6 +100,14 @@ export function postAssistant(body: Record<string, unknown>): Promise<ApiResult>
 
 export function postRender(body: Record<string, unknown>): Promise<ApiResult> {
   return postGateway("render", body);
+}
+
+export function postSegment(body: Record<string, unknown>): Promise<ApiResult> {
+  return postGateway("room/segment", body);
+}
+
+export function postLabel(body: Record<string, unknown>): Promise<ApiResult> {
+  return postGateway("room/label", body);
 }
 
 /** Bind the top bar's Live AI switch (off = "Demo"). */

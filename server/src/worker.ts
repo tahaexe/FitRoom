@@ -28,6 +28,8 @@ import { createD1Store, type D1DatabaseLike, type MockAnswer } from "./meta/stor
 import { assistantRoutes, setAssistantCatalog } from "./routes/assistant.js";
 import { recommendRoutes } from "./routes/recommend.js";
 import { renderRoutes } from "./routes/render.js";
+import { roomLabelRoutes } from "./routes/room-label.js";
+import { roomSegmentRoutes } from "./routes/room-segment.js";
 
 export interface WorkerEnv {
   DB: D1DatabaseLike;
@@ -97,6 +99,8 @@ export default {
     app.route("/api", recommendRoutes(deps));
     app.route("/api", assistantRoutes(deps));
     app.route("/api", renderRoutes(deps));
+    app.route("/api", roomSegmentRoutes(deps));
+    app.route("/api", roomLabelRoutes(deps));
     return app.fetch(request, env);
   },
 };

@@ -16,13 +16,20 @@ export function newSessionId(): string {
 }
 
 interface SessionState {
+  /** Fractional generations: a SAM request counts 0.2. */
   generations: number;
   usd: number;
 }
 
+/** One rate-limit hit with its fractional weight. */
+export interface RateHit {
+  at: number;
+  weight: number;
+}
+
 export interface CapsState {
   sessions: Map<string, SessionState>;
-  rateHits: Map<string, number[]>;
+  rateHits: Map<string, RateHit[]>;
 }
 
 export function createCapsState(): CapsState {
@@ -38,12 +45,17 @@ function sessionOf(state: CapsState, sessionId: string): SessionState {
   return entry;
 }
 
-/** Sliding-window rate check; records the hit and returns true when allowed. */
+/**
+ * Sliding-window rate check; records the weighted hit and returns true when
+ * allowed. Weights are fractional (a SAM request weighs 0.2), with a small
+ * epsilon so five 0.2 requests weigh exactly one call.
+ */
 export function checkRateLimit(
   state: CapsState,
   limitPerMinute: number,
   ip: string,
   nowMs: number,
+  weight = 1,
 ): boolean {
   const windowStart = nowMs - 60_000;
   let hits = state.rateHits.get(ip);
@@ -51,9 +63,10 @@ export function checkRateLimit(
     hits = [];
     state.rateHits.set(ip, hits);
   }
-  while (hits.length > 0 && (hits[0] ?? 0) <= windowStart) hits.shift();
-  if (hits.length >= limitPerMinute) return false;
-  hits.push(nowMs);
+  while (hits.length > 0 && (hits[0]?.at ?? 0) <= windowStart) hits.shift();
+  const spent = hits.reduce((sum, hit) => sum + hit.weight, 0);
+  if (spent + weight > limitPerMinute + 1e-9) return false;
+  hits.push({ at: nowMs, weight });
   return true;
 }
 
@@ -78,9 +91,10 @@ export function checkGenerationCap(
   limits: CapLimits,
   sessionId: string,
   isMock: boolean,
+  weight = 1,
 ): CapVerdict {
   const session = sessionOf(state, sessionId);
-  if (session.generations >= limits.sessionMaxCalls) {
+  if (session.generations + weight > limits.sessionMaxCalls + 1e-9) {
     return { ok: false, reason: "session-calls" };
   }
   if (session.usd >= limits.sessionMaxUsd) return { ok: false, reason: "session-usd" };
@@ -90,8 +104,8 @@ export function checkGenerationCap(
   return { ok: true };
 }
 
-export function noteGeneration(state: CapsState, sessionId: string, usd: number): void {
+export function noteGeneration(state: CapsState, sessionId: string, usd: number, weight = 1): void {
   const session = sessionOf(state, sessionId);
-  session.generations += 1;
+  session.generations = Math.round((session.generations + weight) * 1_000_000) / 1_000_000;
   session.usd = Math.round((session.usd + usd) * 1_000_000) / 1_000_000;
 }

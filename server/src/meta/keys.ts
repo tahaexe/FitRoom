@@ -112,6 +112,14 @@ function sha256HexBytes(input: Uint8Array): string {
     .join("");
 }
 
+/**
+ * SHA-256 hex of a string (byte-identical to Web Crypto's SHA-256 over the
+ * UTF-8 bytes, so keys match on Node and in the Worker).
+ */
+export function sha256Hex(text: string): string {
+  return sha256HexBytes(utf8Bytes(text));
+}
+
 export function gatewayKey(route: string, model: string, keyInput: unknown): string {
   const canonical = JSON.stringify(canonicalize(keyInput));
   return sha256HexBytes(utf8Bytes(`${route}\n${model}\n${canonical}`));
