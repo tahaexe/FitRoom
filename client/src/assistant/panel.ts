@@ -598,19 +598,24 @@ export class AssistantPanel {
         thumb.className = "furnish-thumb";
         thumb.src = row.thumbnail;
         thumb.alt = "";
+        // Name + style chip stack on the left (the name wraps); the price
+        // stays right-aligned on the row's first line, so nothing overlaps.
+        const meta = document.createElement("div");
+        meta.className = "furnish-meta";
         const name = document.createElement("span");
         name.className = "furnish-name";
         name.textContent = row.name;
-        const price = document.createElement("span");
-        price.className = "furnish-price";
-        price.textContent = `$${String(row.price.toLocaleString("en-US"))}`;
-        item.append(thumb, name, price);
+        meta.appendChild(name);
         if (row.styleMatch) {
           const chip = document.createElement("span");
           chip.className = "furnish-style-chip";
           chip.textContent = briefStyleChip(brief.style);
-          item.appendChild(chip);
+          meta.appendChild(chip);
         }
+        const price = document.createElement("span");
+        price.className = "furnish-price";
+        price.textContent = `$${String(row.price.toLocaleString("en-US"))}`;
+        item.append(thumb, meta, price);
         list.appendChild(item);
       }
       box.appendChild(list);
