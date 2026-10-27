@@ -406,6 +406,19 @@
   color: var(--muted);
 }
 
+.editor-fields .source-mark {
+  margin: 8px 0 12px;
+}
+
+.editor-plan-svg .editor-focusable {
+  cursor: pointer;
+}
+
+.editor-plan-svg .editor-focusable:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
+}
+
 /* ---- header room menu: pill with the current room's name ---- */
 
 .room-menu {

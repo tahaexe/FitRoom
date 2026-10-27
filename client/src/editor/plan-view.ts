@@ -17,6 +17,19 @@ export interface EditorPlanActions {
   previewOpeningOffset(openingId: string, offsetCm: number): void;
   endDrag(): void;
   cancelDrag(): void;
+  removeOpening(openingId: string): void;
+  removePiece(pieceId: string): void;
+}
+
+export function openingName(room: RoomLayout, opening: Opening): string {
+  const wallIndex = room.walls.findIndex((w) => w.id === opening.wallId) + 1;
+  const kind = opening.type === "door" ? "Door" : "Window";
+  return `${kind} on wall ${String(wallIndex)}, ${String(Math.round(opening.width))} cm`;
+}
+
+export function pieceName(piece: ExistingPiece): string {
+  const label = piece.label === "" ? "My piece" : piece.label;
+  return `${label}, ${String(Math.round(piece.footprint.w))} by ${String(Math.round(piece.footprint.d))} cm`;
 }
 
 const NS = "http://www.w3.org/2000/svg";
@@ -149,6 +162,49 @@ export class EditorPlanView {
       minZ = 0;
       maxZ = 350;
     }
+    const centroid = centroidOf(room);
+    const grow = (x: number, z: number): void => {
+      if (x < minX) minX = x;
+      if (x > maxX) maxX = x;
+      if (z < minZ) minZ = z;
+      if (z > maxZ) maxZ = z;
+    };
+    // Door swing arcs sweep a full quadrant of radius `width` around the
+    // hinge: include the whole disc so an outward swing is never cut, and
+    // the opening label sitting clear of the leaf and arc.
+    for (const opening of room.openings) {
+      const wall = room.walls.find((w) => w.id === opening.wallId);
+      if (wall === undefined) continue;
+      if (opening.type === "door") {
+        const hingeAt = opening.hinge === "left" ? opening.offset : opening.offset + opening.width;
+        const hinge = along(wall, hingeAt);
+        const r = opening.width;
+        grow(hinge.x - r, hinge.z - r);
+        grow(hinge.x + r, hinge.z + r);
+      }
+      const inward = inwardOf(wall, centroid);
+      const mid = along(wall, opening.offset + opening.width / 2);
+      const labelSide =
+        opening.type === "door"
+          ? opening.swing === "in"
+            ? { x: -inward.x, z: -inward.z }
+            : inward
+          : inward;
+      grow(mid.x + labelSide.x * 60, mid.z + labelSide.z * 60);
+    }
+    // Length pills sit 42 cm outside each wall: include their anchors with
+    // room for the whole pill.
+    for (const wall of room.walls) {
+      const len = wallLen(wall);
+      if (len < 1) continue;
+      const mid = along(wall, len / 2);
+      let ox = mid.x - centroid.x;
+      let oz = mid.z - centroid.z;
+      const outLen = Math.hypot(ox, oz) || 1;
+      ox /= outLen;
+      oz /= outLen;
+      grow(mid.x + ox * 110, mid.z + oz * 110);
+    }
     // SVG y runs down: y = -z, so the top is -(maxZ + pad).
     return [minX - PAD_CM, -(maxZ + PAD_CM), maxX - minX + PAD_CM * 2, maxZ - minZ + PAD_CM * 2];
   }
@@ -178,9 +234,7 @@ export class EditorPlanView {
       const wall = room.walls.find((w) => w.id === opening.wallId);
       if (wall === undefined) continue;
       const selected = selection?.kind === "opening" && selection.id === opening.id;
-      for (const node of this.openingNodes(opening, wall, centroid, selected)) {
-        this.svg.appendChild(node);
-      }
+      this.svg.appendChild(this.openingGroup(room, opening, wall, centroid, selected));
     }
     for (const piece of room.existing) {
       const selected = selection?.kind === "piece" && selection.id === piece.id;
@@ -233,14 +287,15 @@ export class EditorPlanView {
     gap.setAttribute("stroke-width", String(WALL_STROKE_CM + 3));
     nodes.push(gap);
 
-    // Fat transparent hit area for drag + touch selection.
+    // Fixed-thickness transparent hit line for drag + touch selection,
+    // the same easy grab as the walls' hit lines.
     const hit = document.createElementNS(NS, "line");
     hit.setAttribute("x1", fmt(p0.x));
     hit.setAttribute("y1", fmt(-p0.z));
     hit.setAttribute("x2", fmt(p1.x));
     hit.setAttribute("y2", fmt(-p1.z));
     hit.setAttribute("class", "editor-hit");
-    hit.setAttribute("stroke-width", String(Math.max(HIT_STROKE_CM, opening.width)));
+    hit.setAttribute("stroke-width", String(HIT_STROKE_CM));
     hit.dataset["openingId"] = opening.id;
     nodes.push(hit);
 
@@ -281,9 +336,17 @@ export class EditorPlanView {
       }
     }
 
+    // Labels sit clear of leaves and swing arcs: doors label from the
+    // side opposite their swing, windows keep the inward side.
+    const labelSide =
+      opening.type === "door"
+        ? opening.swing === "in"
+          ? { x: -inward.x, z: -inward.z }
+          : inward
+        : inward;
     const label = document.createElementNS(NS, "text");
-    label.setAttribute("x", fmt(mid.x + inward.x * 22));
-    label.setAttribute("y", fmt(-(mid.z + inward.z * 22)));
+    label.setAttribute("x", fmt(mid.x + labelSide.x * 34));
+    label.setAttribute("y", fmt(-(mid.z + labelSide.z * 34)));
     label.setAttribute(
       "class",
       selected ? "editor-opening-label selected" : "editor-opening-label",
@@ -326,9 +389,51 @@ export class EditorPlanView {
     return arc;
   }
 
+  /** Focusable wrapper for one opening: Enter/Space selects, Delete removes like the Details button. */
+  private openingGroup(
+    room: RoomLayout,
+    opening: Opening,
+    wall: Wall,
+    centroid: Vec,
+    selected: boolean,
+  ): SVGElement {
+    const group = document.createElementNS(NS, "g");
+    group.dataset["openingId"] = opening.id;
+    group.setAttribute("tabindex", "0");
+    group.setAttribute("role", "button");
+    group.setAttribute("aria-label", openingName(room, opening));
+    group.setAttribute("class", selected ? "editor-focusable selected" : "editor-focusable");
+    for (const node of this.openingNodes(opening, wall, centroid, selected)) {
+      group.appendChild(node);
+    }
+    group.addEventListener("keydown", (event: KeyboardEvent) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        this.actions.select({ kind: "opening", id: opening.id });
+      } else if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        this.actions.removeOpening(opening.id);
+      }
+    });
+    return group;
+  }
+
   private pieceNode(piece: ExistingPiece, selected: boolean): SVGElement {
     const group = document.createElementNS(NS, "g");
     group.dataset["pieceId"] = piece.id;
+    group.setAttribute("tabindex", "0");
+    group.setAttribute("role", "button");
+    group.setAttribute("aria-label", pieceName(piece));
+    group.setAttribute("class", selected ? "editor-focusable selected" : "editor-focusable");
+    group.addEventListener("keydown", (event: KeyboardEvent) => {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        this.actions.select({ kind: "piece", id: piece.id });
+      } else if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
+        this.actions.removePiece(piece.id);
+      }
+    });
     const corners = pieceCorners(piece);
     const poly = document.createElementNS(NS, "polygon");
     poly.setAttribute("points", corners.map((c) => `${fmt(c.x)},${fmt(-c.z)}`).join(" "));

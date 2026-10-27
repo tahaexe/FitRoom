@@ -154,6 +154,8 @@ export class RoomEditor {
         dragCheckpointed = false;
         this.store.undo();
       },
+      removeOpening: (openingId) => this.removeOpening(openingId),
+      removePiece: (pieceId) => this.removePiece(pieceId),
     });
     this.unsubscribe = this.store.subscribe(() => this.renderPanels());
     this.renderPanels();
@@ -246,6 +248,24 @@ export class RoomEditor {
     });
     this.store.commit(next);
     this.store.select({ kind: "piece", id });
+  }
+
+  /** Same removal as the Details "Remove this …" button, for the plan's Delete key. */
+  private removeOpening(openingId: string): void {
+    const next = cloneRoom(this.store.room);
+    if (!next.openings.some((o) => o.id === openingId)) return;
+    next.openings = next.openings.filter((o) => o.id !== openingId);
+    this.store.commit(next);
+    this.store.select(null);
+  }
+
+  /** Same removal as the Details "Remove this piece" button, for the plan's Delete key. */
+  private removePiece(pieceId: string): void {
+    const next = cloneRoom(this.store.room);
+    if (!next.existing.some((p) => p.id === pieceId)) return;
+    next.existing = next.existing.filter((p) => p.id !== pieceId);
+    this.store.commit(next);
+    this.store.select(null);
   }
 
   private renderPanels(): void {

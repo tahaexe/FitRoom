@@ -39,10 +39,13 @@ export function emptyScene(roomId: string): SceneState {
   };
 }
 
-export function loadAutosave(roomId: string): SceneState | null {
+function roomAutosaveKey(roomId: string): string {
+  return `${AUTOSAVE_KEY}.${roomId}`;
+}
+
+function parseSceneState(raw: string | null, roomId: string): SceneState | null {
+  if (raw === null) return null;
   try {
-    const raw = window.localStorage.getItem(AUTOSAVE_KEY);
-    if (raw === null) return null;
     const parsed: unknown = JSON.parse(raw);
     if (typeof parsed !== "object" || parsed === null) return null;
     const state = parsed as SceneState;
@@ -53,9 +56,30 @@ export function loadAutosave(roomId: string): SceneState | null {
   }
 }
 
+export function loadAutosave(roomId: string): SceneState | null {
+  // Per-room key first; fall back to the legacy single-room key so a
+  // returning sample-room visit keeps its saved pieces.
+  const own = parseSceneState(
+    (() => {
+      try {
+        return window.localStorage.getItem(roomAutosaveKey(roomId));
+      } catch {
+        return null;
+      }
+    })(),
+    roomId,
+  );
+  if (own !== null) return own;
+  try {
+    return parseSceneState(window.localStorage.getItem(AUTOSAVE_KEY), roomId);
+  } catch {
+    return null;
+  }
+}
+
 export function saveAutosave(state: SceneState): void {
   try {
-    window.localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(state));
+    window.localStorage.setItem(roomAutosaveKey(state.roomId), JSON.stringify(state));
   } catch {
     // Storage may be unavailable; the app keeps working in memory.
   }
@@ -63,21 +87,16 @@ export function saveAutosave(state: SceneState): void {
 
 /** True when an autosave exists for the room (a returning visit). */
 export function hasAutosave(roomId: string): boolean {
-  try {
-    const raw = window.localStorage.getItem(AUTOSAVE_KEY);
-    if (raw === null) return false;
-    const parsed = JSON.parse(raw) as SceneState;
-    return parsed.roomId === roomId && Array.isArray(parsed.items);
-  } catch {
-    return false;
-  }
+  return loadAutosave(roomId) !== null;
 }
 
-/** Store with undo (Ctrl+Z) and autosave. */
+/** Store with undo (Ctrl+Z) and autosave. Each room keeps its own placed pieces and its own undo stack. */
 export class SceneStore {
   state: SceneState;
   private past: SceneState[] = [];
   private listeners = new Set<() => void>();
+  private rooms = new Map<string, SceneState>();
+  private roomPasts = new Map<string, SceneState[]>();
 
   constructor(roomId: string, fallback?: SceneState) {
     const saved = loadAutosave(roomId);
@@ -116,6 +135,24 @@ export class SceneStore {
   /** Replace state without pushing undo (remote restore / undo itself). */
   replace(next: SceneState): void {
     this.state = next;
+    this.emit();
+  }
+
+  /**
+   * Switch the store to another room: the current room's pieces and undo
+   * stack are stashed, and the target room's pieces (autosave, stashed, or
+   * fallback) become current with that room's own undo stack.
+   */
+  switchRoom(roomId: string, fallback?: SceneState): void {
+    if (roomId === this.state.roomId) return;
+    this.rooms.set(this.state.roomId, this.snapshot());
+    this.roomPasts.set(this.state.roomId, this.past);
+    const stashed = this.rooms.get(roomId);
+    const saved = stashed ?? loadAutosave(roomId) ?? fallback;
+    this.state =
+      saved === undefined ? emptyScene(roomId) : (JSON.parse(JSON.stringify(saved)) as SceneState);
+    this.state.roomId = roomId;
+    this.past = this.roomPasts.get(roomId) ?? [];
     this.emit();
   }
 

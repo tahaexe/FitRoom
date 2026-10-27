@@ -207,6 +207,8 @@ class FitRoomApp {
   private roomMenu: RoomMenu | null = null;
   private editing = false;
   private menuChoice = "sample";
+  /** Edited room layouts stashed by room id, so each room keeps its own walls, openings and own blocks. */
+  private savedRoomLayouts = new Map<string, RoomLayout>();
   private drag: { id: string; offsetX: number; offsetZ: number } | null = null;
   private rotating = false;
   /** Throttled live fit feedback while dragging (moved id, consumed once per frame). */
@@ -586,24 +588,61 @@ class FitRoomApp {
     });
   }
 
-  /** Header room menu: sample room, manual build, or reopen the editor. */
+  /** Stash the live room layout so switching rooms keeps each room's own walls, openings and blocks. */
+  private stashRoomLayout(): void {
+    this.savedRoomLayouts.set(ROOM.id, JSON.parse(JSON.stringify(ROOM)) as RoomLayout);
+  }
+
+  /** Stashed layout for a room id, or a fresh layout the first time the room opens. */
+  private roomLayoutFor(id: string, fresh: () => RoomLayout): RoomLayout {
+    const saved = this.savedRoomLayouts.get(id);
+    if (saved !== undefined) return JSON.parse(JSON.stringify(saved)) as RoomLayout;
+    return fresh();
+  }
+
+  /** Header room menu: sample room, manual build, or reopen the editor. Each room keeps its own placed pieces. */
   private pickRoom(id: string): void {
     if (id === "manual") {
-      this.menuChoice = "manual";
-      applyRoomLayout(ROOM, createManualRoom());
-      this.syncRoomId();
-      this.rebuildRoom();
-      this.editorStore?.load(ROOM);
-      this.openEditor();
+      if (ROOM.id !== "manual-room") {
+        this.stashRoomLayout();
+        applyRoomLayout(
+          ROOM,
+          this.roomLayoutFor("manual-room", () => createManualRoom()),
+        );
+        this.store.switchRoom(ROOM.id, emptyScene(ROOM.id));
+        this.select(null);
+        this.rebuildRoom();
+        this.editorStore?.load(ROOM);
+        this.openEditor();
+        this.menuChoice = "manual";
+      } else {
+        this.editorStore?.load(ROOM);
+        this.openEditor();
+      }
     } else if (id === "edit") {
       this.editorStore?.load(ROOM);
       this.openEditor();
     } else {
-      this.menuChoice = "sample";
-      applyRoomLayout(ROOM, SAMPLE_ROOM);
-      this.syncRoomId();
-      this.closeEditor();
-      this.rebuildRoom();
+      if (ROOM.id !== SAMPLE_ROOM.id) {
+        this.stashRoomLayout();
+        applyRoomLayout(
+          ROOM,
+          this.roomLayoutFor(
+            SAMPLE_ROOM.id,
+            () => JSON.parse(JSON.stringify(SAMPLE_ROOM)) as RoomLayout,
+          ),
+        );
+        const fallback = JSON.parse(JSON.stringify(validScene)) as SceneState;
+        fallback.roomId = ROOM.id;
+        this.store.switchRoom(ROOM.id, fallback);
+        this.select(null);
+        this.closeEditor();
+        this.rebuildRoom();
+        this.menuChoice = "sample";
+      } else {
+        this.closeEditor();
+        this.rebuildRoom();
+      }
     }
     this.refreshMenu();
   }
