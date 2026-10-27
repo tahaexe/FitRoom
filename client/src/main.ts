@@ -459,6 +459,7 @@ class FitRoomApp {
         swapItem: (oldInstanceId, productId, x, z, rotationY) =>
           this.swapRecommendation(oldInstanceId, productId, x, z, rotationY),
         selectItem: (id) => this.select(id),
+        showRecommend: () => this.showSidePanel("recommend"),
         resetDemoRoom: () => this.resetDemoRoom(),
         hoverRun: (run) => this.hoverRun(run),
       });

@@ -880,6 +880,16 @@ button.danger {
   background: var(--panel-bg);
 }
 
+.recommend-run[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+  border-style: dashed;
+}
+
+.recommend-run[disabled]:hover {
+  background: #ffffff;
+}
+
 .recommend-results {
   display: flex;
   flex-direction: column;
@@ -926,8 +936,12 @@ button.danger {
   background: var(--panel-bg);
 }
 
-.recommend-card .recommend-go {
-  margin-left: auto;
+.recommend-card-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.recommend-card-actions .recommend-go {
   flex: 0 0 auto;
 }
 

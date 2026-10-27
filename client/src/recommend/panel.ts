@@ -75,6 +75,8 @@ export interface RecommendDeps {
     rotationY: number,
   ) => void;
   selectItem: (instanceId: string | null) => void;
+  /** Bring the Recommend panel back to the front (selection shows the Inspector). */
+  showRecommend: () => void;
   resetDemoRoom: () => void;
   hoverRun: (run: FreeRun | null) => void;
 }
@@ -201,7 +203,8 @@ export class RecommendPanel {
     budget.type = "number";
     budget.name = "recommend-budget";
     budget.min = "0";
-    budget.placeholder = "Budget $ (optional)";
+    budget.placeholder = "Budget $";
+    budget.title = "Budget in USD (optional)";
     budget.setAttribute("aria-label", "Budget in USD (optional)");
     budget.value = this.budget;
     budget.addEventListener("input", () => {
@@ -329,7 +332,8 @@ export class RecommendPanel {
       );
       if (!known) {
         b.toggleAttribute("disabled", true);
-        b.title = `${b.textContent ?? ""} — Live AI`;
+        b.setAttribute("aria-disabled", "true");
+        b.title = `${b.textContent ?? ""} — needs Live AI (no stored demo answer)`;
       }
     }
   }
@@ -337,7 +341,8 @@ export class RecommendPanel {
   /** Mark one entry as needing Live AI after a demo-miss. */
   private disableRun(button: HTMLButtonElement): void {
     button.toggleAttribute("disabled", true);
-    button.title = `${button.textContent ?? ""} — Live AI`;
+    button.setAttribute("aria-disabled", "true");
+    button.title = `${button.textContent ?? ""} — needs Live AI (no stored demo answer)`;
   }
 
   private setLoading(on: boolean): void {
@@ -446,6 +451,9 @@ export class RecommendPanel {
     if (live === undefined) return;
     this.deps.selectItem(instanceId);
     this.setSelected(live);
+    // Selecting shows the Inspector; bring Recommend back so the
+    // replacements render in place, in this panel, at once.
+    this.deps.showRecommend();
     await this.askReplacement();
   }
 
@@ -632,11 +640,16 @@ export class RecommendPanel {
         go.toggleAttribute("disabled", true);
       });
     }
-    top.append(thumb, meta, go);
+    top.append(thumb, meta);
     const reason = document.createElement("p");
     reason.className = "recommend-reason";
     reason.textContent = item.reason;
-    card.append(top, reason);
+    // The single primary action lives on its own row under the text, so it
+    // can never cover the size line on a narrow panel.
+    const actions = document.createElement("div");
+    actions.className = "recommend-card-actions";
+    actions.appendChild(go);
+    card.append(top, reason, actions);
     return card;
   }
 
