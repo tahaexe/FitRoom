@@ -1,0 +1,306 @@
+{
+  "asset": {
+    "generator": "FitRoom Studio generate-fitroom-models.mjs",
+    "version": "2.0"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0,
+        1,
+        2
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "fitroom_floor_lamp-node-0"
+    },
+    {
+      "mesh": 1,
+      "name": "fitroom_floor_lamp-node-1"
+    },
+    {
+      "mesh": 2,
+      "name": "fitroom_floor_lamp-node-2"
+    }
+  ],
+  "materials": [
+    {
+      "name": "fitroom_floor_lamp-metal",
+      "pbrMetallicRoughness": {
+        "metallicFactor": 0.8,
+        "roughnessFactor": 0.4,
+        "baseColorFactor": [
+          0.05,
+          0.05,
+          0.06,
+          1
+        ]
+      }
+    },
+    {
+      "name": "fitroom_floor_lamp-shade",
+      "pbrMetallicRoughness": {
+        "metallicFactor": 0,
+        "roughnessFactor": 0.94,
+        "baseColorTexture": {
+          "index": 0
+        }
+      },
+      "normalTexture": {
+        "index": 1
+      },
+      "doubleSided": true
+    }
+  ],
+  "meshes": [
+    {
+      "name": "fitroom_floor_lamp-part-0",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0
+        }
+      ]
+    },
+    {
+      "name": "fitroom_floor_lamp-part-1",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 4,
+            "NORMAL": 5,
+            "TEXCOORD_0": 6
+          },
+          "indices": 7,
+          "material": 0
+        }
+      ]
+    },
+    {
+      "name": "fitroom_floor_lamp-part-2",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 8,
+            "NORMAL": 9,
+            "TEXCOORD_0": 10
+          },
+          "indices": 11,
+          "material": 1
+        }
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    },
+    {
+      "sampler": 0,
+      "source": 1
+    }
+  ],
+  "images": [
+    {
+      "mimeType": "image/jpeg",
+      "name": "Fabric040_1K-JPG_Color",
+      "uri": "../../../textures/ambientcg/Fabric040/Fabric040_1K-JPG_Color.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "Fabric040_1K-JPG_NormalGL",
+      "uri": "../../../textures/ambientcg/Fabric040/Fabric040_1K-JPG_NormalGL.jpg"
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 166,
+      "type": "VEC3",
+      "min": [
+        -0.2,
+        0,
+        -0.2
+      ],
+      "max": [
+        0.2,
+        0.02,
+        0.2
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 166,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 166,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 480,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5126,
+      "count": 86,
+      "type": "VEC3",
+      "min": [
+        -0.02,
+        0.02,
+        -0.02
+      ],
+      "max": [
+        0.02,
+        1.3,
+        0.02
+      ]
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5126,
+      "count": 86,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 6,
+      "componentType": 5126,
+      "count": 86,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 7,
+      "componentType": 5123,
+      "count": 240,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 8,
+      "componentType": 5126,
+      "count": 166,
+      "type": "VEC3",
+      "min": [
+        -0.18,
+        1.3,
+        -0.18
+      ],
+      "max": [
+        0.18,
+        1.6,
+        0.18
+      ]
+    },
+    {
+      "bufferView": 9,
+      "componentType": 5126,
+      "count": 166,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 10,
+      "componentType": 5126,
+      "count": 166,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 11,
+      "componentType": 5123,
+      "count": 480,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 1992
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1992,
+      "byteLength": 1992
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 3984,
+      "byteLength": 1328
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 5312,
+      "byteLength": 960
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 6272,
+      "byteLength": 1032
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 7304,
+      "byteLength": 1032
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 8336,
+      "byteLength": 688
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 9024,
+      "byteLength": 480
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 9504,
+      "byteLength": 1992
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 11496,
+      "byteLength": 1992
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 13488,
+      "byteLength": 1328
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 14816,
+      "byteLength": 960
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 15776,
+      "uri": "fitroom_floor_lamp.bin"
+    }
+  ]
+}

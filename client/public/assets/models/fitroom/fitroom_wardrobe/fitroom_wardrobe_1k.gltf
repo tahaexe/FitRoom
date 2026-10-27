@@ -1,0 +1,451 @@
+{
+  "asset": {
+    "generator": "FitRoom Studio generate-fitroom-models.mjs",
+    "version": "2.0"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Scene",
+      "nodes": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "mesh": 0,
+      "name": "fitroom_wardrobe-node-0"
+    },
+    {
+      "mesh": 1,
+      "name": "fitroom_wardrobe-node-1"
+    },
+    {
+      "mesh": 2,
+      "name": "fitroom_wardrobe-node-2"
+    },
+    {
+      "mesh": 3,
+      "name": "fitroom_wardrobe-node-3"
+    },
+    {
+      "mesh": 4,
+      "name": "fitroom_wardrobe-node-4"
+    }
+  ],
+  "materials": [
+    {
+      "name": "fitroom_wardrobe-wood",
+      "pbrMetallicRoughness": {
+        "metallicFactor": 0,
+        "roughnessFactor": 0.7,
+        "baseColorTexture": {
+          "index": 0
+        }
+      },
+      "normalTexture": {
+        "index": 1
+      }
+    },
+    {
+      "name": "fitroom_wardrobe-metal",
+      "pbrMetallicRoughness": {
+        "metallicFactor": 0.8,
+        "roughnessFactor": 0.4,
+        "baseColorFactor": [
+          0.08,
+          0.08,
+          0.09,
+          1
+        ]
+      }
+    }
+  ],
+  "meshes": [
+    {
+      "name": "fitroom_wardrobe-part-0",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0
+        }
+      ]
+    },
+    {
+      "name": "fitroom_wardrobe-part-1",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 4,
+            "NORMAL": 5,
+            "TEXCOORD_0": 6
+          },
+          "indices": 7,
+          "material": 0
+        }
+      ]
+    },
+    {
+      "name": "fitroom_wardrobe-part-2",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 8,
+            "NORMAL": 9,
+            "TEXCOORD_0": 10
+          },
+          "indices": 11,
+          "material": 0
+        }
+      ]
+    },
+    {
+      "name": "fitroom_wardrobe-part-3",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 12,
+            "NORMAL": 13,
+            "TEXCOORD_0": 14
+          },
+          "indices": 15,
+          "material": 1
+        }
+      ]
+    },
+    {
+      "name": "fitroom_wardrobe-part-4",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 16,
+            "NORMAL": 17,
+            "TEXCOORD_0": 18
+          },
+          "indices": 19,
+          "material": 1
+        }
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "sampler": 0,
+      "source": 0
+    },
+    {
+      "sampler": 0,
+      "source": 1
+    }
+  ],
+  "images": [
+    {
+      "mimeType": "image/jpeg",
+      "name": "WoodFloor051_1K-JPG_Color",
+      "uri": "../../../textures/ambientcg/WoodFloor051/WoodFloor051_1K-JPG_Color.jpg"
+    },
+    {
+      "mimeType": "image/jpeg",
+      "name": "WoodFloor051_1K-JPG_NormalGL",
+      "uri": "../../../textures/ambientcg/WoodFloor051/WoodFloor051_1K-JPG_NormalGL.jpg"
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3",
+      "min": [
+        -0.5,
+        0,
+        -0.30000000000000004
+      ],
+      "max": [
+        0.5,
+        2,
+        0.24000000000000002
+      ]
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3",
+      "min": [
+        -0.495,
+        0.020000000000000018,
+        0.24000000000000002
+      ],
+      "max": [
+        -0.0050000000000000044,
+        1.98,
+        0.28
+      ]
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 6,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 7,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 8,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3",
+      "min": [
+        0.0050000000000000044,
+        0.020000000000000018,
+        0.24000000000000002
+      ],
+      "max": [
+        0.495,
+        1.98,
+        0.28
+      ]
+    },
+    {
+      "bufferView": 9,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 10,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 11,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 12,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3",
+      "min": [
+        -0.060000000000000005,
+        0.9,
+        0.27999999999999997
+      ],
+      "max": [
+        -0.04,
+        1.1,
+        0.3
+      ]
+    },
+    {
+      "bufferView": 13,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 14,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 15,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 16,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3",
+      "min": [
+        0.04,
+        0.9,
+        0.27999999999999997
+      ],
+      "max": [
+        0.060000000000000005,
+        1.1,
+        0.3
+      ]
+    },
+    {
+      "bufferView": 17,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 18,
+      "componentType": 5126,
+      "count": 24,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 19,
+      "componentType": 5123,
+      "count": 36,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 288
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 288,
+      "byteLength": 288
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 576,
+      "byteLength": 192
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 768,
+      "byteLength": 72
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 840,
+      "byteLength": 288
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1128,
+      "byteLength": 288
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1416,
+      "byteLength": 192
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1608,
+      "byteLength": 72
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1680,
+      "byteLength": 288
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 1968,
+      "byteLength": 288
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 2256,
+      "byteLength": 192
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 2448,
+      "byteLength": 72
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 2520,
+      "byteLength": 288
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 2808,
+      "byteLength": 288
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 3096,
+      "byteLength": 192
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 3288,
+      "byteLength": 72
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 3360,
+      "byteLength": 288
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 3648,
+      "byteLength": 288
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 3936,
+      "byteLength": 192
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 4128,
+      "byteLength": 72
+    }
+  ],
+  "samplers": [
+    {
+      "magFilter": 9729,
+      "minFilter": 9987,
+      "wrapS": 10497,
+      "wrapT": 10497
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 4200,
+      "uri": "fitroom_wardrobe.bin"
+    }
+  ]
+}
