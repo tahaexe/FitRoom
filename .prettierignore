@@ -3,3 +3,5 @@ dist/
 package-lock.json
 client/public/assets/
 .tmp/
+server/src/meta/bundled-data.ts
+wrangler.deploy.jsonc

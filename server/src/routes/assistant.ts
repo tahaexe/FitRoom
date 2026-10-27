@@ -24,14 +24,8 @@ import {
   type AssistantToolCall,
   type CatalogItem,
 } from "@fitroom/shared";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { Hono } from "hono";
-import { buildAssistantDemoRequests } from "../assistant-demo.js";
-import { META_MODELS } from "../config.js";
-import { readDemoStore } from "../meta/demo.js";
-import { gatewayKey } from "../meta/keys.js";
+import { META_MODELS } from "../meta/models.js";
 import {
   callSpark,
   type ChatMessage,
@@ -52,17 +46,12 @@ export const ASSISTANT_FRIENDLY_ERROR =
 
 export const ASSISTANT_MAX_TOKENS = 8000;
 
-let catalogCache: CatalogItem[] | null = null;
+/** The product catalog, loaded from disk on Node and from the build-time bundle in the Worker. */
+export let assistantCatalog: CatalogItem[] = [];
 
-function loadCatalog(): CatalogItem[] {
-  if (catalogCache !== null) return catalogCache;
-  const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..", "shared");
-  const parsed: unknown = JSON.parse(
-    readFileSync(resolve(root, "catalog", "catalog.json"), "utf8"),
-  );
-  if (!Array.isArray(parsed)) throw new Error("Catalog is not an array.");
-  catalogCache = parsed as CatalogItem[];
-  return catalogCache;
+/** Set the catalog the assistant upstream calls rank against. */
+export function setAssistantCatalog(catalog: CatalogItem[]): void {
+  assistantCatalog = catalog;
 }
 
 function parseToolArguments(raw: string): Record<string, unknown> {
@@ -99,7 +88,7 @@ async function callAssistantRound(
   apiKey: string,
   input: AssistantRequest,
 ): Promise<UpstreamResult> {
-  const messages: ChatMessage[] = buildAssistantUpstreamMessages(input, loadCatalog());
+  const messages: ChatMessage[] = buildAssistantUpstreamMessages(input, assistantCatalog);
   let lengthRetried = false;
   let emptyRetried = false;
   const attempts: UpstreamResult["usage"][] = [];
@@ -179,12 +168,20 @@ export const assistantDef: RouteDef = {
 export function assistantRoutes(deps: PipelineDeps): Hono {
   const app = new Hono();
   app.post("/assistant", (c) => serveGatewayRequest(c, deps, assistantDef));
-  app.get("/assistant/demo-chips", (c) => {
+  app.get("/assistant/demo-chips", async (c) => {
+    // The stored first rounds (single-message turns) name the demo chips.
+    const seen = new Set<string>();
     const requests: string[] = [];
-    for (const first of buildAssistantDemoRequests()) {
-      const key = gatewayKey(assistantDef.route, assistantDef.model, assistantDef.keyInput(first));
-      if (readDemoStore(deps.config.dataDir, assistantDef.route, assistantDef.model, key)) {
-        requests.push(first.request);
+    for (const file of await deps.store.listDemo(assistantDef.route)) {
+      const input = file.input as { request?: unknown; messages?: unknown } | null | undefined;
+      if (
+        typeof input?.request === "string" &&
+        Array.isArray(input.messages) &&
+        input.messages.length === 1 &&
+        !seen.has(input.request)
+      ) {
+        seen.add(input.request);
+        requests.push(input.request);
       }
     }
     return c.json({ status: "ok", requests });

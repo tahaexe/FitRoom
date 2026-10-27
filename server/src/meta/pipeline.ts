@@ -7,7 +7,10 @@
  *   demo-store hit is used too (free).
  * - A cache hit makes no upstream call.
  * - Session caps count generations (upstream, or the mock fixture standing
- *   in for it); the global budget sums only `upstream` lines in costs.csv.
+ *   in for it); the global budget sums only `upstream` lines.
+ *
+ * All gateway state goes through the `GatewayStore`: files on Node, D1 in
+ * the Worker. This module itself has no Node imports.
  */
 
 import {
@@ -19,23 +22,16 @@ import {
 import type { Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import type { GatewayConfig } from "../config.js";
-import { readCache, writeCache } from "./cache.js";
-import {
-  SESSION_COOKIE,
-  checkGenerationCap,
-  checkRateLimit,
-  noteGeneration,
-  newSessionId,
-} from "./caps.js";
-import { readMockFixture, type UpstreamResult } from "./client.js";
+import { newSessionId } from "./caps.js";
+import type { UpstreamResult } from "./client.js";
 import { UpstreamFriendlyError } from "./errors.js";
 
 export { UpstreamFriendlyError };
-import { readDemoStore, writeRecorded } from "./demo.js";
 import { gatewayKey } from "./keys.js";
-import { appendCostLine } from "./metering.js";
 import { costUsd, emptyUsage } from "./pricing.js";
-import type { CapsState } from "./caps.js";
+import type { GatewayStore } from "./store.js";
+
+export const SESSION_COOKIE = "fitroom_sid";
 
 export interface ParsedBody {
   /** The route's typed input (the live flag already stripped). */
@@ -60,7 +56,24 @@ export interface RouteDef {
 
 export interface PipelineDeps {
   config: GatewayConfig;
-  caps: CapsState;
+  store: GatewayStore;
+  /**
+   * Client IP for the per-IP rate limit. Defaults to `x-forwarded-for`
+   * (Node, local use); the Worker passes `CF-Connecting-IP` and never
+   * trusts `X-Forwarded-For`.
+   */
+  clientIp?: (c: Context) => string;
+  /**
+   * Development-only recording of upstream answers (Node `META_RECORD=1`).
+   * The Worker never records.
+   */
+  recordUpstream?: (
+    route: string,
+    model: string,
+    key: string,
+    keyInput: unknown,
+    data: unknown,
+  ) => void;
 }
 
 function isLiveRequest(c: Context, body: unknown): boolean {
@@ -74,7 +87,7 @@ function isLiveRequest(c: Context, body: unknown): boolean {
   return false;
 }
 
-function clientIp(c: Context): string {
+function nodeClientIp(c: Context): string {
   const forwarded = c.req.header("x-forwarded-for");
   if (forwarded !== undefined && forwarded.trim() !== "") {
     const first = forwarded.split(",")[0]?.trim();
@@ -122,7 +135,8 @@ export async function serveGatewayRequest(
   deps: PipelineDeps,
   def: RouteDef,
 ): Promise<Response> {
-  const { config, caps } = deps;
+  const { config, store } = deps;
+  const clientIp = deps.clientIp ?? nodeClientIp;
   let body: unknown;
   try {
     body = await c.req.json();
@@ -143,10 +157,10 @@ export async function serveGatewayRequest(
   const key = gatewayKey(def.route, def.model, keyInput);
 
   // 1. Demo store (free in both modes).
-  const demo = readDemoStore(config.dataDir, def.route, def.model, key);
+  const demo = await store.readDemo(def.route, def.model, key);
   if (demo !== null) {
     const usage = { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, images: 0 };
-    appendCostLine(config.logsDir, {
+    await store.appendCost({
       time: new Date().toISOString(),
       session: sessionId,
       route: def.route,
@@ -181,10 +195,10 @@ export async function serveGatewayRequest(
   }
 
   // 4. Cache: a hit makes no upstream call.
-  const cached = readCache(config.dataDir, def.route, def.model, key);
+  const cached = await store.readCache(def.route, def.model, key);
   if (cached !== null) {
     const usage = { inputTokens: 0, cachedInputTokens: 0, outputTokens: 0, images: 0 };
-    appendCostLine(config.logsDir, {
+    await store.appendCost({
       time: new Date().toISOString(),
       session: sessionId,
       route: def.route,
@@ -208,26 +222,32 @@ export async function serveGatewayRequest(
   // 5. Rate limit plus caps before any generation. Demo-store and cache
   // hits are free and never count: only a live request that missed both may
   // go upstream, so replaying the demo chips never sees the capped message.
-  if (!checkRateLimit(caps, config, clientIp(c), Date.now())) {
+  if (!(await store.checkRateLimit(clientIp(c), config.ratePerMinutePerIp, Date.now()))) {
     return c.json(capped(), 429);
   }
   const isMock = config.mock;
-  if (!checkGenerationCap(caps, config, sessionId, isMock).ok) {
+  const cap = await store.checkGenerationCap(
+    sessionId,
+    isMock,
+    config.sessionMaxCalls,
+    config.sessionMaxUsd,
+    config.globalBudgetUsd,
+  );
+  if (!cap.ok) {
     return c.json(capped(), 429);
   }
 
   // 6. Generation: fixture in mock mode, Meta upstream otherwise.
   let result: UpstreamResult;
   if (isMock) {
-    try {
-      const fixture = readMockFixture(config.dataDir, def.route);
-      result = { data: fixture.data, usage: fixture.usage };
-    } catch {
+    const fixture = await store.readMock(def.route);
+    if (fixture === null) {
       return c.json(
         { status: "error", message: "The mock fixture is missing." } satisfies GatewayResponse,
         500,
       );
     }
+    result = { data: fixture.data, usage: fixture.usage };
   } else {
     if (config.apiKey === "") {
       return c.json(
@@ -244,8 +264,8 @@ export async function serveGatewayRequest(
         // — with the usage Meta reported — is still written.
         const usage = error.usage ?? emptyUsage();
         const failedUsd = costUsd(def.model, usage);
-        noteGeneration(caps, sessionId, failedUsd, true);
-        appendCostLine(config.logsDir, {
+        await store.noteGeneration(sessionId, failedUsd, true);
+        await store.appendCost({
           time: new Date().toISOString(),
           session: sessionId,
           route: def.route,
@@ -266,14 +286,14 @@ export async function serveGatewayRequest(
   const usd = costUsd(def.model, result.usage);
 
   // 7. Cache write, then (development only) the recorded copy of upstream.
-  writeCache(config.dataDir, def.route, def.model, key, keyInput, result.data);
-  if (config.record && source === "upstream") {
-    writeRecorded(config.dataDir, def.route, def.model, key, keyInput, result.data);
+  await store.writeCache(def.route, def.model, key, keyInput, result.data);
+  if (config.record && source === "upstream" && deps.recordUpstream !== undefined) {
+    deps.recordUpstream(def.route, def.model, key, keyInput, result.data);
   }
 
   // 8. Metering.
-  noteGeneration(caps, sessionId, usd, source === "upstream");
-  appendCostLine(config.logsDir, {
+  await store.noteGeneration(sessionId, usd, source === "upstream");
+  await store.appendCost({
     time: new Date().toISOString(),
     session: sessionId,
     route: def.route,

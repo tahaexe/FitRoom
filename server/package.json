@@ -6,9 +6,9 @@
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
-    "build": "tsc -p tsconfig.build.json",
-    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "dev": "tsx scripts/build-worker-data.ts && tsx watch src/index.ts",
+    "build": "tsx scripts/build-worker-data.ts && tsc -p tsconfig.build.json",
+    "typecheck": "tsx scripts/build-worker-data.ts && tsc --noEmit -p tsconfig.json",
     "start": "node dist/index.js",
     "check:gateway": "tsx scripts/check-gateway.ts",
     "check:recommend": "tsx scripts/check-recommend.ts",

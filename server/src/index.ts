@@ -1,17 +1,31 @@
 import "dotenv/config";
 import { existsSync, readFileSync } from "node:fs";
 import { readFile } from "node:fs/promises";
-import { extname, relative, resolve, sep } from "node:path";
+import { dirname, extname, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { serve } from "@hono/node-server";
 import { isHealthResponse, type HealthResponse } from "@fitroom/shared";
 import { Hono } from "hono";
+import type { CatalogItem } from "@fitroom/shared";
 import { loadGatewayConfig } from "./config.js";
-import { createCapsState } from "./meta/caps.js";
+import { writeRecorded } from "./meta/demo.js";
 import type { PipelineDeps } from "./meta/pipeline.js";
-import { assistantRoutes } from "./routes/assistant.js";
+import { createNodeStore } from "./meta/store.js";
+import { assistantRoutes, setAssistantCatalog } from "./routes/assistant.js";
 import { recommendRoutes } from "./routes/recommend.js";
 import { renderRoutes } from "./routes/render.js";
+
+function loadCatalog(): CatalogItem[] {
+  const here = dirname(fileURLToPath(import.meta.url));
+  // `src/index.ts` and the built `dist/index.js` both sit two levels below
+  // the repo root, next to `shared/`.
+  const root = resolve(here, "..", "..", "shared");
+  const parsed: unknown = JSON.parse(
+    readFileSync(resolve(root, "catalog", "catalog.json"), "utf8"),
+  );
+  if (!Array.isArray(parsed)) throw new Error("Catalog is not an array.");
+  return parsed as CatalogItem[];
+}
 
 function readServerVersion(): string {
   const fromNpm = process.env["npm_package_version"];
@@ -77,9 +91,14 @@ app.get("/api/health", (c) => {
 });
 
 // Small, safe Meta-model gateway: demo store, cache, caps, upstream, metering.
+const gatewayConfig = loadGatewayConfig();
+setAssistantCatalog(loadCatalog());
 const gatewayDeps: PipelineDeps = {
-  config: loadGatewayConfig(),
-  caps: createCapsState(),
+  config: gatewayConfig,
+  store: createNodeStore({ dataDir: gatewayConfig.dataDir, logsDir: gatewayConfig.logsDir }),
+  recordUpstream: (route, model, key, keyInput, data) => {
+    writeRecorded(gatewayConfig.dataDir, route, model, key, keyInput, data);
+  },
 };
 app.route("/api", recommendRoutes(gatewayDeps));
 app.route("/api", assistantRoutes(gatewayDeps));

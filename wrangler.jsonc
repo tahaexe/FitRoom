@@ -1,0 +1,30 @@
+{
+  // FitRoom on Cloudflare: one Worker serves the built client and the API,
+  // with the gateway's durable state in D1. Local use stays on Node
+  // (`npm run dev`, `npm start`); `npm run dev:worker` runs this Worker
+  // locally and `npm run deploy` (part B) ships it.
+  //
+  // No secrets here: the Meta key is a Worker secret named META_API_KEY,
+  // set by the deploy script from its own environment.
+  "name": "fitroom",
+  "main": "server/src/worker.ts",
+  "compatibility_date": "2026-10-26",
+  "compatibility_flags": ["nodejs_compat"],
+  "send_metrics": false,
+  "assets": {
+    "directory": "client/dist",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*"],
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "fitroom",
+      // Local-only placeholder: `npm run deploy` finds (or creates) the
+      // real database and writes its id into a generated, git-ignored
+      // config. Never commit a real id here.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "server/migrations",
+    },
+  ],
+}

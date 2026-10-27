@@ -2,6 +2,9 @@ node_modules/
 dist/
 .env
 .tmp/
+.wrangler/
 server/data/cache/
 server/data/recorded/
 server/logs/
+server/src/meta/bundled-data.ts
+wrangler.deploy.jsonc

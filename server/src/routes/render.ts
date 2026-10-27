@@ -13,7 +13,8 @@
 
 import { MAX_RENDER_PROMPT_CHARS, buildRenderKeyInput, renderRequestError } from "@fitroom/shared";
 import { Hono } from "hono";
-import { META_MODELS } from "../config.js";
+import { base64ToBytes } from "../meta/base64.js";
+import { META_MODELS } from "../meta/models.js";
 import { callImage, type UpstreamResult } from "../meta/client.js";
 import { UpstreamFriendlyError } from "../meta/errors.js";
 import {
@@ -38,9 +39,9 @@ function decodeJpegBase64(value: string): Uint8Array | null {
   try {
     const bare = stripDataUrl(value).trim();
     if (bare.length < 16) return null;
-    const bytes = Buffer.from(bare, "base64");
+    const bytes = base64ToBytes(bare);
     if (bytes.length < 32) return null;
-    return new Uint8Array(bytes);
+    return bytes;
   } catch {
     return null;
   }

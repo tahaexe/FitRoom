@@ -30,6 +30,47 @@ Client: http://localhost:5173 (proxies `/api` to the server). Server: http://loc
 - `npm run typecheck` — strict TypeScript check for every workspace.
 - `npm run lint` — ESLint plus a Prettier check.
 - `npm start` — serve the built API and the built client from one process.
+- `npm run dev:worker` — build everything and run the Cloudflare Worker locally.
+- `npm run check:worker` — end-to-end Worker check, all local (no Meta call, no account).
+- `npm run deploy` — ship the Worker to Cloudflare (needs credentials, part B).
+
+## Deploy
+
+The app also runs on Cloudflare's free Workers plan as one Worker that
+serves the built client and the API, with the gateway's durable state in
+D1. `wrangler.jsonc` at the repo root names the Worker (`fitroom`) and the
+D1 database (`fitroom`); `/api/*` runs the Worker first while every other
+path serves the built client with single-page-application fallback.
+
+Local Worker development needs no account:
+
+```sh
+npm run build
+npm run dev:worker
+```
+
+`npm run check:worker` builds the client and the Worker, applies the D1
+migrations locally, starts `wrangler dev` in-process with `META_MOCK=1`
+and checks the app, the API, demo/mock/cache behaviour, caps, the budget
+sum, restart persistence and the Worker's gzip size (under the free plan's
+3 MB limit).
+
+Deploying (part B, not run here) needs three values in the environment —
+never in a file, log or commit:
+
+- `CLOUDFLARE_API_TOKEN`
+- `CLOUDFLARE_ACCOUNT_ID`
+- `META_API_KEY` (becomes the Worker's `META_API_KEY` secret)
+
+```sh
+npm run deploy
+```
+
+The script finds the `fitroom` D1 database by name (or creates it),
+writes its id into the generated, git-ignored `wrangler.deploy.jsonc` so
+no account data is committed, applies `server/migrations/` remotely,
+pipes the Meta key to `wrangler secret put` on standard input (never on a
+command line, never printed), deploys, and prints the public URL.
 
 ## How it's built
 

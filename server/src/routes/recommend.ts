@@ -24,10 +24,9 @@ import {
   type RecommendRequest,
 } from "@fitroom/shared";
 import { Hono } from "hono";
-import { META_MODELS } from "../config.js";
+import { META_MODELS } from "../meta/models.js";
 import { callSpark, type ChatMessage, type UpstreamResult } from "../meta/client.js";
 import { emptyUsage } from "../meta/pricing.js";
-import { listDemoStore } from "../meta/demo.js";
 import {
   UpstreamFriendlyError,
   serveGatewayRequest,
@@ -113,9 +112,9 @@ export const recommendDef: RouteDef = {
 export function recommendRoutes(deps: PipelineDeps): Hono {
   const app = new Hono();
   app.post("/recommend", (c) => serveGatewayRequest(c, deps, recommendDef));
-  app.get("/recommend/demo-spots", (c) => {
+  app.get("/recommend/demo-spots", async (c) => {
     const spots: Array<{ wall: string; start_cm: number; end_cm: number }> = [];
-    for (const file of listDemoStore(deps.config.dataDir, recommendDef.route)) {
+    for (const file of await deps.store.listDemo(recommendDef.route)) {
       const input = file.input as {
         request?: {
           category?: unknown;

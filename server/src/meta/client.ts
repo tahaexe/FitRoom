@@ -23,11 +23,10 @@
  * of calling upstream. No live Meta calls happen in mock mode.
  */
 
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
-import { META_BASE_URL, META_MODELS } from "../config.js";
+import { META_BASE_URL, META_MODELS } from "./models.js";
 import { UpstreamFriendlyError } from "./errors.js";
-import { emptyUsage, usageFromUpstream, type TokenUsage } from "./pricing.js";
+import { base64ToBytes, bytesToBase64 } from "./base64.js";
+import { usageFromUpstream, type TokenUsage } from "./pricing.js";
 
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
@@ -145,7 +144,7 @@ export async function callSpark(
 }
 
 function dataUrlJpeg(bytes: Uint8Array): string {
-  return `data:image/jpeg;base64,${Buffer.from(bytes).toString("base64")}`;
+  return `data:image/jpeg;base64,${bytesToBase64(bytes)}`;
 }
 
 export const IMAGE_FRIENDLY_ERROR =
@@ -239,8 +238,7 @@ export async function callImage(
   let width = 0;
   let height = 0;
   try {
-    const bytes = Buffer.from(imageBase64, "base64");
-    const dims = webpDimensions(new Uint8Array(bytes));
+    const dims = webpDimensions(base64ToBytes(imageBase64));
     if (dims !== null) {
       width = dims.width;
       height = dims.height;
@@ -257,51 +255,5 @@ export async function callImage(
   };
 }
 
-// ---- mock fixtures -------------------------------------------------------
-
-export interface MockFixture {
-  data: unknown;
-  usage: TokenUsage;
-}
-
-const fixtureCache = new Map<string, MockFixture>();
-
-function fixtureUsage(raw: unknown): TokenUsage {
-  if (typeof raw !== "object" || raw === null) return emptyUsage();
-  const record = raw as Record<string, unknown>;
-  const pick = (obj: Record<string, unknown>, key: string): number =>
-    typeof obj[key] === "number" && Number.isFinite(obj[key]) ? (obj[key] as number) : 0;
-  const details = record["prompt_tokens_details"];
-  const nestedCached =
-    typeof details === "object" && details !== null
-      ? pick(details as Record<string, unknown>, "cached_tokens")
-      : 0;
-  return {
-    inputTokens: pick(record, "prompt_tokens"),
-    cachedInputTokens: nestedCached > 0 ? nestedCached : pick(record, "cached_tokens"),
-    outputTokens: pick(record, "completion_tokens"),
-    images: pick(record, "images"),
-  };
-}
-
-/** Mock answer for a route, from `server/data/mock/<route>.json`. */
-export function readMockFixture(dataDir: string, route: string): MockFixture {
-  const cached = fixtureCache.get(`${dataDir}\n${route}`);
-  if (cached !== undefined) return cached;
-  const parsed: unknown = JSON.parse(readFileSync(join(dataDir, "mock", `${route}.json`), "utf8"));
-  if (typeof parsed !== "object" || parsed === null) {
-    throw new Error(`Mock fixture for route ${route} is not an object`);
-  }
-  const record = parsed as Record<string, unknown>;
-  const fixture: MockFixture = {
-    data: "data" in record ? record["data"] : parsed,
-    usage: fixtureUsage(record["usage"]),
-  };
-  fixtureCache.set(`${dataDir}\n${route}`, fixture);
-  return fixture;
-}
-
-/** Test hook: drop cached fixtures (isolated check runs). */
-export function clearMockFixtures(): void {
-  fixtureCache.clear();
-}
+// Mock fixtures live in `./fixtures.js` on Node and in the build-time
+// bundle in the Worker; both are served through the gateway store.

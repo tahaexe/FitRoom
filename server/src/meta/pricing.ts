@@ -3,7 +3,7 @@
  * give USD. Only `upstream` lines cost money; everything else is free.
  */
 
-import { META_PRICES } from "../config.js";
+import { META_PRICES } from "./models.js";
 
 export interface TokenUsage {
   inputTokens: number;
@@ -18,6 +18,29 @@ export function emptyUsage(): TokenUsage {
 
 function nonNegative(value: unknown): number {
   return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
+}
+
+/**
+ * Normalise a mock fixture `usage` block to TokenUsage. Fixtures may carry
+ * either the nested OpenAI shape (`prompt_tokens_details.cached_tokens`)
+ * or a flat `cached_tokens` number.
+ */
+export function normalizeMockUsage(raw: unknown): TokenUsage {
+  if (typeof raw !== "object" || raw === null) return emptyUsage();
+  const record = raw as Record<string, unknown>;
+  const pick = (obj: Record<string, unknown>, key: string): number =>
+    typeof obj[key] === "number" && Number.isFinite(obj[key]) ? (obj[key] as number) : 0;
+  const details = record["prompt_tokens_details"];
+  const nestedCached =
+    typeof details === "object" && details !== null
+      ? pick(details as Record<string, unknown>, "cached_tokens")
+      : 0;
+  return {
+    inputTokens: pick(record, "prompt_tokens"),
+    cachedInputTokens: nestedCached > 0 ? nestedCached : pick(record, "cached_tokens"),
+    outputTokens: pick(record, "completion_tokens"),
+    images: pick(record, "images"),
+  };
 }
 
 /** Normalise an upstream `usage` block (OpenAI shape) to TokenUsage. */

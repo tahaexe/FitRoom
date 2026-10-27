@@ -3,17 +3,16 @@
  * per-IP rate limit. Over any cap the routes answer HTTP 429 with the
  * friendly capped copy. In mock mode the fixture stands in for upstream, so
  * mock generations count toward the session caps (they never touch the
- * global budget, which sums only `upstream` lines in costs.csv).
+ * global budget, which sums only `upstream` lines).
+ *
+ * This module holds the in-memory state behind the Node store
+ * (`store.ts`); the D1 store implements the same checks in SQL.
  */
 
-import { randomBytes } from "node:crypto";
-import type { GatewayConfig } from "../config.js";
-import { readUpstreamTotalUsd } from "./metering.js";
-
-export const SESSION_COOKIE = "fitroom_sid";
-
 export function newSessionId(): string {
-  return randomBytes(16).toString("hex");
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
 }
 
 interface SessionState {
@@ -24,12 +23,10 @@ interface SessionState {
 export interface CapsState {
   sessions: Map<string, SessionState>;
   rateHits: Map<string, number[]>;
-  /** Cached upstream total; null until first loaded from costs.csv. */
-  upstreamTotalUsd: number | null;
 }
 
 export function createCapsState(): CapsState {
-  return { sessions: new Map(), rateHits: new Map(), upstreamTotalUsd: null };
+  return { sessions: new Map(), rateHits: new Map() };
 }
 
 function sessionOf(state: CapsState, sessionId: string): SessionState {
@@ -41,10 +38,10 @@ function sessionOf(state: CapsState, sessionId: string): SessionState {
   return entry;
 }
 
-/** Sliding-window rate check; true when the request may proceed. */
+/** Sliding-window rate check; records the hit and returns true when allowed. */
 export function checkRateLimit(
   state: CapsState,
-  config: GatewayConfig,
+  limitPerMinute: number,
   ip: string,
   nowMs: number,
 ): boolean {
@@ -55,7 +52,7 @@ export function checkRateLimit(
     state.rateHits.set(ip, hits);
   }
   while (hits.length > 0 && (hits[0] ?? 0) <= windowStart) hits.shift();
-  if (hits.length >= config.ratePerMinutePerIp) return false;
+  if (hits.length >= limitPerMinute) return false;
   hits.push(nowMs);
   return true;
 }
@@ -63,12 +60,12 @@ export function checkRateLimit(
 export type CapVerdict =
   { ok: true } | { ok: false; reason: "session-calls" | "session-usd" | "global-budget" };
 
-function upstreamTotal(state: CapsState, config: GatewayConfig): number {
-  if (state.upstreamTotalUsd === null) {
-    // Read from costs.csv so the budget survives restarts.
-    state.upstreamTotalUsd = readUpstreamTotalUsd(config.logsDir);
-  }
-  return state.upstreamTotalUsd;
+export interface CapLimits {
+  sessionMaxCalls: number;
+  sessionMaxUsd: number;
+  globalBudgetUsd: number;
+  /** Sum of `upstream` USD; mock generations never check it. */
+  upstreamTotalUsd: number;
 }
 
 /**
@@ -78,29 +75,23 @@ function upstreamTotal(state: CapsState, config: GatewayConfig): number {
  */
 export function checkGenerationCap(
   state: CapsState,
-  config: GatewayConfig,
+  limits: CapLimits,
   sessionId: string,
   isMock: boolean,
 ): CapVerdict {
   const session = sessionOf(state, sessionId);
-  if (session.generations >= config.sessionMaxCalls) return { ok: false, reason: "session-calls" };
-  if (session.usd >= config.sessionMaxUsd) return { ok: false, reason: "session-usd" };
-  if (!isMock && upstreamTotal(state, config) >= config.globalBudgetUsd) {
+  if (session.generations >= limits.sessionMaxCalls) {
+    return { ok: false, reason: "session-calls" };
+  }
+  if (session.usd >= limits.sessionMaxUsd) return { ok: false, reason: "session-usd" };
+  if (!isMock && limits.upstreamTotalUsd >= limits.globalBudgetUsd) {
     return { ok: false, reason: "global-budget" };
   }
   return { ok: true };
 }
 
-export function noteGeneration(
-  state: CapsState,
-  sessionId: string,
-  usd: number,
-  isUpstream: boolean,
-): void {
+export function noteGeneration(state: CapsState, sessionId: string, usd: number): void {
   const session = sessionOf(state, sessionId);
   session.generations += 1;
   session.usd = Math.round((session.usd + usd) * 1_000_000) / 1_000_000;
-  if (isUpstream && state.upstreamTotalUsd !== null) {
-    state.upstreamTotalUsd = Math.round((state.upstreamTotalUsd + usd) * 1_000_000) / 1_000_000;
-  }
 }
