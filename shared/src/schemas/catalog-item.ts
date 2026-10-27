@@ -15,6 +15,7 @@ export const catalogItemSchema = {
         "ottoman",
         "coffee-table",
         "side-table",
+        "rug",
         "tv-unit",
         "shelf",
         "decor",

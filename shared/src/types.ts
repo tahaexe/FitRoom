@@ -140,6 +140,7 @@ export type CatalogCategory =
   | "ottoman"
   | "coffee-table"
   | "side-table"
+  | "rug"
   | "tv-unit"
   | "shelf"
   | "decor"

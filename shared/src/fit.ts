@@ -11,7 +11,8 @@
  * - overlap: two footprints, or a footprint and a fixture, overlap by more
  *   than 0.01 cm along every separating axis (the four edge normals of the
  *   two rectangles); for axis-aligned boxes this is "more than 0.01 cm on
- *   both axes". Rugs never fail overlap.
+ *   both axes". Rugs never fail overlap (other pieces may stand on them),
+ *   and walkways ignore rugs entirely.
  * - outside: a footprint corner passes a wall's inner face by more than 1 cm.
  * - door-swing: a footprint intersects the door's quarter disc (centre =
  *   hinge point, radius = door width, on the swing side): the rectangle is
@@ -1284,8 +1285,9 @@ export class FitEngine {
       }
     }
 
-    // ---- walkway ----
-    const footprints = order
+    // ---- walkway (rugs are floor cover, not blockage) ----
+    const solidRects = order
+      .filter((id) => !rug(id))
       .map((id) => rects.get(id))
       .filter((r): r is OrientedRect => r !== undefined);
     const movedSet = movedIds === undefined ? undefined : new Set(movedIds);
@@ -1294,7 +1296,7 @@ export class FitEngine {
       order.length === this.lastRects.size &&
       order.every((id) => this.lastRects.has(id));
     if (!sameSet) {
-      this.stampFull(footprints);
+      this.stampFull(solidRects);
       this.lastRects = new Map(rects);
     } else if (movedSet !== undefined) {
       const regions: FitRect[] = [];
@@ -1305,7 +1307,7 @@ export class FitEngine {
         if (newR !== undefined) regions.push(newR);
       }
       if (regions.length > 0) {
-        this.restampRegion(footprints, regions);
+        this.restampRegion(solidRects, regions);
       }
       this.lastRects = new Map(rects);
     }
@@ -1330,19 +1332,20 @@ export class FitEngine {
           const r = rects.get(id);
           return (
             r !== undefined &&
+            !rug(id) &&
             distPointOriented(startCentre.x, startCentre.z, r) < CIRC_GROWTH_CM - SLACK
           );
         });
         const sortedBlockers = [...blockers].sort();
         const firstBlocker = items.find((it) => it.instanceId === sortedBlockers[0]);
         const width = Math.round(
-          2 * clearanceAt(startCentre.x, startCentre.z, this.room.walls, footprints, this.fixtures),
+          2 * clearanceAt(startCentre.x, startCentre.z, this.room.walls, solidRects, this.fixtures),
         );
         const bp = nearestBlockPoint(
           startCentre.x,
           startCentre.z,
           this.room.walls,
-          footprints,
+          solidRects,
           this.fixtures,
         );
         let ex = startCentre.x - bp.x;
@@ -1476,7 +1479,7 @@ export class FitEngine {
                 c.x,
                 c.z,
                 this.room.walls,
-                footprints,
+                solidRects,
                 this.fixtures,
               );
             }
