@@ -1696,6 +1696,12 @@ class FitRoomApp {
     skip.addEventListener("click", done);
     bar.append(text, next, skip);
     this.container.appendChild(bar);
+    // Sit above the toolbar whatever its wrapped height is, so the bar
+    // never covers the Recommend or Arrange buttons.
+    const toolbar = this.container.querySelector(".bottom-toolbar");
+    const toolbarHeight =
+      toolbar instanceof HTMLElement ? toolbar.getBoundingClientRect().height : 52;
+    bar.style.bottom = `${String(Math.ceil(toolbarHeight) + 24)}px`;
     draw();
   }
 
@@ -1730,7 +1736,10 @@ class FitRoomApp {
     const id = this.selectedId;
     if (id === null) {
       const b = roomBounds(ROOM);
-      this.measureEl.textContent = `Room ${Math.round(b.maxX - b.minX)}×${Math.round(b.maxZ - b.minZ)}cm · ${this.store.state.items.length} piece(s)`;
+      const count = this.store.state.items.length;
+      this.measureEl.textContent =
+        `Room ${Math.round(b.maxX - b.minX)} × ${Math.round(b.maxZ - b.minZ)} cm · ` +
+        `${String(count)} ${count === 1 ? "item" : "items"}`;
       this.sizeTag.style.display = "none";
       return;
     }
