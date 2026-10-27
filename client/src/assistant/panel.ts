@@ -911,6 +911,9 @@ export class AssistantPanel {
     }
     const input = this.root.querySelector(".assistant-row input");
     if (input instanceof HTMLInputElement) input.toggleAttribute("disabled", on);
+    // Re-enabling must not wake demo-mode controls: the Furnish button
+    // stays disabled with the other fields until Live AI is on.
+    if (!on) this.syncMode();
   }
 
   /**
