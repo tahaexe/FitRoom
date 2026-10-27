@@ -49,6 +49,7 @@ export class Inspector {
     xLabel.textContent = "X (cm) ";
     const xInput = document.createElement("input");
     xInput.type = "number";
+    xInput.name = "position-x-cm";
     xInput.step = "5";
     xInput.value = String(Math.round(item.position.x));
     xInput.addEventListener("change", () => {
@@ -58,6 +59,7 @@ export class Inspector {
     zLabel.textContent = "Z (cm) ";
     const zInput = document.createElement("input");
     zInput.type = "number";
+    zInput.name = "position-z-cm";
     zInput.step = "5";
     zInput.value = String(Math.round(item.position.z));
     zInput.addEventListener("change", () => {
@@ -72,6 +74,7 @@ export class Inspector {
     rLabel.textContent = "Rotation (°) ";
     const rInput = document.createElement("input");
     rInput.type = "number";
+    rInput.name = "rotation-deg";
     rInput.step = "15";
     rInput.value = String(Math.round(item.rotationY));
     rInput.addEventListener("change", () => {
