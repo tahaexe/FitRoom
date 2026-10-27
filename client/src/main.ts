@@ -638,6 +638,13 @@ class FitRoomApp {
         this.menuChoice = "photos";
         this.openPhotoFlow();
       },
+      onTryExample: () => {
+        this.firstOpen?.hide();
+        if (this.menuChoice !== "photos") this.menuBeforePhotos = this.menuChoice;
+        this.menuChoice = "photos";
+        this.openPhotoFlow();
+        void this.photoFlow?.tryExample();
+      },
       onExploreSample: () => {
         this.firstOpen?.hide();
         this.menuChoice = "sample";

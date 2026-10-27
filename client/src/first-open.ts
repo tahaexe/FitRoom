@@ -29,6 +29,7 @@ export interface RoomSize {
 
 export interface FirstOpenCallbacks {
   onUsePhotos: () => void;
+  onTryExample: () => void;
   onExploreSample: () => void;
   onBuildRoom: (size: RoomSize) => void;
   onShapeInEditor: (size: RoomSize | null) => void;
@@ -153,6 +154,10 @@ export class FirstOpen {
     photoBtn.type = "button";
     photoBtn.addEventListener("click", () => this.callbacks.onUsePhotos());
     photoCard.appendChild(photoBtn);
+    const exampleBtn = el("button", "setup-secondary", "Try the example room");
+    exampleBtn.type = "button";
+    exampleBtn.addEventListener("click", () => this.callbacks.onTryExample());
+    photoCard.appendChild(exampleBtn);
 
     const sampleCard = el("article", "setup-card");
     sampleCard.append(

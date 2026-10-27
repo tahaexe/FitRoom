@@ -29,6 +29,7 @@
     "check:geometry": "tsx scripts/check-geometry.ts",
     "check:surfaces": "tsx scripts/check-surfaces.ts",
     "check:photo-intake": "npm run check:photo-intake -w @fitroom/client",
+    "check:example-room": "npm run check:example-room -w @fitroom/client",
     "check:guidance": "npm run check:guidance -w @fitroom/client",
     "check:orbit-resolution": "npm run check:orbit-resolution -w @fitroom/client",
     "check:pointer-ownership": "npm run check:pointer-ownership -w @fitroom/client",

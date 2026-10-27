@@ -23,16 +23,8 @@
   },
   "response": {
     "style": {
-      "tags": [
-        "minimalist",
-        "scandinavian",
-        "bright"
-      ],
-      "dominantColors": [
-        "#f2eee6",
-        "#d9c19a",
-        "#8a6742"
-      ]
+      "tags": ["minimalist", "scandinavian", "bright"],
+      "dominantColors": ["#f2eee6", "#d9c19a", "#8a6742"]
     },
     "floor": {
       "family": "wood",

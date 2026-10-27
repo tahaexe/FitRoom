@@ -29,6 +29,18 @@ import {
   type WallLetter,
 } from "@fitroom/shared";
 import { isLive, postLabel, setLive } from "../api";
+import {
+  EXAMPLE_LABEL_SIZE,
+  EXAMPLE_SEG_SIZE,
+  EXAMPLE_TAPE_A,
+  EXAMPLE_TAPE_B,
+  EXAMPLE_TAPE_NOTE,
+  EXAMPLE_ROOM_NAME,
+  exampleBadge,
+  exampleLabelUrl,
+  exampleSegUrl,
+  exampleWebpUrl,
+} from "./example";
 import { processPhotoFile, type IntakePhoto } from "./intake";
 import { clearPhoto, loadPhoto, savePhoto, type StoredPhoto } from "./photo-store";
 import {
@@ -89,6 +101,7 @@ interface WallState {
   tap: { x: number; y: number } | null;
   tapping: boolean;
   doorMarked: boolean;
+  example: boolean;
 }
 
 function emptyWallState(): WallState {
@@ -105,7 +118,25 @@ function emptyWallState(): WallState {
     tap: null,
     tapping: false,
     doorMarked: false,
+    example: false,
   };
+}
+
+function fetchDataUrl(url: string): Promise<string> {
+  return fetch(url)
+    .then((res) => {
+      if (!res.ok) throw new Error(`The example photo is missing (${url}).`);
+      return res.blob();
+    })
+    .then(
+      (blob) =>
+        new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onerror = () => reject(new Error("The example photo could not be read."));
+          reader.onload = () => resolve(String(reader.result));
+          reader.readAsDataURL(blob);
+        }),
+    );
 }
 
 function toMark(source: Uncertain["source"], plusMinus: number): WallSourceMark {
@@ -236,6 +267,9 @@ export class PhotoFlow {
   private tapeA = "";
   private tapeB = "";
   private tapeError: string | null = null;
+  private exampleMode = false;
+  private exampleLoading = false;
+  private readonly exampleDisplay = new Map<WallLetter, string>();
   private buildMessage = "Solving your room…";
   private buildError: string | null = null;
 
@@ -282,6 +316,106 @@ export class PhotoFlow {
         console.error(`Restoring the photo for wall ${letter} failed.`, error);
       }
     }
+    this.render();
+  }
+
+  private anyIntake(): boolean {
+    return WALL_ORDER.some((letter) => this.stateOf(letter).intake !== null);
+  }
+
+  private refreshExampleMode(): void {
+    this.exampleMode = WALL_ORDER.some((letter) => this.stateOf(letter).example);
+  }
+
+  /**
+   * "Try the example room": load the four generated example photos, prefill
+   * the tapes from the example's tape measurements, and replay every
+   * analysis from the demo store (no upstream call in demo mode).
+   */
+  async tryExample(): Promise<void> {
+    if (this.exampleLoading) return;
+    this.exampleLoading = true;
+    this.exampleMode = true;
+    this.tapeA = EXAMPLE_TAPE_A;
+    this.tapeB = EXAMPLE_TAPE_B;
+    this.tapeError = null;
+    this.step = "capture";
+    this.wallIndex = 0;
+    for (const letter of WALL_ORDER) {
+      const state = this.stateOf(letter);
+      state.error = null;
+      state.demoMiss = false;
+      state.reading = true;
+    }
+    this.render();
+    for (const letter of WALL_ORDER) {
+      const state = this.stateOf(letter);
+      try {
+        const [segUrl, labelUrl] = await Promise.all([
+          fetchDataUrl(exampleSegUrl(letter)),
+          fetchDataUrl(exampleLabelUrl(letter)),
+        ]);
+        try {
+          const webp = await fetch(exampleWebpUrl(letter));
+          if (webp.ok) {
+            const blob = await webp.blob();
+            if (typeof URL !== "undefined" && typeof URL.createObjectURL === "function") {
+              this.exampleDisplay.set(letter, URL.createObjectURL(blob));
+            }
+          }
+        } catch {
+          // The preview falls back to the labelled photo below.
+        }
+        const stored: StoredPhoto = {
+          segUrl,
+          segWidth: EXAMPLE_SEG_SIZE.width,
+          segHeight: EXAMPLE_SEG_SIZE.height,
+          labelUrl,
+          labelWidth: EXAMPLE_LABEL_SIZE.width,
+          labelHeight: EXAMPLE_LABEL_SIZE.height,
+          orientation: 1,
+          focal35mm: undefined,
+          wall: letter,
+          savedAt: Date.now(),
+        };
+        try {
+          await savePhoto(stored);
+        } catch (saveError) {
+          console.warn("Keeping the example photo in memory: saving it failed.", saveError);
+        }
+        state.photo = stored;
+        state.intake = {
+          segUrl,
+          segWidth: EXAMPLE_SEG_SIZE.width,
+          segHeight: EXAMPLE_SEG_SIZE.height,
+          labelUrl,
+          labelWidth: EXAMPLE_LABEL_SIZE.width,
+          labelHeight: EXAMPLE_LABEL_SIZE.height,
+          orientation: 1,
+          focal35mm: undefined,
+        };
+        state.analysis = null;
+        state.tap = null;
+        state.doorMarked = false;
+        state.example = true;
+      } catch (error) {
+        console.error(`Loading the example photo for wall ${letter} failed.`, error);
+        state.error = "The example room could not be loaded. Please try again.";
+        state.example = false;
+      } finally {
+        state.reading = false;
+      }
+      this.render();
+    }
+    for (const letter of WALL_ORDER) {
+      if (this.stateOf(letter).intake !== null) {
+        await this.analyse(letter, null);
+      }
+    }
+    this.exampleLoading = false;
+    this.refreshExampleMode();
+    this.step = "tape";
+    this.wallIndex = 0;
     this.render();
   }
 
@@ -383,6 +517,19 @@ export class PhotoFlow {
         live.addEventListener("click", () => setLive(true));
         host.appendChild(live);
       }
+      if (this.wallIndex === 0 && !this.anyIntake() && !this.exampleLoading) {
+        const exampleHint = document.createElement("p");
+        exampleHint.className = "photo-sheet-note";
+        exampleHint.textContent =
+          "Or try four generated photos of a 420 × 360 cm room, analysed free from the demo store.";
+        const example = document.createElement("button");
+        example.type = "button";
+        example.className = "photo-example";
+        example.textContent = this.exampleLoading ? "Loading the example…" : "Try the example room";
+        example.disabled = this.exampleLoading;
+        example.addEventListener("click", () => void this.tryExample());
+        host.append(exampleHint, example);
+      }
       host.appendChild(this.picker(letter));
       if (state.error !== null) {
         const message = document.createElement("p");
@@ -460,6 +607,9 @@ export class PhotoFlow {
     state.analysis = null;
     state.tap = null;
     state.doorMarked = false;
+    state.example = false;
+    this.exampleDisplay.delete(letter);
+    this.refreshExampleMode();
     state.reading = true;
     this.render();
     try {
@@ -513,8 +663,14 @@ export class PhotoFlow {
     if (intake === null) return wrap;
     const img = document.createElement("img");
     img.className = "photo-img";
-    img.src = intake.labelUrl;
-    img.alt = `Wall ${letter} photo`;
+    img.src = this.exampleDisplay.get(letter) ?? intake.labelUrl;
+    img.alt = state.example ? `Wall ${letter} generated example photo` : `Wall ${letter} photo`;
+    if (state.example) {
+      const badge = document.createElement("span");
+      badge.className = "photo-example-badge";
+      badge.textContent = exampleBadge(letter);
+      wrap.appendChild(badge);
+    }
     if (state.tapping) {
       img.classList.add("tapping");
       img.tabIndex = 0;
@@ -766,6 +922,8 @@ export class PhotoFlow {
       console.error(`Discarding the photo for wall ${letter} failed.`, error);
     }
     this.walls.set(letter, emptyWallState());
+    this.exampleDisplay.delete(letter);
+    this.refreshExampleMode();
     this.render();
   }
 
@@ -846,6 +1004,12 @@ export class PhotoFlow {
     note.textContent =
       "Measure at floor level, corner to corner. Leave one empty to estimate it from the photos.";
     host.appendChild(note);
+    if (this.exampleMode) {
+      const exampleNote = document.createElement("p");
+      exampleNote.className = "photo-example-note";
+      exampleNote.textContent = EXAMPLE_TAPE_NOTE;
+      host.appendChild(exampleNote);
+    }
     const form = document.createElement("div");
     form.className = "photo-tape-form";
     form.appendChild(
@@ -1106,6 +1270,7 @@ export class PhotoFlow {
         tapeB: finalB,
         ...(this.finalTap() === undefined ? {} : { doorTap: this.finalTap() }),
       });
+      if (this.exampleMode) draft.layout.name = EXAMPLE_ROOM_NAME;
       const label = await labelPromise;
       this.applyLabel(draft, label);
       this.buildMessage = "Opening the plan editor…";

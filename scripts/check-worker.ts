@@ -8,8 +8,8 @@
  * - `/` serves the app and a deep link falls back to it;
  * - `/api/health`;
  * - demo mode answers a stored request of each route from the bundle, and
- *   an unknown request of each route gets `demo-miss` (segment answers
- *   never enter the store, so every segment request is a miss);
+ *   an unknown request of each route gets `demo-miss` (the segment store
+ *   holds the example room's answers, so only unknown segment requests miss);
  * - the same mock request twice writes one `mock` row then one `cache` row
  *   in D1 (render plus both room routes);
  * - a session over its call cap gets 429 with the friendly text;
@@ -566,8 +566,8 @@ async function main(): Promise<void> {
 
     // 4c. Demo mode answers every route from the bundle; unknown is a miss.
     // (The label demo input holds key hashes, so it replays from the
-    // shared test photos instead of the stored input; segment answers never
-    // enter the store, so every segment request is a miss.)
+    // shared test photos instead of the stored input; the segment store
+    // holds the example room's answers, so only unknown segment requests miss.)
     {
       const routes = ["recommend", "assistant", "render"] as const;
       let demoOk = 0;

@@ -11,6 +11,7 @@
  */
 
 import { applyHomography, wallHomography, type RoomLayout } from "@fitroom/shared";
+import { exampleBadge, exampleMeasuredLine, isExampleRoom } from "../photo-room/example";
 import type { EditorStore, PhotoSession } from "./editor-store";
 import { renderFinishesPicker } from "./finishes";
 import type { PhotoDraftMeta } from "../photo-room/flow";
@@ -353,6 +354,12 @@ export class PhotoConfirmView {
       card.append(thumb, name, status);
       card.setAttribute("aria-label", `Wall ${letter}, ${state.toLowerCase()}`);
       card.addEventListener("click", () => this.actions.onSelectWall(letter));
+      if (isExampleRoom(this.store.room.name)) {
+        const badge = document.createElement("span");
+        badge.className = "photo-example-badge";
+        badge.textContent = exampleBadge(letter);
+        card.appendChild(badge);
+      }
       this.wallsEl.appendChild(card);
     }
   }
@@ -382,9 +389,17 @@ export class PhotoConfirmView {
     const img = document.createElement("img");
     img.className = "photo-stage-img";
     img.src = this.photo.url;
-    img.alt = `Wall ${letter} photo`;
+    img.alt = isExampleRoom(this.store.room.name)
+      ? `Wall ${letter} generated example photo`
+      : `Wall ${letter} photo`;
     img.draggable = false;
     wrap.appendChild(img);
+    if (isExampleRoom(this.store.room.name)) {
+      const badge = document.createElement("span");
+      badge.className = "photo-example-badge";
+      badge.textContent = exampleBadge(session.activeWall);
+      wrap.appendChild(badge);
+    }
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("class", "photo-stage-svg");
     svg.setAttribute("viewBox", `0 0 ${String(this.photo.width)} ${String(this.photo.height)}`);
@@ -1041,6 +1056,17 @@ export class PhotoConfirmView {
     estimated.textContent = "Estimated: from the photos";
     legend.append(measured, estimated);
     this.planEl.appendChild(legend);
+    if (isExampleRoom(this.store.room.name)) {
+      const truth = document.createElement("p");
+      truth.className = "photo-example-note";
+      const wallA = letterToWallId("A", session);
+      const wallB = letterToWallId("B", session);
+      truth.textContent = exampleMeasuredLine(
+        wallLengthOf(this.store.room, wallA),
+        wallLengthOf(this.store.room, wallB),
+      );
+      this.planEl.appendChild(truth);
+    }
     if (meta !== null && meta.estimatedWallCount > 0) {
       const band = document.createElement("div");
       band.className = "photo-draft-band";

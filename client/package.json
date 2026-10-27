@@ -8,6 +8,7 @@
     "build": "vite build",
     "check:capture": "tsx scripts/check-capture.ts",
     "check:photo-intake": "tsx scripts/check-photo-intake.ts",
+    "check:example-room": "tsx scripts/check-example-room.ts",
     "check:orbit-resolution": "tsx scripts/check-orbit-resolution.ts",
     "check:pointer-ownership": "tsx scripts/check-pointer-ownership.ts",
     "check:guidance": "tsx scripts/check-guidance.ts",
