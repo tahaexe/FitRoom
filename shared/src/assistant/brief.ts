@@ -86,14 +86,31 @@ export function formatUsd(value: number): string {
 /**
  * The request text for a brief turn: the brief sentence plus the shopper's
  * optional note (at most 200 characters — the panel enforces the length).
+ * The style word is capitalized ("Scandinavian style").
  */
 export function buildBriefRequest(brief: AssistantBrief, note?: string): string {
   const people = brief.seats === 1 ? "1 person" : `${String(brief.seats)} people`;
   const sentence =
-    `Furnish this room for ${people}, ${brief.style} style, ` +
+    `Furnish this room for ${people}, ${briefStyleName(brief.style)} style, ` +
     `new pieces up to ${formatUsd(brief.budget)}.`;
   const trimmed = (note ?? "").trim().slice(0, 200);
   return trimmed === "" ? sentence : `${sentence} ${trimmed}`;
+}
+
+/** Capitalized style word for request sentences and labels ("Scandinavian"). */
+export function briefStyleName(style: BriefStyle): string {
+  return `${style.charAt(0).toUpperCase()}${style.slice(1)}`;
+}
+
+/**
+ * Short chip label for a brief ("4 seats · Classic · up to $2,500"): the
+ * request sentence stays the chat line and the demo-store key.
+ */
+export function briefShortLabel(brief: AssistantBrief, note?: string): string {
+  const seats = brief.seats === 1 ? "1 seat" : `${String(brief.seats)} seats`;
+  const label = `${seats} · ${briefStyleName(brief.style)} · up to ${formatUsd(brief.budget)}`;
+  const trimmed = (note ?? "").trim();
+  return trimmed === "" ? label : `${label} · ${trimmed}`;
 }
 
 /** Seats of one catalog product (absent `seats` counts 0). */

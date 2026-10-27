@@ -134,6 +134,18 @@ function parseAssistantBody(body: unknown): ParsedBody | { error: string } {
  * still replay. The brief itself stays in the key like the other fields.
  * Exported so `check:assistant` can name the same keys the pipeline reads.
  */
+/**
+ * Brief request sentences recorded before style capitalization still replay:
+ * the key sees the old lowercase form ("classic style"), whatever the
+ * request's current capitalization.
+ */
+export function normalizeBriefRequestText(text: string): string {
+  return text.replace(
+    /, (Any|Modern|Classic|Scandinavian) style,/g,
+    (match, word: string) => `, ${word.toLowerCase()} style,`,
+  );
+}
+
 export function assistantKeyInput(input: unknown): unknown {
   if (typeof input !== "object" || input === null || Array.isArray(input)) return input;
   const record = input as Record<string, unknown>;
@@ -141,6 +153,9 @@ export function assistantKeyInput(input: unknown): unknown {
   const messages = (record["messages"] as unknown[]).map((entry) => {
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return entry;
     const message = entry as Record<string, unknown>;
+    if (typeof message["content"] === "string" && message["role"] === "user") {
+      return { ...message, content: normalizeBriefRequestText(message["content"]) };
+    }
     if (message["role"] !== "tool" || typeof message["content"] !== "string") return entry;
     let parsed: unknown;
     try {
@@ -165,7 +180,11 @@ export function assistantKeyInput(input: unknown): unknown {
     }
     return { ...message, content: JSON.stringify(stripped) };
   });
-  return { ...record, messages };
+  const request =
+    typeof record["request"] === "string"
+      ? normalizeBriefRequestText(record["request"])
+      : record["request"];
+  return { ...record, request, messages };
 }
 
 export const assistantDef: RouteDef = {

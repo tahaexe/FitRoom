@@ -31,6 +31,7 @@ import {
   assistantToolMessages,
   briefError,
   briefResultCard,
+  briefShortLabel,
   briefStartLine,
   briefStyleChip,
   buildBriefRequest,
@@ -40,6 +41,7 @@ import {
   formatAssistantToolRecord,
   impossibleAnswer,
   isAssistantRoundData,
+  isBriefStyle,
   startBriefDraft,
   summarizeAssistantTurn,
   turnErrors,
@@ -390,14 +392,16 @@ export class AssistantPanel {
     note.type = "text";
     note.id = "furnish-note";
     note.name = "furnish-note";
-    note.placeholder = "e.g. leave the window wall free";
     note.maxLength = 200;
     note.value = this.furnishNote;
-    note.setAttribute("aria-label", "Anything else? e.g. leave the window wall free");
+    note.setAttribute("aria-label", "Anything else?");
     note.addEventListener("input", () => {
       this.furnishNote = note.value;
     });
-    noteField.append(noteLabel, note);
+    const hint = document.createElement("p");
+    hint.className = "furnish-hint";
+    hint.textContent = "For example: keep the window wall free.";
+    noteField.append(noteLabel, note, hint);
     form.appendChild(noteField);
 
     const go = document.createElement("button");
@@ -483,15 +487,19 @@ export class AssistantPanel {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.className = "assistant-chip";
-      chip.textContent = text;
       if (parsed === null) {
+        chip.textContent = text;
         chip.title = `${text} — needs Live AI (no stored demo answer)`;
         chip.toggleAttribute("disabled", true);
         chip.setAttribute("aria-disabled", "true");
       } else {
+        // Short label on the chip; the request sentence stays the chat
+        // line and the demo-store key.
+        chip.textContent = briefShortLabel(parsed.brief, parsed.note);
         chip.title = text;
         const brief = parsed.brief;
-        chip.addEventListener("click", () => void this.sendFurnishDemo(text, brief));
+        const note = parsed.note;
+        chip.addEventListener("click", () => void this.sendFurnishDemo(text, brief, note));
       }
       host.appendChild(chip);
     }
@@ -513,17 +521,17 @@ export class AssistantPanel {
    * Demo brief chip: the recorded brief replays from the sample layout.
    * When the room already differs, ask first — never reset it silently.
    */
-  private async sendFurnishDemo(text: string, brief: AssistantBrief): Promise<void> {
+  private async sendFurnishDemo(text: string, brief: AssistantBrief, note: string): Promise<void> {
     if (this.sending) return;
     const pending = this.pendingDemo;
     if ((pending?.text !== text || pending.brief === null) && !this.deps.isSampleScene()) {
-      this.pendingDemo = { text, brief };
+      this.pendingDemo = { text, brief, note };
       this.addSampleConfirm("furnish");
       return;
     }
     this.pendingDemo = null;
     this.deps.resetDemoRoom();
-    await this.furnishTurn(brief, text);
+    await this.furnishTurn(brief, buildBriefRequest(brief, note));
   }
 
   private addFurnishUserLine(text: string): void {
@@ -920,7 +928,8 @@ export class AssistantPanel {
    * Demo chip: the scripted request replays from the sample layout. When the
    * room already differs, ask first — never reset it silently.
    */
-  private pendingDemo: { text: string; brief: AssistantBrief | null } | null = null;
+  private pendingDemo: { text: string; brief: AssistantBrief | null; note: string } | null =
+    null;
 
   private async sendDemo(text: string): Promise<void> {
     if (this.sending) return;
@@ -928,7 +937,7 @@ export class AssistantPanel {
       (this.pendingDemo?.text !== text || this.pendingDemo.brief !== null) &&
       !this.deps.isSampleScene()
     ) {
-      this.pendingDemo = { text, brief: null };
+      this.pendingDemo = { text, brief: null, note: "" };
       this.addSampleConfirm("arrange");
       return;
     }
@@ -956,7 +965,7 @@ export class AssistantPanel {
       card.remove();
       const pending = this.pendingDemo;
       if (pending?.brief !== undefined && pending?.brief !== null) {
-        void this.sendFurnishDemo(pending.text, pending.brief);
+        void this.sendFurnishDemo(pending.text, pending.brief, pending.note);
       } else if (pending !== null) {
         void this.sendDemo(pending.text);
       }
@@ -1131,13 +1140,17 @@ export function furnishProgressLine(toolNames: string[]): string {
  */
 export function parseBriefChip(text: string): { brief: AssistantBrief; note: string } | null {
   const match =
-    /^Furnish this room for (\d+) (person|people), (any|modern|classic|scandinavian) style, new pieces up to \$([\d,]+)\.(.*)$/.exec(
+    /^Furnish this room for (\d+) (person|people), ([A-Za-z]+) style, new pieces up to \$([\d,]+)\.(.*)$/.exec(
       text.trim(),
     );
   if (match === null) return null;
+  // Recorded sentences predate style capitalization ("classic style");
+  // the style word matches either way.
+  const style = (match[3] ?? "").toLowerCase();
+  if (!isBriefStyle(style)) return null;
   const brief: AssistantBrief = {
     seats: Number(match[1]),
-    style: (match[3] ?? "any") as BriefStyle,
+    style,
     budget: Number((match[4] ?? "").replace(/,/g, "")),
     keepExisting: false,
   };

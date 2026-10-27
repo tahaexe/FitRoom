@@ -8,7 +8,7 @@
 import type { CatalogItem, RoomLayout, SceneState } from "../types.js";
 import { wallLengthCm } from "../units.js";
 import { wallDisplayName } from "../recommend/walls.js";
-import { formatUsd, type AssistantBrief } from "./brief.js";
+import { briefStyleName, formatUsd, type AssistantBrief } from "./brief.js";
 import type { AssistantMessage, AssistantRequest } from "./types.js";
 
 /** The pasted system prompt: Muse Spark arranges only through the tools. */
@@ -200,7 +200,7 @@ function flattenMessage(message: AssistantMessage): UpstreamChatMessage {
 export function briefPromptAddition(brief: AssistantBrief): string {
   const empty = brief.keepExisting ? "" : ", starting from an empty room";
   return (
-    `Furnishing brief: seat ${String(brief.seats)} people, ${brief.style} style, ` +
+    `Furnishing brief: seat ${String(brief.seats)} people, ${briefStyleName(brief.style)} style, ` +
     `new pieces at most ${formatUsd(brief.budget)} in total${empty}. ` +
     "Plan a complete, usable layout from the catalog: one seating group facing a focal point " +
     "(the window, or a TV unit when the shopper asks for one), a coffee table 35-45 cm in front " +

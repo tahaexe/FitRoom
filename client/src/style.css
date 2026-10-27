@@ -1625,6 +1625,13 @@ button.danger {
   font-variant-numeric: tabular-nums;
 }
 
+.furnish-hint {
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--muted);
+  margin: 0;
+}
+
 .furnish-keep {
   display: flex;
   align-items: center;
