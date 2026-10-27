@@ -31,6 +31,7 @@ import {
   createAssistantContext,
   executeTurnRound,
   formatAssistantToolRecord,
+  impossibleAnswer,
   isAssistantRoundData,
   summarizeAssistantTurn,
   turnErrors,
@@ -334,7 +335,14 @@ export class AssistantPanel {
     if (answer === null) {
       // Round cap: a fit-clean draft is applied with an answer composed from
       // the tool records (what moved, where, the verdict); a draft with fit
-      // errors is never applied.
+      // errors is never applied. A refused "does not fit" placement discards
+      // the whole turn, so nothing is applied and the refusal is the answer.
+      const refused = impossibleAnswer(records, "");
+      if (refused !== null) {
+        const summary = summarizeAssistantTurn(start, start, this.deps.room, this.deps.catalog);
+        this.addAnswer(refused, summary, records);
+        return;
+      }
       if (cleanSnapshot !== null) {
         this.deps.applyTurn(cleanSnapshot);
         const composed = summarizeAssistantTurn(
@@ -347,6 +355,15 @@ export class AssistantPanel {
       } else {
         this.addNotice("I ran out of steps without a clean draft, so nothing changed.");
       }
+      return;
+    }
+
+    // A refused "does not fit" placement enforces the refusal: the turn
+    // applies no change at all, whatever the model did after it.
+    const enforced = impossibleAnswer(records, answer);
+    if (enforced !== null) {
+      const summary = summarizeAssistantTurn(start, start, this.deps.room, this.deps.catalog);
+      this.addAnswer(enforced, summary, records);
       return;
     }
 

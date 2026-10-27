@@ -158,8 +158,13 @@ export function describeRoomForAssistant(
   lines.push(
     "Use place_against_wall to put a piece against a wall (it snaps the back to the wall and turns it " +
       "correctly); pass centred_on with an opening id to centre under a window, or offset_cm for a " +
-      "distance along the wall. Make every move with the tools before you answer, then call check_fit; " +
-      "never describe a move you have not made. " +
+      "distance along the wall. When the customer names a particular stretch " +
+      '(e.g. "between the door and the corner"), they mean the short run right beside that door ' +
+      "or corner: the free span listed between 'the corner' and 'the door ...' " +
+      "(for example 0-30 cm), starting at its middle — even when a longer run continues on the " +
+      "other side of the door. Never substitute the longer run for the named one. " +
+      "Make every move with the tools before " +
+      "you answer, then call check_fit; never describe a move you have not made. " +
       "Positions are item centres in plan cm. In your final answer use the shopper wall names " +
       "(door wall, back wall, left/right wall, with (window)), never ids like wall-1.",
   );

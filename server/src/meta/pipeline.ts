@@ -140,10 +140,6 @@ export async function serveGatewayRequest(
   }
 
   const sessionId = ensureSession(c);
-  if (!checkRateLimit(caps, config, clientIp(c), Date.now())) {
-    return c.json(capped(), 429);
-  }
-
   const live = isLiveRequest(c, body);
   const parsed = def.parseBody(body);
   if ("error" in parsed) {
@@ -215,7 +211,12 @@ export async function serveGatewayRequest(
     );
   }
 
-  // 5. Caps before any generation.
+  // 5. Rate limit plus caps before any generation. Demo-store and cache
+  // hits are free and never count: only a live request that missed both may
+  // go upstream, so replaying the demo chips never sees the capped message.
+  if (!checkRateLimit(caps, config, clientIp(c), Date.now())) {
+    return c.json(capped(), 429);
+  }
   const isMock = config.mock;
   if (!checkGenerationCap(caps, config, sessionId, isMock).ok) {
     return c.json(capped(), 429);

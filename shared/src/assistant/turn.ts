@@ -294,6 +294,77 @@ function shortResult(room: RoomLayout, result: Record<string, unknown>): string 
 }
 
 /**
+ * A placement refused because the item does not fit: the `doesNotFit` tool
+ * result with both lengths (matched by marker, falling back to the
+ * "does not fit" wording for older entries). The first such refusal of a
+ * turn, or null when the turn has none.
+ */
+export interface DoesNotFitRefusal {
+  error: string;
+  /** Item length in cm, when the result carries it. */
+  needCm: number | null;
+  /** Free stretch length in cm, when the result carries it. */
+  freeCm: number | null;
+}
+
+export function impossibleRefusal(records: AssistantToolRecord[]): DoesNotFitRefusal | null {
+  for (const record of records) {
+    const result = record.result;
+    if (result["doesNotFit"] === true) {
+      const need = result["needCm"];
+      const free = result["freeCm"];
+      return {
+        error: String(result["error"] ?? "It does not fit there."),
+        needCm: typeof need === "number" && Number.isFinite(need) ? need : null,
+        freeCm: typeof free === "number" && Number.isFinite(free) ? free : null,
+      };
+    }
+    if (
+      result["ok"] === false &&
+      typeof result["error"] === "string" &&
+      /does not fit/i.test(result["error"])
+    ) {
+      return { error: result["error"], needCm: null, freeCm: null };
+    }
+  }
+  return null;
+}
+
+/** Rounded integers naming a length, so "273.1 cm" still matches "273". */
+function lengthNames(value: number): string[] {
+  const names = new Set<string>([String(value), String(Math.round(value))]);
+  return [...names];
+}
+
+/** True when the text names both refusal lengths (need and free). */
+export function namesBothLengths(text: string, needCm: number, freeCm: number): boolean {
+  const lower = text.toLowerCase();
+  return (
+    lengthNames(needCm).some((name) => lower.includes(name.toLowerCase())) &&
+    lengthNames(freeCm).some((name) => lower.includes(name.toLowerCase()))
+  );
+}
+
+/**
+ * The shopper answer for a turn with a "does not fit" refusal: the model's
+ * text when it names both lengths, else the refusal text followed by the
+ * model's proposal. Null when the turn has no such refusal.
+ */
+export function impossibleAnswer(records: AssistantToolRecord[], modelText: string): string | null {
+  const refusal = impossibleRefusal(records);
+  if (refusal === null) return null;
+  const proposal = modelText.trim();
+  if (
+    refusal.needCm !== null &&
+    refusal.freeCm !== null &&
+    namesBothLengths(proposal, refusal.needCm, refusal.freeCm)
+  ) {
+    return proposal;
+  }
+  return proposal === "" ? refusal.error : `${refusal.error} ${proposal}`;
+}
+
+/**
  * One collapsible-list line per tool call: name, arguments, result — with
  * shopper wall names wherever an id appears.
  */

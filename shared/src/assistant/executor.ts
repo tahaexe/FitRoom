@@ -452,6 +452,9 @@ function alongWallLength(
  * Refusal when a piece cannot fit the requested wall stretch: both lengths
  * plus the stretch's ends, and an instruction to explain and propose an
  * alternative in words instead of placing anything else. Nothing is placed.
+ *
+ * The `doesNotFit` marker (with both lengths as numbers) lets the turn loop
+ * enforce the refusal: a turn containing it applies no change at all.
  */
 function tooLongRefusal(
   ctx: AssistantContext,
@@ -463,12 +466,15 @@ function tooLongRefusal(
   const wall = wallDisplayName(ctx.room, wallId);
   return {
     ok: false,
+    doesNotFit: true,
+    needCm: round1(needCm),
+    freeCm: round1(stretch.length),
     error:
       `The ${productName} is ${String(round1(needCm))} cm; the free stretch between ` +
       `${stretch.before} and ${stretch.after} on the ${wall} is only ` +
       `${String(round1(stretch.length))} cm ` +
       `(${String(round1(stretch.start))}–${String(round1(stretch.end))} cm from the wall start). ` +
-      `It cannot fit there. Explain why it cannot fit, with both lengths, and propose the ` +
+      `It does not fit there. Explain why it does not fit, with both lengths, and propose the ` +
       `closest alternative in words; do not place anything else in this turn.`,
   };
 }
