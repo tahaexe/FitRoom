@@ -58,7 +58,7 @@ export interface GatewayPromptRequest {
   live?: boolean;
 }
 
-export const MAX_RENDER_PROMPT_CHARS = 600;
+export const MAX_RENDER_PROMPT_CHARS = 2000;
 export const MAX_TEXT_PROMPT_CHARS = 2000;
 
 export const gatewayPromptRequestSchema = {
