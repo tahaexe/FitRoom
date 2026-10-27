@@ -26,6 +26,7 @@ import {
 import { Hono } from "hono";
 import { META_MODELS } from "../config.js";
 import { callSpark, type ChatMessage, type UpstreamResult } from "../meta/client.js";
+import { emptyUsage } from "../meta/pricing.js";
 import { listDemoStore } from "../meta/demo.js";
 import {
   UpstreamFriendlyError,
@@ -76,12 +77,14 @@ async function callAdvisor(apiKey: string, request: RecommendRequest): Promise<U
     { role: "system", content: RECOMMEND_SYSTEM_PROMPT },
     { role: "user", content: userMessage(request) },
   ];
+  let lastUsage: UpstreamResult["usage"] | null = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const result = await callSpark(apiKey, {
       messages,
       jsonSchema: { name: "recommend", schema: RECOMMEND_OUTPUT_SCHEMA },
       maxTokens: 8000,
     });
+    lastUsage = result.usage;
     const text =
       typeof result.data === "object" && result.data !== null
         ? String((result.data as Record<string, unknown>)["text"] ?? "")
@@ -94,7 +97,7 @@ async function callAdvisor(apiKey: string, request: RecommendRequest): Promise<U
       }
     }
   }
-  throw new UpstreamFriendlyError(RECOMMEND_FRIENDLY_ERROR);
+  throw new UpstreamFriendlyError(RECOMMEND_FRIENDLY_ERROR, lastUsage ?? emptyUsage());
 }
 
 export const recommendDef: RouteDef = {

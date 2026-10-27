@@ -234,7 +234,10 @@ export async function callImage(
     }
   }
   if (imageBase64 === null) {
-    throw new UpstreamFriendlyError(IMAGE_FRIENDLY_ERROR);
+    throw new UpstreamFriendlyError(
+      IMAGE_FRIENDLY_ERROR,
+      usageFromUpstream(record["usage"], 1),
+    );
   }
   let width = 0;
   let height = 0;
@@ -249,7 +252,10 @@ export async function callImage(
     // Falls through to the friendly error below.
   }
   if (width === 0 || height === 0) {
-    throw new UpstreamFriendlyError(IMAGE_FRIENDLY_ERROR);
+    throw new UpstreamFriendlyError(
+      IMAGE_FRIENDLY_ERROR,
+      usageFromUpstream(record["usage"], 1),
+    );
   }
   return {
     data: { imageBase64, format: "webp", width, height },

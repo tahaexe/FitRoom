@@ -34,7 +34,7 @@ export { UpstreamFriendlyError };
 import { readDemoStore, writeRecorded } from "./demo.js";
 import { gatewayKey } from "./keys.js";
 import { appendCostLine } from "./metering.js";
-import { costUsd } from "./pricing.js";
+import { costUsd, emptyUsage } from "./pricing.js";
 import type { CapsState } from "./caps.js";
 
 export interface ParsedBody {
@@ -239,6 +239,21 @@ export async function serveGatewayRequest(
       result = await def.upstream(config.apiKey, parsed.input);
     } catch (error) {
       if (error instanceof UpstreamFriendlyError) {
+        // The model answered but unusably (no image, invalid JSON after
+        // the retry): Meta still billed the call, so its `upstream` line
+        // — with the usage Meta reported — is still written.
+        const usage = error.usage ?? emptyUsage();
+        const failedUsd = costUsd(def.model, usage);
+        noteGeneration(caps, sessionId, failedUsd, true);
+        appendCostLine(config.logsDir, {
+          time: new Date().toISOString(),
+          session: sessionId,
+          route: def.route,
+          model: def.model,
+          source: "upstream",
+          usage,
+          usd: failedUsd,
+        });
         return c.json({ status: "error", message: error.message } satisfies GatewayResponse, 200);
       }
       return c.json(

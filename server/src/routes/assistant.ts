@@ -38,6 +38,7 @@ import {
   type SparkToolCall,
   type UpstreamResult,
 } from "../meta/client.js";
+import { emptyUsage } from "../meta/pricing.js";
 import {
   UpstreamFriendlyError,
   serveGatewayRequest,
@@ -101,12 +102,14 @@ async function callAssistantRound(
   const messages: ChatMessage[] = buildAssistantUpstreamMessages(input, loadCatalog());
   let lengthRetried = false;
   let emptyRetried = false;
+  let lastUsage: UpstreamResult["usage"] | null = null;
   for (;;) {
     const result = await callSpark(apiKey, {
       messages,
       tools: ASSISTANT_TOOLS,
       maxTokens: ASSISTANT_MAX_TOKENS,
     });
+    lastUsage = result.usage;
     if (result.finishReason === "length" && !lengthRetried) {
       lengthRetried = true;
       continue;
@@ -118,7 +121,7 @@ async function callAssistantRound(
     if (emptyRetried) break;
     emptyRetried = true;
   }
-  throw new UpstreamFriendlyError(ASSISTANT_FRIENDLY_ERROR);
+  throw new UpstreamFriendlyError(ASSISTANT_FRIENDLY_ERROR, lastUsage ?? emptyUsage());
 }
 
 function parseAssistantBody(body: unknown): ParsedBody | { error: string } {
@@ -136,8 +139,9 @@ function parseAssistantBody(body: unknown): ParsedBody | { error: string } {
  * Key input for the demo store, cache and caps: the canonical request with
  * the advisory `ready` line stripped from tool results, so a turn recorded
  * before that line existed still replays (the line never changes the draft).
+ * Exported so `check:assistant` can name the same keys the pipeline reads.
  */
-function assistantKeyInput(input: unknown): unknown {
+export function assistantKeyInput(input: unknown): unknown {
   if (typeof input !== "object" || input === null || Array.isArray(input)) return input;
   const record = input as Record<string, unknown>;
   if (!Array.isArray(record["messages"])) return input;
