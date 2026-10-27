@@ -37,6 +37,8 @@ import { applyVariant, loadModel } from "./models";
 import { PlanOverlay } from "./plan";
 import { FitOverlay } from "./fit-overlay";
 import { Inspector } from "./inspector";
+import { captureView } from "./render/capture";
+import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
 import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
 import {
@@ -148,6 +150,7 @@ class FitRoomApp {
   private inspector: Inspector;
   private recommendPanel: RecommendPanel | null = null;
   private assistantPanel: AssistantPanel | null = null;
+  private renderViewer: RenderViewer | null = null;
   private runHighlight: THREE.Mesh | null = null;
   private fitEngine: FitEngine;
   private analysis: FitAnalysis | null = null;
@@ -297,6 +300,20 @@ class FitRoomApp {
         getScene: () => this.store.state,
         applyTurn: (endScene) => this.applyAssistantTurn(endScene),
         resetDemoRoom: () => this.resetDemoRoom(),
+      });
+    }
+
+    const renderHost = document.getElementById("render-viewer");
+    if (renderHost !== null) {
+      this.renderViewer = new RenderViewer(renderHost, {
+        room: ROOM,
+        catalog: CATALOG,
+        getScene: () => this.store.state,
+        getCapture: () => {
+          const shot = captureView(this.renderer, this.scene, this.activeCamera(), this.container);
+          return { dataUrl: shot.dataUrl, base64: shot.base64 };
+        },
+        cameraPreset: () => this.renderPreset(),
       });
     }
 
@@ -911,6 +928,7 @@ class FitRoomApp {
     });
     on("tool-orbit", () => this.setMode("orbit"));
     on("tool-plan", () => this.setMode("plan"));
+    on("tool-render", () => void this.renderViewer?.visualise());
     on("tool-clearance", () => this.toggleClearance());
     const scenes = document.getElementById("tool-scenes");
     if (scenes instanceof HTMLSelectElement) {
@@ -933,6 +951,13 @@ class FitRoomApp {
       const dlg = document.getElementById("credits-dialog");
       if (dlg instanceof HTMLDialogElement) dlg.showModal();
     });
+  }
+
+  /** Preset name for the render key: plan, eye-level, or dollhouse. */
+  private renderPreset(): string {
+    if (this.mode === "plan") return "plan";
+    const y = this.orbitCam.position.y;
+    return y <= 2.0 ? "eye-level" : "dollhouse";
   }
 
   /** Clearance overlay toggle: shade the circulation-blocked 1 cm cells. */
