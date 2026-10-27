@@ -10,8 +10,10 @@ export interface CaptureResult {
 }
 
 const CAPTURE_WIDTH = 1024;
-/** Small margin around the room in the capture frame. */
-const FRAME_MARGIN = 1.08;
+/** About 5% margin on the tighter side of the capture frame. */
+const CAPTURE_MARGIN = 1.05;
+/** NDC half-extent the room's corners must fit inside (1 / margin). */
+const FRAME_LIMIT = 1 / CAPTURE_MARGIN;
 /** Wall height used for framing when the room mesh is missing. */
 const FALLBACK_WALL_HEIGHT_M = 2.6;
 
@@ -44,6 +46,79 @@ interface RoomFrame {
   czM: number;
   wM: number;
   dM: number;
+}
+
+/** Wall-top height for framing, from the built room shell when present. */
+function wallTopOf(scene: THREE.Scene): number {
+  const shell = scene.getObjectByName("fitroom-room");
+  if (shell !== undefined) {
+    const box = new THREE.Box3().setFromObject(shell);
+    if (Number.isFinite(box.max.y) && box.max.y > 0.5) return box.max.y;
+  }
+  return FALLBACK_WALL_HEIGHT_M;
+}
+
+/** Eight room-shell corners: floor corners and wall tops (metres). */
+function roomCorners(scene: THREE.Scene, frame: RoomFrame): THREE.Vector3[] {
+  const topM = wallTopOf(scene);
+  const corners: THREE.Vector3[] = [];
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      corners.push(
+        new THREE.Vector3(frame.cxM + (sx * frame.wM) / 2, 0, frame.czM + (sz * frame.dM) / 2),
+        new THREE.Vector3(frame.cxM + (sx * frame.wM) / 2, topM, frame.czM + (sz * frame.dM) / 2),
+      );
+    }
+  }
+  return corners;
+}
+
+/** Centre of the room's corners: the capture looks here. */
+function roomCentre(corners: THREE.Vector3[]): THREE.Vector3 {
+  const box = new THREE.Box3();
+  for (const c of corners) box.expandByPoint(c);
+  return box.getCenter(new THREE.Vector3());
+}
+
+/**
+ * Closest distance along `dir` from `target` where every corner projects
+ * inside the frame with margin. Bisected (48 rounds): nearer fails, farther
+ * always fits, so the room fills the frame with a small margin.
+ */
+function fitDistance(
+  camera: THREE.PerspectiveCamera,
+  corners: THREE.Vector3[],
+  target: THREE.Vector3,
+  dir: THREE.Vector3,
+): number {
+  const probe = new THREE.Vector3();
+  const fits = (dist: number): boolean => {
+    camera.position.copy(target).addScaledVector(dir, dist);
+    camera.lookAt(target);
+    camera.updateMatrixWorld();
+    for (const corner of corners) {
+      probe.copy(corner).applyMatrix4(camera.matrixWorldInverse);
+      if (!(probe.z < -0.2)) return false;
+      probe.copy(corner).project(camera);
+      if (!Number.isFinite(probe.x) || !Number.isFinite(probe.y)) return false;
+      if (Math.abs(probe.x) > FRAME_LIMIT || Math.abs(probe.y) > FRAME_LIMIT) return false;
+    }
+    return true;
+  };
+  let lo = 0.2;
+  let hi = 1;
+  if (fits(lo)) return lo;
+  let guard = 0;
+  while (!fits(hi) && guard < 64) {
+    hi *= 2;
+    guard += 1;
+  }
+  for (let i = 0; i < 48; i += 1) {
+    const mid = (lo + hi) / 2;
+    if (fits(mid)) hi = mid;
+    else lo = mid;
+  }
+  return hi;
 }
 
 /** Room bounds from the built floor mesh (metres, x east, z north). */
@@ -112,26 +187,28 @@ export function captureView(
   const prevPosition = camera.position.clone();
   const prevQuaternion = camera.quaternion.clone();
 
-  // Frame the room tightly for this capture only.
+  // Frame the room tightly for this capture only: fit the room shell's
+  // corners (floor corners and wall tops) as this camera sees them, with
+  // about 5% margin on the tighter side, keeping the view direction. A
+  // bounding sphere would leave about a fifth of the frame empty.
+  if (isPerspective) {
+    // Project into the capture frame, not the live one.
+    camera.aspect = captureAspect;
+    camera.updateProjectionMatrix();
+  }
   const frame = roomFrameOf(scene);
   if (frame !== null) {
-    const hw = (frame.wM / 2) * FRAME_MARGIN;
-    const hd = (frame.dM / 2) * FRAME_MARGIN;
     if (isPerspective) {
-      const vFov = (camera.fov * Math.PI) / 180;
-      const hFov = 2 * Math.atan(Math.tan(vFov / 2) * captureAspect);
-      const fitFov = Math.min(vFov, hFov);
-      const radius = Math.sqrt(
-        hw * hw + hd * hd + (FALLBACK_WALL_HEIGHT_M / 2) * (FALLBACK_WALL_HEIGHT_M / 2),
-      );
-      const dist = radius / Math.sin(fitFov / 2);
-      const center = new THREE.Vector3(frame.cxM, 0.4, frame.czM);
-      const dir = camera.position.clone().sub(center);
+      const corners = roomCorners(scene, frame);
+      const target = roomCentre(corners);
+      const dir = camera.position.clone().sub(target);
       if (dir.lengthSq() < 1e-6) dir.set(0.85, 0.85, 1);
       dir.normalize();
-      camera.position.copy(center).addScaledVector(dir, dist);
-      camera.lookAt(center);
+      camera.position.copy(target).addScaledVector(dir, fitDistance(camera, corners, target, dir));
+      camera.lookAt(target);
     } else if (isOrtho) {
+      const hw = (frame.wM / 2) * CAPTURE_MARGIN;
+      const hd = (frame.dM / 2) * CAPTURE_MARGIN;
       const halfH = Math.max(hd, hw / captureAspect);
       camera.left = -halfH * captureAspect;
       camera.right = halfH * captureAspect;

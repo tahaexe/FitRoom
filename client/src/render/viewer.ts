@@ -6,7 +6,7 @@
  */
 
 import { buildRenderPrompt } from "@fitroom/shared";
-import type { CatalogItem, RoomLayout, SceneState } from "@fitroom/shared";
+import type { CatalogItem, RenderWallView, RoomLayout, SceneState } from "@fitroom/shared";
 import { isLive, postRender } from "../api";
 import { captureView } from "./capture";
 
@@ -16,6 +16,7 @@ export interface RenderViewerDeps {
   getScene: () => SceneState;
   getCapture: () => { dataUrl: string; base64: string };
   cameraPreset: () => string;
+  wallView: () => RenderWallView | undefined;
 }
 
 const MODEL_LABEL = "AI visualisation by Muse Image";
@@ -71,7 +72,12 @@ export class RenderViewer {
       return;
     }
     const scene = this.deps.getScene();
-    const prompt = buildRenderPrompt(scene, this.deps.room, this.deps.catalog);
+    const prompt = buildRenderPrompt(
+      scene,
+      this.deps.room,
+      this.deps.catalog,
+      this.deps.wallView(),
+    );
     this.showProgress(capture.dataUrl);
     let result: Awaited<ReturnType<typeof postRender>>;
     try {

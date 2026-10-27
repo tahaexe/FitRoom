@@ -19,6 +19,7 @@ import { fileURLToPath } from "node:url";
 import {
   buildRenderKeyInput,
   buildRenderPrompt,
+  dollhouseWallView,
   type CatalogItem,
   type RoomLayout,
   type SceneState,
@@ -186,6 +187,35 @@ async function main(): Promise<void> {
         prompt.includes("Right wall (window)") &&
         prompt.includes("Left wall"),
       prompt.slice(0, 200),
+    );
+    // First view: the dollhouse capture cuts away both window walls, so
+    // the prompt names the walls it shows by their place in the image and
+    // puts the windows behind the camera instead of on named walls.
+    const firstToCam = { x: 0.85 / Math.hypot(0.85, 1), z: 1 / Math.hypot(0.85, 1) };
+    const firstRight = { x: 1 / Math.hypot(1, 0.85), z: -0.85 / Math.hypot(1, 0.85) };
+    const firstPrompt = buildRenderPrompt(
+      scene,
+      room,
+      catalog,
+      dollhouseWallView(room, firstToCam, firstRight),
+    );
+    check(
+      `${name}: first-view prompt names the visible walls by image place`,
+      firstPrompt.includes("left wall in the image: Left wall") &&
+        firstPrompt.includes("right wall in the image: Door wall"),
+      firstPrompt.slice(0, 200),
+    );
+    check(
+      `${name}: first-view prompt marks the shown plain wall`,
+      firstPrompt.includes("Left wall — plain wall, no openings"),
+      firstPrompt.slice(0, 200),
+    );
+    check(
+      `${name}: first-view prompt puts the windows behind the camera`,
+      firstPrompt.includes("are behind the camera") &&
+        firstPrompt.includes("light the room from there") &&
+        !/^- (Back|Right) wall/m.test(firstPrompt),
+      firstPrompt.slice(0, 300),
     );
     check(
       `${name}: prompt keeps the door a closed solid door`,

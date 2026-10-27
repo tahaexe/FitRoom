@@ -14,7 +14,14 @@ import type {
   SceneItem,
   SceneState,
 } from "@fitroom/shared";
-import { FitEngine, cmToMeters, describeRun, isHealthResponse } from "@fitroom/shared";
+import {
+  FitEngine,
+  cmToMeters,
+  describeRun,
+  dollhouseWallView,
+  isHealthResponse,
+  type RenderWallView,
+} from "@fitroom/shared";
 import roomJson from "../../shared/samples/living-420x360.json";
 import catalogJson from "../../shared/catalog/catalog.json";
 import validScene from "../../shared/samples/fit-tests/valid.json";
@@ -320,6 +327,7 @@ class FitRoomApp {
           return { dataUrl: shot.dataUrl, base64: shot.base64 };
         },
         cameraPreset: () => this.renderPreset(),
+        wallView: () => this.renderWallView(),
       });
     }
 
@@ -586,6 +594,9 @@ class FitRoomApp {
     document
       .getElementById("tool-assistant")
       ?.setAttribute("data-active", String(name === "assistant"));
+    // The stage width follows the column: re-fit the cameras now that the
+    // container grew or shrank.
+    this.resize();
   }
 
   /** Hide developer controls unless the address has `?dev=1`. */
@@ -1040,6 +1051,29 @@ class FitRoomApp {
     if (this.mode === "plan") return "plan";
     const y = this.orbitCam.position.y;
     return y <= 2.0 ? "eye-level" : "dollhouse";
+  }
+
+  /**
+   * Walls as the capture shows them (dollhouse only): the cut-away pair
+   * and every visible wall's place in the image, from the live camera —
+   * the same pair `updateDollhouse` hides, so the prompt can no longer
+   * list windows on walls the capture cut away.
+   */
+  private renderWallView(): RenderWallView | undefined {
+    if (this.mode === "plan" || this.renderPreset() !== "dollhouse") return undefined;
+    const cam = this.activeCamera();
+    const bounds = roomBounds(ROOM);
+    const cx = cmToMeters((bounds.minX + bounds.maxX) / 2);
+    const cz = cmToMeters((bounds.minZ + bounds.maxZ) / 2);
+    const toCam = new THREE.Vector3(cam.position.x - cx, 0, cam.position.z - cz);
+    if (toCam.lengthSq() < 1e-6) toCam.set(0.85, 0, 1);
+    toCam.normalize();
+    const forward = new THREE.Vector3();
+    cam.getWorldDirection(forward);
+    const right = new THREE.Vector3().crossVectors(forward, new THREE.Vector3(0, 1, 0));
+    if (right.lengthSq() < 1e-6) right.set(1, 0, 0);
+    right.normalize();
+    return dollhouseWallView(ROOM, { x: toCam.x, z: toCam.z }, { x: right.x, z: right.z });
   }
 
   /** Clearance overlay toggle: shade the circulation-blocked 1 cm cells. */
