@@ -167,6 +167,10 @@ class FitRoomApp {
   private analysis: FitAnalysis | null = null;
   private issues: FitIssue[] = [];
   private mode: "orbit" | "plan" = "orbit";
+  /** Developer camera hook: exact frozen pose, 4:3 frame, known scene. */
+  private devCam = false;
+  /** Reframe + republish intrinsics together (hook window resizes). */
+  private devRefresh: (() => void) | null = null;
   private drag: { id: string; offsetX: number; offsetZ: number } | null = null;
   private rotating = false;
   /** Throttled live fit feedback while dragging (moved id, consumed once per frame). */
@@ -187,6 +191,15 @@ class FitRoomApp {
     // the chips reset to — while returning visits restore the autosave.
     const firstVisit = !hasAutosave(ROOM.id);
     this.store = new SceneStore(ROOM.id, validScene as unknown as SceneState);
+    // Developer camera hook: a known scene, never the saved shopper state.
+    // The scene menu still works on top; `camitems=0` hides every piece.
+    // Assigned directly (no replace event) so the shopper autosave survives.
+    this.devCam = FitRoomApp.wantsHook();
+    if (this.devCam) {
+      const hideAll = FitRoomApp.hookParam("camitems") === "0";
+      const base = JSON.parse(JSON.stringify(validScene)) as SceneState;
+      this.store.state = hideAll ? { ...base, items: [] } : base;
+    }
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     // The app uses only built-in materials, so there are no custom shaders
@@ -378,7 +391,11 @@ class FitRoomApp {
             x: (bounds.minX + bounds.maxX) / 2,
             z: (bounds.minZ + bounds.maxZ) / 2,
           },
+          room: ROOM,
           requestRender: () => this.requestRender(),
+          onReady: (refresh) => {
+            this.devRefresh = refresh;
+          },
         });
       });
     }
@@ -398,6 +415,28 @@ class FitRoomApp {
     requestContactRefresh(this.rig);
     this.shadowNeedsUpdate = true;
     this.requestRender();
+  }
+
+  /** Hook query without importing the dev-only module (prod stays clean). */
+  private static hookQuery(): URLSearchParams | null {
+    try {
+      return new URLSearchParams(window.location.search);
+    } catch {
+      return null;
+    }
+  }
+
+  private static hookParam(key: string): string | null {
+    return FitRoomApp.hookQuery()?.get(key) ?? null;
+  }
+
+  /** Hook view requested (any cam* URL parameter present). */
+  private static wantsHook(): boolean {
+    const query = FitRoomApp.hookQuery();
+    if (query === null) return false;
+    return ["camx", "camz", "cameye", "camyaw", "campitch", "camfov", "camitems"].some(
+      (key) => query.get(key) !== null,
+    );
   }
 
   private roomWalls: THREE.Group;
@@ -810,6 +849,7 @@ class FitRoomApp {
 
   /** Point the orbit camera at a plan position (issue focus). */
   private focusCameraOn(point: PlanPoint): void {
+    if (this.devCam) return;
     if (this.mode !== "orbit") this.setMode("orbit");
     const target = new THREE.Vector3(cmToMeters(point.x), 0.4, cmToMeters(point.z));
     const offset = this.orbitCam.position.clone().sub(this.controls.target);
@@ -1163,6 +1203,7 @@ class FitRoomApp {
   }
 
   private setMode(mode: "orbit" | "plan"): void {
+    if (this.devCam) return;
     this.mode = mode;
     document.getElementById("tool-orbit")?.setAttribute("data-active", String(mode === "orbit"));
     document.getElementById("tool-plan")?.setAttribute("data-active", String(mode === "plan"));
@@ -1184,6 +1225,13 @@ class FitRoomApp {
   // ---- frame ----
 
   private resize(): void {
+    // Developer camera hook: a window resize redoes the frame and the
+    // intrinsics together, never the frame alone.
+    if (this.devCam) {
+      this.devRefresh?.();
+      this.requestRender();
+      return;
+    }
     const w = Math.max(1, this.container.clientWidth);
     const h = Math.max(1, this.container.clientHeight);
     this.orbitCam.aspect = w / h;
@@ -1199,6 +1247,7 @@ class FitRoomApp {
 
   /** Apply a clamped orbit scale (no-op when unchanged). */
   private setOrbitScale(scale: number): void {
+    if (this.devCam) return;
     const clamped = Math.min(ORBIT_MAX_SCALE, Math.max(ORBIT_MIN_SCALE, scale));
     if (clamped === this.orbitScale) return;
     this.orbitScale = clamped;
@@ -1207,6 +1256,7 @@ class FitRoomApp {
 
   /** Nudge the orbit scale so the frame cost stays under budget. */
   private adaptOrbitScale(costMs: number): void {
+    if (this.devCam) return;
     this.orbitEmaMs = this.orbitEmaMs === 0 ? costMs : this.orbitEmaMs * 0.8 + costMs * 0.2;
     if (this.orbitEmaMs > ORBIT_FRAME_BUDGET_MS + 0.5) {
       this.setOrbitScale(this.orbitScale - 0.1);
@@ -1217,6 +1267,7 @@ class FitRoomApp {
 
   /** Dollhouse: hide the 2 walls nearest the camera (orbit mode only). */
   private updateDollhouse(): void {
+    if (this.devCam) return;
     const cam = this.activeCamera();
     if (this.mode === "plan") {
       for (const e of this.wallEntries) for (const m of e.meshes) m.visible = false;
@@ -1265,6 +1316,16 @@ class FitRoomApp {
   }
 
   private frame(): void {
+    // Developer camera hook: the pose is exact and frozen — draw the frame
+    // without touching the position, rotation or projection.
+    if (this.devCam) {
+      if (this.shadowNeedsUpdate) {
+        this.renderer.shadowMap.needsUpdate = true;
+        this.shadowNeedsUpdate = false;
+      }
+      this.renderer.render(this.scene, this.orbitCam);
+      return;
+    }
     const t0 = performance.now();
     // Never below the floor.
     if (this.orbitCam.position.y < 0.1) this.orbitCam.position.y = 0.1;
@@ -1285,17 +1346,13 @@ class FitRoomApp {
       this.refreshIssues([movedId]);
     }
     this.updateOutline();
-    this.fitOverlay.update(
-      this.activeCamera(),
-      this.container.clientWidth,
-      this.container.clientHeight,
-    );
     if (this.selectedId !== null) {
       const entry = this.instances.get(this.selectedId);
       if (entry !== undefined) this.positionHandle(entry);
     }
     this.updateTag();
     if (this.mode === "plan") {
+      // Plan labels land first so the fit chips avoid their fresh boxes.
       this.planOverlay.update(
         this.planCam,
         ROOM,
@@ -1303,6 +1360,11 @@ class FitRoomApp {
         this.container.clientHeight,
       );
     }
+    this.fitOverlay.update(
+      this.activeCamera(),
+      this.container.clientWidth,
+      this.container.clientHeight,
+    );
     if (this.rig !== null && this.rig.contactNeedsRefresh.value) {
       this.rig.contactNeedsRefresh.value = false;
     }

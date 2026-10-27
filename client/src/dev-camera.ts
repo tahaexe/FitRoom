@@ -1,4 +1,5 @@
 import * as THREE from "three";
+import type { RoomLayout } from "@fitroom/shared";
 
 /**
  * Developer camera hook: exact wall views from URL parameters. This module
@@ -11,21 +12,29 @@ import * as THREE from "three";
  * - camyaw: yaw in degrees, clockwise from north (default 0 = facing north)
  * - campitch: pitch in degrees, positive looks up (default 0 = level)
  * - camfov: vertical field of view in degrees (default 60)
+ * - camitems: when "0", every piece is hidden (the room shell stays)
  *
- * When any parameter is present the hook frames a 4:3 view, hides the
- * interface chrome and publishes the calibrated camera on
+ * When any cam* parameter is present the hook frames a 4:3 view, hides the
+ * interface panels and publishes the calibrated camera on
  * `window.__fitroomCamera` ({ width, height, fx, fy, cx, cy in pixels,
- * position in metres, yawDeg, pitchDeg, fovDeg }).
+ * position in metres, yawDeg, pitchDeg, fovDeg, room }). The host keeps the
+ * pose frozen afterwards: no controls update, framing or animation may
+ * touch the camera's position, rotation or projection (a window resize may
+ * redo the frame and the intrinsics together through the refresh callback).
  */
 
 export interface DevCameraDeps {
   renderer: THREE.WebGLRenderer;
   camera: THREE.PerspectiveCamera;
-  controls: { enabled: boolean };
+  controls: { enabled: boolean; target: THREE.Vector3 };
   container: HTMLElement;
   /** Room centre in plan centimetres (default camera position). */
   roomCentre: { x: number; z: number };
+  /** The room layout the view is rendered from (published as the truth). */
+  room: RoomLayout;
   requestRender: () => void;
+  /** Receives the reframe callback (window resizes redo frame + intrinsics). */
+  onReady?: (refresh: () => void) => void;
 }
 
 declare global {
@@ -41,11 +50,23 @@ declare global {
       yawDeg: number;
       pitchDeg: number;
       fovDeg: number;
+      room: RoomLayout;
     };
   }
 }
 
-const PARAMS = ["camx", "camz", "cameye", "camyaw", "campitch", "camfov"] as const;
+const PARAMS = ["camx", "camz", "cameye", "camyaw", "campitch", "camfov", "camitems"] as const;
+
+/** True when the URL requests the hook view (any cam* parameter present). */
+export function wantsDevCamera(search: string): boolean {
+  let params: URLSearchParams;
+  try {
+    params = new URLSearchParams(search);
+  } catch {
+    return false;
+  }
+  return PARAMS.some((key) => params.get(key) !== null);
+}
 
 function param(search: URLSearchParams, key: string, fallback: number): number {
   const raw = search.get(key);
@@ -56,6 +77,7 @@ function param(search: URLSearchParams, key: string, fallback: number): number {
 
 /** Hide every interface surface so only the 3D view remains. */
 function hideChrome(): void {
+  if (document.getElementById("devcam-style") !== null) return;
   const style = document.createElement("style");
   style.id = "devcam-style";
   style.textContent = [
@@ -90,17 +112,6 @@ export function initDevCamera(deps: DevCameraDeps): void {
   hideChrome();
   deps.controls.enabled = false;
 
-  // Exact 1:1 pixels so the published intrinsics match the image.
-  deps.renderer.setPixelRatio(1);
-  const fullW = Math.max(1, deps.container.clientWidth);
-  const fullH = Math.max(1, deps.container.clientHeight);
-  const frameW = Math.max(2, Math.floor(Math.min(fullW, (fullH * 4) / 3)));
-  const frameH = Math.max(2, Math.floor((frameW * 3) / 4));
-  deps.renderer.setSize(frameW, frameH, false);
-  const canvas = deps.renderer.domElement;
-  canvas.style.width = `${String(frameW)}px`;
-  canvas.style.height = `${String(frameH)}px`;
-
   const px = x / 100;
   const py = eye / 100;
   const pz = z / 100;
@@ -109,31 +120,54 @@ export function initDevCamera(deps: DevCameraDeps): void {
     Math.sin(pitch),
     Math.cos(yaw) * Math.cos(pitch),
   );
+  // Pin the orbit target onto the view ray as well, so even a stray
+  // controls update would keep the exact yaw and pitch.
   deps.camera.position.set(px, py, pz);
   deps.camera.lookAt(px + dir.x, py + dir.y, pz + dir.z);
-  deps.camera.fov = fovDeg;
-  deps.camera.aspect = 4 / 3;
-  deps.camera.updateProjectionMatrix();
+  deps.controls.target.set(px + dir.x, py + dir.y, pz + dir.z);
 
-  const size = deps.renderer.getDrawingBufferSize(new THREE.Vector2());
-  const w = size.x;
-  const h = size.y;
-  const halfVFov = (fovDeg * Math.PI) / 180 / 2;
-  const fy = h / 2 / Math.tan(halfVFov);
-  // Square pixels: both focal lengths derive from the same pixel pitch, so
-  // fx equals fy (the 4:3 frame keeps the horizontal field consistent).
-  const fx = fy;
-  window.__fitroomCamera = {
-    width: w,
-    height: h,
-    fx: Math.round(fx * 100) / 100,
-    fy: Math.round(fy * 100) / 100,
-    cx: w / 2,
-    cy: h / 2,
-    position: { x: px, y: py, z: pz },
-    yawDeg,
-    pitchDeg,
-    fovDeg,
+  const room = JSON.parse(JSON.stringify(deps.room)) as RoomLayout;
+
+  const frame = (): void => {
+    // Exact 1:1 pixels so the published intrinsics match the image.
+    deps.renderer.setPixelRatio(1);
+    const fullW = Math.max(1, deps.container.clientWidth);
+    const fullH = Math.max(1, deps.container.clientHeight);
+    const frameW = Math.max(2, Math.floor(Math.min(fullW, (fullH * 4) / 3)));
+    const frameH = Math.max(2, Math.floor((frameW * 3) / 4));
+    deps.renderer.setSize(frameW, frameH, false);
+    const canvas = deps.renderer.domElement;
+    canvas.style.width = `${String(frameW)}px`;
+    canvas.style.height = `${String(frameH)}px`;
+
+    deps.camera.fov = fovDeg;
+    deps.camera.aspect = 4 / 3;
+    deps.camera.updateProjectionMatrix();
+
+    const size = deps.renderer.getDrawingBufferSize(new THREE.Vector2());
+    const w = size.x;
+    const h = size.y;
+    const halfVFov = (fovDeg * Math.PI) / 180 / 2;
+    const fy = h / 2 / Math.tan(halfVFov);
+    // Square pixels: both focal lengths derive from the same pixel pitch, so
+    // fx equals fy (the 4:3 frame keeps the horizontal field consistent).
+    const fx = fy;
+    window.__fitroomCamera = {
+      width: w,
+      height: h,
+      fx: Math.round(fx * 100) / 100,
+      fy: Math.round(fy * 100) / 100,
+      cx: w / 2,
+      cy: h / 2,
+      position: { x: px, y: py, z: pz },
+      yawDeg,
+      pitchDeg,
+      fovDeg,
+      room,
+    };
   };
+
+  frame();
+  deps.onReady?.(frame);
   deps.requestRender();
 }
