@@ -8,6 +8,7 @@
 import type { CatalogItem, RoomLayout, SceneState } from "../types.js";
 import { wallLengthCm } from "../units.js";
 import { wallDisplayName } from "../recommend/walls.js";
+import { formatUsd, type AssistantBrief } from "./brief.js";
 import type { AssistantMessage, AssistantRequest } from "./types.js";
 
 /** The pasted system prompt: Muse Spark arranges only through the tools. */
@@ -146,13 +147,17 @@ export function describeRoomForAssistant(
         `rotationY ${String(round1(item.rotationY))} variant "${item.variant}"`,
     );
   }
-  lines.push("Catalog (id, name, category, W x D x H cm, variants):");
+  lines.push("Catalog (id, name, category, W x D x H cm, price, seats, style tags, variants):");
   for (const entry of catalog) {
     const variants =
       entry.variants.length === 0 ? "no variants" : entry.variants.map((v) => v.name).join(", ");
+    const seats = entry.seats ?? 0;
+    const seatWord = seats === 1 ? "1 seat" : `${String(seats)} seats`;
+    const styles = entry.styleTags.length === 0 ? "no style tags" : entry.styleTags.join(", ");
     lines.push(
       `- ${entry.id} ${entry.name} [${entry.category}] ` +
-        `${String(round1(entry.size.w))} x ${String(round1(entry.size.d))} x ${String(round1(entry.size.h))} cm (${variants})`,
+        `${String(round1(entry.size.w))} x ${String(round1(entry.size.d))} x ${String(round1(entry.size.h))} cm, ` +
+        `${formatUsd(entry.price)}, ${seatWord}, styles ${styles} (${variants})`,
     );
   }
   lines.push(
@@ -187,14 +192,39 @@ function flattenMessage(message: AssistantMessage): UpstreamChatMessage {
   return { role: message.role, content: message.content };
 }
 
+/**
+ * The brief paragraph appended to the system prompt on a furnishing turn
+ * (kept meaning, names adapted): what to seat, in which style, for how
+ * much, and how to answer.
+ */
+export function briefPromptAddition(brief: AssistantBrief): string {
+  const empty = brief.keepExisting ? "" : ", starting from an empty room";
+  return (
+    `Furnishing brief: seat ${String(brief.seats)} people, ${brief.style} style, ` +
+    `new pieces at most ${formatUsd(brief.budget)} in total${empty}. ` +
+    "Plan a complete, usable layout from the catalog: one seating group facing a focal point " +
+    "(the window, or a TV unit when the shopper asks for one), a coffee table 35-45 cm in front " +
+    "of the main seat when there are 3 or more seats, side tables or a plant only if the budget allows. " +
+    "Keep 80 cm walking paths and the door swing clear. Prefer pieces of the brief's style; where the " +
+    "catalog has none, choose a neutral piece and say so in one sentence. Place all pieces in as few " +
+    "rounds as you can, then call check_fit and fix every error. The tools refuse a piece that would " +
+    "pass the budget. Never invent products, prices or sizes. " +
+    "Answer in at most three sentences: what you chose and why."
+  );
+}
+
 /** System prompt + room description + flattened conversation. */
 export function buildAssistantUpstreamMessages(
   input: AssistantRequest,
   catalog: CatalogItem[],
 ): UpstreamChatMessage[] {
   const roomText = describeRoomForAssistant(input.room, input.scene, catalog);
+  const system =
+    input.brief === undefined
+      ? ASSISTANT_SYSTEM_PROMPT
+      : `${ASSISTANT_SYSTEM_PROMPT} ${briefPromptAddition(input.brief)}`;
   return [
-    { role: "system", content: ASSISTANT_SYSTEM_PROMPT },
+    { role: "system", content: system },
     { role: "user", content: `Customer request: ${input.request}\n\n${roomText}` },
     ...input.messages.map(flattenMessage),
   ];

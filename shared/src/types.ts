@@ -170,6 +170,11 @@ export interface CatalogItem {
   category: CatalogCategory;
   /** Price in USD, integer, the same for every variant. */
   price: number;
+  /**
+   * Seats this piece offers (0 for non-seating; the ottoman is a footrest).
+   * Optional — absent counts 0. Integer 0-8.
+   */
+  seats?: number;
   size: SizeCm;
   styleTags: string[];
   colors: string[];

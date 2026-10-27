@@ -12,6 +12,7 @@
 
 import type { RoomLayout, SceneState } from "../types.js";
 import { validateRoomLayout, validateSceneState } from "../validate.js";
+import { briefError, type AssistantBrief } from "./brief.js";
 
 /** One call the model wants executed on the draft scene. */
 export interface AssistantToolCall {
@@ -39,6 +40,11 @@ export interface AssistantRequest {
   room: RoomLayout;
   /** The current draft scene (evolves as tools run). */
   scene: SceneState;
+  /**
+   * Optional furnishing brief (seats, style, budget, keepExisting): part of
+   * the demo-store, cache and cap key like the other fields.
+   */
+  brief?: AssistantBrief;
 }
 
 /** One model round: final text, plus tool calls when the turn continues. */
@@ -100,6 +106,10 @@ export function assistantRequestError(body: unknown): string | null {
   if (!room.ok) return `The room is invalid: ${room.errors[0]?.message ?? "unknown problem"}.`;
   const scene = validateSceneState(body["scene"]);
   if (!scene.ok) return `The scene is invalid: ${scene.errors[0]?.message ?? "unknown problem"}.`;
+  if (body["brief"] !== undefined) {
+    const briefProblem = briefError(body["brief"]);
+    if (briefProblem !== null) return briefProblem;
+  }
   return null;
 }
 

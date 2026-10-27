@@ -21,6 +21,7 @@ export const catalogItemSchema = {
       ],
     },
     price: { type: "integer", minimum: 0 },
+    seats: { type: "integer", minimum: 0, maximum: 8 },
     size: {
       type: "object",
       properties: {

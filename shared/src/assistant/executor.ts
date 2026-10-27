@@ -20,16 +20,91 @@ import {
 } from "../fit.js";
 import type { CatalogItem, FitIssue, RoomLayout, SceneItem, SceneState } from "../types.js";
 import { wallLengthCm } from "../units.js";
+import {
+  briefPricedTotal,
+  briefSeatCount,
+  briefStyleMatches,
+  formatUsd,
+  overBudgetError,
+  type AssistantBrief,
+} from "./brief.js";
 import { isAssistantToolName } from "./tools.js";
 
 export interface AssistantContext {
   room: RoomLayout;
   catalog: CatalogItem[];
   byId: Map<string, CatalogItem>;
+  /** Furnishing brief for this turn (budget and style checks). */
+  brief?: AssistantBrief;
+  /** Instance ids placed in this turn: the brief's new pieces. */
+  briefNewIds: Set<string>;
 }
 
-export function createAssistantContext(room: RoomLayout, catalog: CatalogItem[]): AssistantContext {
-  return { room, catalog, byId: new Map(catalog.map((c) => [c.id, c])) };
+export function createAssistantContext(
+  room: RoomLayout,
+  catalog: CatalogItem[],
+  brief?: AssistantBrief,
+): AssistantContext {
+  return {
+    room,
+    catalog,
+    byId: new Map(catalog.map((c) => [c.id, c])),
+    ...(brief === undefined ? {} : { brief }),
+    briefNewIds: new Set<string>(),
+  };
+}
+
+/** Priced total of the turn's new pieces still on the draft. */
+function briefNewTotal(ctx: AssistantContext, draft: SceneState): number {
+  return briefPricedTotal(
+    ctx.catalog,
+    draft.items.filter((item) => ctx.briefNewIds.has(item.instanceId)),
+  );
+}
+
+/**
+ * Refusal when a new piece would push the turn's new pieces past the brief
+ * budget. Nothing changes. Removing a new piece frees its price.
+ */
+function budgetRefusal(
+  ctx: AssistantContext,
+  draft: SceneState,
+  entry: CatalogItem,
+): Record<string, unknown> | null {
+  if (ctx.brief === undefined) return null;
+  const total = briefNewTotal(ctx, draft);
+  if (total + entry.price <= ctx.brief.budget) return null;
+  return {
+    ok: false,
+    overBudget: true,
+    error: overBudgetError(entry.name, entry.price, total, ctx.brief.budget),
+  };
+}
+
+/**
+ * One status line for a brief turn: seats in the room against the brief,
+ * the new pieces' total against the budget, which new pieces match the
+ * style.
+ */
+export function briefStatusLine(ctx: AssistantContext, draft: SceneState): string | null {
+  if (ctx.brief === undefined) return null;
+  const brief = ctx.brief;
+  const seats = briefSeatCount(ctx.catalog, draft.items);
+  const fresh = draft.items.filter((item) => ctx.briefNewIds.has(item.instanceId));
+  const total = briefPricedTotal(ctx.catalog, fresh);
+  const matched = fresh
+    .map((item) => ctx.byId.get(item.productId))
+    .filter(
+      (entry): entry is CatalogItem =>
+        entry !== undefined && briefStyleMatches(brief.style, entry.styleTags),
+    )
+    .map((entry) => entry.name);
+  const styleWord = brief.style.charAt(0).toUpperCase() + brief.style.slice(1);
+  return (
+    `Seats ${String(seats)} of ${String(brief.seats)} · ` +
+    `${formatUsd(total)} of ${formatUsd(brief.budget)} · ` +
+    `${styleWord} match: ${matched.length === 0 ? "none" : matched.join(", ")}`
+  );
 }
 
 /** Deep copy of a scene: the draft a turn works on. */
@@ -733,6 +808,8 @@ export function executeAssistantTool(
           category: c.category,
           size: { w: round1(c.size.w), d: round1(c.size.d), h: round1(c.size.h) },
           price_usd: c.price,
+          seats: c.seats ?? 0,
+          styleTags: [...c.styleTags],
           variants: c.variants.map((v) => v.name),
         }));
       return { ok: true, products };
@@ -764,6 +841,8 @@ export function executeAssistantTool(
         }
         variant = matched;
       }
+      const budgeted = budgetRefusal(ctx, draft, entry);
+      if (budgeted !== null) return budgeted;
       const refusal = wallStretchRefusal(
         ctx,
         entry.name,
@@ -781,6 +860,7 @@ export function executeAssistantTool(
         variant,
       };
       draft.items.push(item);
+      ctx.briefNewIds.add(item.instanceId);
       return touchedResult(ctx, draft, item);
     }
     case "move_item": {
@@ -830,16 +910,19 @@ export function executeAssistantTool(
           placed: draft.items.map((i) => i.instanceId),
         };
       }
+      ctx.briefNewIds.delete(instanceId);
       const removed: Record<string, unknown> = { ok: true, removed: instanceId };
       return isDraftClean(ctx, draft) ? { ...removed, ready: ASSISTANT_READY_LINE } : removed;
     }
     case "check_fit": {
       const issues = draftIssues(ctx, draft);
-      return {
+      const base: Record<string, unknown> = {
         ok: true,
         fits: issues.every((i) => i.severity !== "error"),
         issues,
       };
+      const status = briefStatusLine(ctx, draft);
+      return status === null ? base : { ...base, brief: status };
     }
     case "set_variant": {
       const instanceId = needString(args, "instanceId");
@@ -917,6 +1000,8 @@ export function executeAssistantTool(
       } else if (productId !== null) {
         const entry = ctx.byId.get(productId);
         if (entry === undefined) return { ok: false, error: `Unknown productId "${productId}".` };
+        const budgeted = budgetRefusal(ctx, draft, entry);
+        if (budgeted !== null) return budgeted;
         size = { ...entry.size };
       }
       let dist = offset ?? 0;
@@ -977,6 +1062,7 @@ export function executeAssistantTool(
           variant: defaultVariant(entry),
         };
         draft.items.push(created);
+        ctx.briefNewIds.add(created.instanceId);
         item = created;
       } else if (item !== null) {
         item.position = { x: round1(cx), z: round1(cz) };

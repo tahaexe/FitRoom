@@ -132,7 +132,8 @@ const DESCRIPTIONS: Record<AssistantToolName, string> = {
   get_room:
     "Room walls (id, shopper name, start, end, length), openings (id, wall, type, span, sill, hinge, swing), fixtures and free wall runs.",
   list_items: "Placed items: instanceId, productId, name, centre, rotationY, footprint, variant.",
-  list_catalog: "Catalog products: id, name, category, size {w,d,h} cm, price, variants.",
+  list_catalog:
+    "Catalog products: id, name, category, size {w,d,h} cm, price_usd, seats, styleTags, variants.",
   place_item:
     "Place a catalog product at a centre (x, z) with rotationY. Returns instanceId, footprint and fit issues touching it.",
   move_item: "Move a placed item to a centre (x, z). Returns footprint and fit issues touching it.",

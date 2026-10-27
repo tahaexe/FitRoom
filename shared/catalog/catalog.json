@@ -4,6 +4,7 @@
     "name": "Chester Leather Sofa",
     "category": "sofa",
     "price": 1490,
+    "seats": 2,
     "size": {
       "w": 180.7,
       "d": 81.8,
@@ -23,6 +24,7 @@
     "name": "Heritage Grand Sofa",
     "category": "sofa",
     "price": 1790,
+    "seats": 3,
     "size": {
       "w": 273.1,
       "d": 92.5,
@@ -42,6 +44,7 @@
     "name": "Provence Loveseat",
     "category": "sofa",
     "price": 890,
+    "seats": 2,
     "size": {
       "w": 157.1,
       "d": 65.8,
@@ -107,6 +110,7 @@
     "name": "Orbit Swivel Lounge Chair",
     "category": "armchair",
     "price": 820,
+    "seats": 1,
     "size": {
       "w": 100.9,
       "d": 119.0,
@@ -126,6 +130,7 @@
     "name": "Nord Leather Armchair",
     "category": "armchair",
     "price": 590,
+    "seats": 1,
     "size": {
       "w": 82.0,
       "d": 98.7,
@@ -145,6 +150,7 @@
     "name": "Bloom Velvet Lounge Chair",
     "category": "armchair",
     "price": 450,
+    "seats": 1,
     "size": {
       "w": 82.7,
       "d": 57.0,
@@ -175,6 +181,7 @@
     "name": "Victoria Accent Chair",
     "category": "armchair",
     "price": 380,
+    "seats": 1,
     "size": {
       "w": 67.3,
       "d": 66.4,
@@ -194,6 +201,7 @@
     "name": "Provence Armchair",
     "category": "armchair",
     "price": 490,
+    "seats": 1,
     "size": {
       "w": 84.8,
       "d": 76.6,
@@ -260,6 +268,7 @@
     "name": "Chester Ottoman",
     "category": "ottoman",
     "price": 290,
+    "seats": 0,
     "size": {
       "w": 88.5,
       "d": 62.1,
@@ -279,6 +288,7 @@
     "name": "Slate Coffee Table",
     "category": "coffee-table",
     "price": 340,
+    "seats": 0,
     "size": {
       "w": 120.2,
       "d": 60.0,
@@ -298,6 +308,7 @@
     "name": "Luna Marble Coffee Table",
     "category": "coffee-table",
     "price": 560,
+    "seats": 0,
     "size": {
       "w": 130.1,
       "d": 130.1,
@@ -317,6 +328,7 @@
     "name": "Pine Side Table",
     "category": "side-table",
     "price": 120,
+    "seats": 0,
     "size": {
       "w": 55.0,
       "d": 45.0,
@@ -336,6 +348,7 @@
     "name": "Rhythm TV Unit",
     "category": "tv-unit",
     "price": 860,
+    "seats": 0,
     "size": {
       "w": 244.0,
       "d": 52.0,
@@ -355,6 +368,7 @@
     "name": "Cube Shelf 3×3",
     "category": "shelf",
     "price": 210,
+    "seats": 0,
     "size": {
       "w": 107.8,
       "d": 37.2,
@@ -374,6 +388,7 @@
     "name": "Alocasia in Terracotta",
     "category": "decor",
     "price": 65,
+    "seats": 0,
     "size": {
       "w": 70.1,
       "d": 65.7,

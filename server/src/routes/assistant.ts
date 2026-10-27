@@ -128,7 +128,10 @@ function parseAssistantBody(body: unknown): ParsedBody | { error: string } {
 /**
  * Key input for the demo store, cache and caps: the canonical request with
  * the advisory `ready` line stripped from tool results, so a turn recorded
- * before that line existed still replays (the line never changes the draft).
+ * before that line existed still replays (the line never changes the draft),
+ * and with the `seats`/`styleTags` display fields stripped from
+ * `list_catalog` results, so turns recorded before those fields existed
+ * still replay. The brief itself stays in the key like the other fields.
  * Exported so `check:assistant` can name the same keys the pipeline reads.
  */
 export function assistantKeyInput(input: unknown): unknown {
@@ -147,9 +150,19 @@ export function assistantKeyInput(input: unknown): unknown {
     }
     if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) return entry;
     const result = parsed as Record<string, unknown>;
-    if (!("ready" in result)) return entry;
     const stripped = { ...result };
     delete stripped["ready"];
+    if (message["name"] === "list_catalog" && Array.isArray(stripped["products"])) {
+      stripped["products"] = (stripped["products"] as unknown[]).map((product) => {
+        if (typeof product !== "object" || product === null || Array.isArray(product)) {
+          return product;
+        }
+        const view = { ...(product as Record<string, unknown>) };
+        delete view["seats"];
+        delete view["styleTags"];
+        return view;
+      });
+    }
     return { ...message, content: JSON.stringify(stripped) };
   });
   return { ...record, messages };
