@@ -9,13 +9,21 @@
 
 export type ValueSource = "measured" | "estimated";
 
+/**
+ * Text of a measured mark: plain "Measured", or with its ± tolerance once a
+ * typed wall length turns measured (± 0.5 cm).
+ */
+export function measuredMarkText(toleranceCm?: number): string {
+  if (toleranceCm === undefined) return "Measured";
+  return `Measured ± ${String(Math.round(toleranceCm * 10) / 10)} cm`;
+}
+
 export function sourceMark(source: ValueSource, toleranceCm?: number): HTMLElement {
   const mark = document.createElement("span");
   mark.className = "source-mark";
   mark.dataset["source"] = source;
   if (source === "measured") {
-    const label =
-      toleranceCm === undefined ? "Measured" : `Measured ± ${String(Math.round(toleranceCm))} cm`;
+    const label = measuredMarkText(toleranceCm);
     mark.setAttribute("title", `${label}: typed by you`);
     mark.appendChild(tapeIcon());
     const text = document.createElement("span");
