@@ -294,7 +294,13 @@ const furnishEnd: SceneState = {
     },
   ],
 };
-const furnishCard = briefResultCard(furnishStart, furnishEnd, guideRoom, furnishCatalog, furnishBrief);
+const furnishCard = briefResultCard(
+  furnishStart,
+  furnishEnd,
+  guideRoom,
+  furnishCatalog,
+  furnishBrief,
+);
 check(
   "brief:card-headline",
   furnishCard.headline === "Seats 3 of 4 · 2 new pieces · $1,870 of $2,500 · ✓ Fits",

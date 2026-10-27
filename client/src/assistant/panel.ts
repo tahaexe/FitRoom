@@ -355,9 +355,7 @@ export class AssistantPanel {
     budget.setAttribute("aria-label", "Budget in dollars");
     budget.addEventListener("change", () => {
       const parsed = Math.round(Number(budget.value));
-      this.furnishBudget = Number.isFinite(parsed)
-        ? Math.min(20000, Math.max(300, parsed))
-        : 2000;
+      this.furnishBudget = Number.isFinite(parsed) ? Math.min(20000, Math.max(300, parsed)) : 2000;
       budget.value = String(this.furnishBudget);
     });
     budgetRow.append(dollar, budget);

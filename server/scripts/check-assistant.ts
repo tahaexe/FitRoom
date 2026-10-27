@@ -36,7 +36,6 @@ import {
   assistantRequestError,
   assistantToolMessages,
   briefNewItems,
-  briefPricedTotal,
   briefResultCard,
   briefSeatCount,
   briefStyleMatches,
@@ -475,7 +474,10 @@ async function main(): Promise<void> {
   );
 
   // ---- style groups by catalog tag (case-insensitive) ----
-  check("style: modern matches mid-century modern", briefStyleMatches("modern", ["mid-century modern"]));
+  check(
+    "style: modern matches mid-century modern",
+    briefStyleMatches("modern", ["mid-century modern"]),
+  );
   check("style: modern matches Mid-Century", briefStyleMatches("modern", ["Mid-Century"]));
   check(
     "style: classic matches French provincial",

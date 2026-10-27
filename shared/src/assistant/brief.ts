@@ -121,7 +121,7 @@ export function startBriefDraft(start: SceneState, brief?: AssistantBrief): Scen
   if (brief === undefined || brief.keepExisting) {
     return JSON.parse(JSON.stringify(start)) as SceneState;
   }
-  return { ...JSON.parse(JSON.stringify(start)) as SceneState, items: [] };
+  return { ...(JSON.parse(JSON.stringify(start)) as SceneState), items: [] };
 }
 
 /**
@@ -195,7 +195,8 @@ export function briefResultCard(
   );
   const fitErrors = checkFit(room, end, products).filter((i) => i.severity === "error").length;
   const pieceWord = fresh.length === 1 ? "1 new piece" : `${String(fresh.length)} new pieces`;
-  const fits = fitErrors === 0 ? "✓ Fits" : `✕ ${String(fitErrors)} problem${fitErrors === 1 ? "" : "s"}`;
+  const fits =
+    fitErrors === 0 ? "✓ Fits" : `✕ ${String(fitErrors)} problem${fitErrors === 1 ? "" : "s"}`;
   const headline =
     `Seats ${String(seats)} of ${String(brief.seats)} · ${pieceWord} · ` +
     `${formatUsd(total)} of ${formatUsd(brief.budget)} · ${fits}`;
