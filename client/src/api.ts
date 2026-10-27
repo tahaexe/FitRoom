@@ -61,6 +61,7 @@ function toResult(payload: GatewayResponse): ApiResult {
 async function postGateway(
   route: "recommend" | "assistant" | "render" | "room/segment" | "room/label",
   body: Record<string, unknown>,
+  signal?: AbortSignal,
 ): Promise<ApiResult> {
   let res: Response;
   try {
@@ -71,8 +72,15 @@ async function postGateway(
         ...(isLive() ? { "X-FitRoom-Live": "1" } : {}),
       },
       body: JSON.stringify(body),
+      ...(signal !== undefined ? { signal } : {}),
     });
-  } catch {
+  } catch (error) {
+    if (signal?.aborted === true) {
+      return { status: "error", message: "The request timed out. Try again." };
+    }
+    if (error instanceof DOMException && error.name === "AbortError") {
+      return { status: "error", message: "The request timed out. Try again." };
+    }
     return { status: "error", message: "The AI service is unreachable." };
   }
   let payload: unknown;
@@ -102,12 +110,18 @@ export function postRender(body: Record<string, unknown>): Promise<ApiResult> {
   return postGateway("render", body);
 }
 
-export function postSegment(body: Record<string, unknown>): Promise<ApiResult> {
-  return postGateway("room/segment", body);
+export function postSegment(
+  body: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
+): Promise<ApiResult> {
+  return postGateway("room/segment", body, options?.signal);
 }
 
-export function postLabel(body: Record<string, unknown>): Promise<ApiResult> {
-  return postGateway("room/label", body);
+export function postLabel(
+  body: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
+): Promise<ApiResult> {
+  return postGateway("room/label", body, options?.signal);
 }
 
 /** Bind the top bar's Live AI switch (off = "Demo"). */

@@ -29,13 +29,15 @@ type ExifrParse = (
  * and a UMD bundle (default export, used by Node): accept both shapes.
  */
 function exifrParseFn(): ExifrParse {
-  const ns = exifrNs as unknown as Record<string, unknown>;
+  const holder: unknown = exifrNs;
+  const ns = holder as Record<string, unknown>;
   const direct = ns["parse"];
-  if (typeof direct === "function") return direct as unknown as ExifrParse;
+  if (typeof direct === "function") return direct as ExifrParse;
   const def = ns["default"];
   if (typeof def === "object" && def !== null) {
-    const fallback = (def as Record<string, unknown>)["parse"];
-    if (typeof fallback === "function") return fallback as unknown as ExifrParse;
+    const inner: unknown = def;
+    const fallback = (inner as Record<string, unknown>)["parse"];
+    if (typeof fallback === "function") return fallback as ExifrParse;
   }
   throw new Error("The photo intake needs the exifr library.");
 }
@@ -204,6 +206,7 @@ export function computePhotoPlan(fullW: number, fullH: number, orientation: numb
 export interface PhotoSource {
   width: number;
   height: number;
+  image: CanvasImageSource;
   close(): void;
 }
 
@@ -211,6 +214,7 @@ export interface PhotoSource {
 export interface PhotoCanvas {
   width: number;
   height: number;
+  image: CanvasImageSource;
   drawOriented(source: PhotoSource, orientation: number): void;
   drawSmaller(source: PhotoCanvas): void;
   toDataUrl(): Promise<string>;
@@ -254,7 +258,7 @@ export async function runDownscalePipeline(
 }
 
 /** Browser `PhotoCanvas` over a real 2D canvas. */
-export function browserCanvas(w: number, h: number): PhotoCanvas {
+export function browserCanvas(w: number, h: number): PhotoCanvas & { canvas: HTMLCanvasElement } {
   const canvas = document.createElement("canvas");
   canvas.width = w;
   canvas.height = h;
@@ -271,17 +275,11 @@ export function browserCanvas(w: number, h: number): PhotoCanvas {
     ctx.translate(dw / 2, dh / 2);
     ctx.rotate((t.rotateDeg * Math.PI) / 180);
     ctx.scale(t.flipH ? -scale : scale, scale);
-    const bitmap = source as unknown as CanvasImageSource;
-    ctx.drawImage(bitmap, -source.width / 2, -source.height / 2, source.width, source.height);
+    ctx.drawImage(source.image, -source.width / 2, -source.height / 2, source.width, source.height);
   };
   const drawSmaller = (source: PhotoCanvas): void => {
-    const real = source as unknown as { canvas: HTMLCanvasElement };
-    if (real.canvas instanceof HTMLCanvasElement) {
-      ctx.setTransform(1, 0, 0, 1, 0, 0);
-      ctx.drawImage(real.canvas, 0, 0, canvas.width, canvas.height);
-      return;
-    }
-    throw new Error("The photo intake only downscales its own canvases.");
+    ctx.setTransform(1, 0, 0, 1, 0, 0);
+    ctx.drawImage(source.image, 0, 0, canvas.width, canvas.height);
   };
   const toDataUrl = (): Promise<string> =>
     new Promise((resolve, reject) => {
@@ -303,11 +301,12 @@ export function browserCanvas(w: number, h: number): PhotoCanvas {
   return {
     width: w,
     height: h,
+    image: canvas,
     drawOriented,
     drawSmaller,
     toDataUrl,
     canvas,
-  } as PhotoCanvas & { canvas: HTMLCanvasElement };
+  };
 }
 
 export interface IntakePhoto {
@@ -321,27 +320,61 @@ export interface IntakePhoto {
   focal35mm: number | undefined;
 }
 
+/** Time limit for reading and resizing one photo (20 s). */
+export const PHOTO_READ_TIMEOUT_MS = 20000;
+
+/** Decodes a picked file into a drawable full-size image. */
+export type PhotoDecoder = (file: Blob) => Promise<ImageBitmap>;
+
+/** Injectable wiring for `processPhotoFile` (headless checks pass fakes). */
+export interface ProcessPhotoOptions {
+  decode?: PhotoDecoder;
+  makeCanvas?: (w: number, h: number) => PhotoCanvas;
+  timeoutMs?: number;
+}
+
 /**
  * One photo at a time from a picked file: EXIF first (before any resize),
  * then the downscale pipeline, releasing the full-size image at once.
  */
-export async function processPhotoFile(file: File): Promise<IntakePhoto> {
-  const bytes = await file.arrayBuffer();
-  const exif = await readPhotoExif(bytes);
-  const bitmap = await createImageBitmap(file);
-  const source: PhotoSource = {
-    width: bitmap.width,
-    height: bitmap.height,
-    close: () => bitmap.close(),
-  };
-  try {
-    const downscaled = await runDownscalePipeline(source, exif.orientation, browserCanvas);
-    return { ...downscaled, orientation: exif.orientation, focal35mm: exif.focal35mm };
-  } finally {
+export async function processPhotoFile(
+  file: File,
+  options: ProcessPhotoOptions = {},
+): Promise<IntakePhoto> {
+  const decode = options.decode ?? ((blob: Blob) => createImageBitmap(blob));
+  const makeCanvas = options.makeCanvas ?? browserCanvas;
+  const timeoutMs = options.timeoutMs ?? PHOTO_READ_TIMEOUT_MS;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const work = (async (): Promise<IntakePhoto> => {
+    const bytes = await file.arrayBuffer();
+    const exif = await readPhotoExif(bytes);
+    const bitmap = await decode(file);
+    const source: PhotoSource = {
+      width: bitmap.width,
+      height: bitmap.height,
+      image: bitmap,
+      close: () => bitmap.close(),
+    };
     try {
-      bitmap.close();
-    } catch {
-      // Already closed by the pipeline.
+      const downscaled = await runDownscalePipeline(source, exif.orientation, makeCanvas);
+      return { ...downscaled, orientation: exif.orientation, focal35mm: exif.focal35mm };
+    } finally {
+      try {
+        bitmap.close();
+      } catch {
+        // Already closed by the pipeline.
+      }
     }
+  })();
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(
+      () => reject(new Error("Reading your photo timed out after 20 seconds. Try again.")),
+      timeoutMs,
+    );
+  });
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
   }
 }

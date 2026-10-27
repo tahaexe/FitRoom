@@ -24,6 +24,7 @@ import { fileURLToPath } from "node:url";
 import {
   computePhotoPlan,
   pixelsUpright,
+  processPhotoFile,
   readPhotoExif,
   runDownscalePipeline,
   type PhotoCanvas,
@@ -100,20 +101,28 @@ function tiffWithExif(orientation: number, focal: number | null): Uint8Array {
 const events: string[] = [];
 
 class FakeSource implements PhotoSource {
+  public image: CanvasImageSource;
   constructor(
     public width: number,
     public height: number,
-  ) {}
+  ) {
+    const holder: unknown = { fakeSource: `${String(width)}x${String(height)}` };
+    this.image = holder as CanvasImageSource;
+  }
   close(): void {
     events.push("close");
   }
 }
 
 class FakeCanvas implements PhotoCanvas {
+  public image: CanvasImageSource;
   constructor(
     public width: number,
     public height: number,
-  ) {}
+  ) {
+    const holder: unknown = { fakeCanvas: `${String(width)}x${String(height)}` };
+    this.image = holder as CanvasImageSource;
+  }
   drawOriented(source: PhotoSource, orientation: number): void {
     events.push(`draw ${String(source.width)}x${String(source.height)} o${String(orientation)}`);
   }
@@ -195,7 +204,7 @@ async function main(): Promise<void> {
 
   let oversized = false;
   const made: string[] = [];
-  const result = await runDownscalePipeline(new FakeSource(8000, 6000, 1), 1, (w, h) => {
+  const result = await runDownscalePipeline(new FakeSource(8000, 6000), 1, (w, h) => {
     made.push(`${String(w)}x${String(h)}`);
     if (Math.max(w, h) > 1280) oversized = true;
     return new FakeCanvas(w, h);
@@ -220,6 +229,68 @@ async function main(): Promise<void> {
     result.labelWidth === 640 && result.labelHeight === 480,
     `${String(result.labelWidth)}x${String(result.labelHeight)}`,
   );
+
+  const wiringFile = new File([new Uint8Array([1, 2, 3])], "photo.jpg", { type: "image/jpeg" });
+  let closedWiring = 0;
+  const fakeImageHolder: unknown = {
+    width: 800,
+    height: 600,
+    close: () => {
+      closedWiring += 1;
+    },
+  };
+  const fakeImage = fakeImageHolder as ImageBitmap;
+  let drawSawExactImage = false;
+  const wiringResult = await processPhotoFile(wiringFile, {
+    decode: () => Promise.resolve(fakeImage),
+    makeCanvas: (w, h) => {
+      const holder: unknown = { wiringCanvas: `${String(w)}x${String(h)}` };
+      const canvas: PhotoCanvas = {
+        width: w,
+        height: h,
+        image: holder as CanvasImageSource,
+        drawOriented: (source) => {
+          const expected: unknown = fakeImage;
+          const actual: unknown = source.image;
+          if (actual !== expected) throw new Error("drawOriented did not get the decoded image");
+          drawSawExactImage = true;
+        },
+        drawSmaller: () => {},
+        toDataUrl: () => Promise.resolve(`data:image/jpeg;base64,fake-${String(w)}x${String(h)}`),
+      };
+      return canvas;
+    },
+    timeoutMs: 5000,
+  });
+  check(
+    "processPhotoFile draws exactly the decoded image",
+    drawSawExactImage && wiringResult.segWidth > 0 && closedWiring >= 1,
+    `draw=${String(drawSawExactImage)} closed=${String(closedWiring)}`,
+  );
+
+  let decoderErrorSeen = false;
+  try {
+    await processPhotoFile(wiringFile, {
+      decode: () => Promise.reject(new Error("decode boom")),
+      makeCanvas: (w, h) => new FakeCanvas(w, h),
+      timeoutMs: 5000,
+    });
+  } catch (error) {
+    decoderErrorSeen = error instanceof Error && error.message.includes("decode boom");
+  }
+  check("a decoder failure reaches the caller", decoderErrorSeen);
+
+  let timedOut = false;
+  try {
+    await processPhotoFile(wiringFile, {
+      decode: () => new Promise<never>(() => {}),
+      makeCanvas: (w, h) => new FakeCanvas(w, h),
+      timeoutMs: 50,
+    });
+  } catch (error) {
+    timedOut = error instanceof Error && error.message.includes("timed out");
+  }
+  check("a hung decoder hits the time limit", timedOut);
 
   await savePhoto({
     wall: "A",

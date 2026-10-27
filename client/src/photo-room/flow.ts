@@ -32,6 +32,7 @@ import {
   analyseWallPhoto,
   cornersFound,
   floorLineFound,
+  LABEL_TIMEOUT_MS,
   tiltDeg,
   TILT_AMBER_DEG,
   type WallAnalysis,
@@ -80,6 +81,7 @@ interface WallState {
   demoMiss: boolean;
   error: string | null;
   analysing: boolean;
+  reading: boolean;
   progress: { done: number; total: number };
   tap: { x: number; y: number } | null;
   tapping: boolean;
@@ -95,6 +97,7 @@ function emptyWallState(): WallState {
     demoMiss: false,
     error: null,
     analysing: false,
+    reading: false,
     progress: { done: 0, total: 0 },
     tap: null,
     tapping: false,
@@ -265,12 +268,16 @@ export class PhotoFlow {
   /** Reload saved downscaled photos (a reload keeps the run). */
   private async restore(): Promise<void> {
     for (const letter of WALL_ORDER) {
-      const stored = await loadPhoto(letter);
-      if (stored === null) continue;
-      const state = this.walls.get(letter);
-      if (state === undefined) continue;
-      state.photo = stored;
-      state.intake = stored;
+      try {
+        const stored = await loadPhoto(letter);
+        if (stored === null) continue;
+        const state = this.walls.get(letter);
+        if (state === undefined) continue;
+        state.photo = stored;
+        state.intake = stored;
+      } catch (error) {
+        console.error(`Restoring the photo for wall ${letter} failed.`, error);
+      }
     }
     this.render();
   }
@@ -356,7 +363,27 @@ export class PhotoFlow {
     host.appendChild(lens);
 
     if (state.intake === null) {
+      const privacy = document.createElement("p");
+      privacy.className = "photo-privacy";
+      privacy.textContent =
+        "Your photos are sent to Meta's AI models for analysis and may be used to improve them.";
+      host.appendChild(privacy);
       host.appendChild(this.picker(letter));
+      if (state.error !== null) {
+        const message = document.createElement("p");
+        message.className = "photo-sheet-bad";
+        message.textContent = state.error;
+        host.appendChild(message);
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.className = "photo-quiet";
+        retry.textContent = "Try again";
+        retry.addEventListener("click", () => {
+          state.error = null;
+          this.render();
+        });
+        host.appendChild(retry);
+      }
       if (this.wallIndex > 0)
         host.appendChild(this.backButton("Back to previous wall", () => this.prevWall()));
       return;
@@ -366,6 +393,7 @@ export class PhotoFlow {
   }
 
   private picker(letter: WallLetter): HTMLElement {
+    const state = this.stateOf(letter);
     const zone = document.createElement("div");
     zone.className = "photo-drop";
     const inputId = `photo-file-${letter}`;
@@ -374,7 +402,12 @@ export class PhotoFlow {
     input.id = inputId;
     input.accept = "image/*";
     input.className = "photo-file";
+    if (state.reading) input.disabled = true;
     input.addEventListener("change", () => {
+      if (this.stateOf(letter).reading) {
+        input.value = "";
+        return;
+      }
       const file = input.files?.[0];
       if (file !== undefined) void this.takeFile(letter, file);
       input.value = "";
@@ -382,7 +415,7 @@ export class PhotoFlow {
     const label = document.createElement("label");
     label.className = "photo-pick";
     label.setAttribute("for", inputId);
-    label.textContent = "Take or pick a photo";
+    label.textContent = state.reading ? "Reading your photo…" : "Take or pick a photo";
     const hint = document.createElement("p");
     hint.className = "photo-drop-hint";
     hint.textContent = "Camera or library on a phone · drag and drop on a desktop";
@@ -397,6 +430,7 @@ export class PhotoFlow {
     zone.addEventListener("drop", (event) => {
       event.preventDefault();
       zone.dataset["over"] = "false";
+      if (this.stateOf(letter).reading) return;
       const file = event.dataTransfer?.files?.[0];
       if (file !== undefined && file.type.startsWith("image/")) void this.takeFile(letter, file);
     });
@@ -405,20 +439,32 @@ export class PhotoFlow {
 
   private async takeFile(letter: WallLetter, file: File): Promise<void> {
     const state = this.stateOf(letter);
+    if (state.reading) return;
     state.error = null;
     state.demoMiss = false;
     state.analysis = null;
     state.tap = null;
     state.doorMarked = false;
+    state.reading = true;
     this.render();
     try {
       const intake = await processPhotoFile(file);
       const stored: StoredPhoto = { ...intake, wall: letter, savedAt: Date.now() };
-      await savePhoto(stored);
+      try {
+        await savePhoto(stored);
+      } catch (saveError) {
+        console.warn("Keeping the photo in memory: saving it failed.", saveError);
+      }
       state.photo = stored;
       state.intake = intake;
-    } catch {
-      state.error = "That photo could not be read. Please try another.";
+    } catch (error) {
+      console.error(`Reading the photo for wall ${letter} failed.`, error);
+      state.error =
+        error instanceof Error && error.message.includes("timed out")
+          ? error.message
+          : "That photo could not be read. Please try another.";
+    } finally {
+      state.reading = false;
     }
     this.render();
     if (state.intake !== null) void this.analyse(letter, null);
@@ -654,7 +700,11 @@ export class PhotoFlow {
   }
 
   private async retake(letter: WallLetter): Promise<void> {
-    await clearPhoto(letter);
+    try {
+      await clearPhoto(letter);
+    } catch (error) {
+      console.error(`Discarding the photo for wall ${letter} failed.`, error);
+    }
     this.walls.set(letter, emptyWallState());
     this.render();
   }
@@ -705,6 +755,7 @@ export class PhotoFlow {
         }
       }
     } catch (error) {
+      console.error(`Analysing the photo for wall ${letter} failed.`, error);
       state.error = error instanceof Error ? error.message : "The room scanner failed just now.";
     } finally {
       state.analysing = false;
@@ -985,7 +1036,10 @@ export class PhotoFlow {
       this.buildMessage = "Labelling your room…";
       this.render();
       // The label never blocks: on failure the defaults stand in.
-      const labelPromise = this.labelPhotos().catch(() => defaultRoomLabel(["A", "B", "C", "D"]));
+      const labelPromise = this.labelPhotos().catch((error: unknown) => {
+        console.error("Labelling the room failed; using defaults.", error);
+        return defaultRoomLabel(["A", "B", "C", "D"]);
+      });
       const draft = solveRoomFromPhotos({
         photos,
         tapeA: finalA,
@@ -998,6 +1052,7 @@ export class PhotoFlow {
       this.render();
       this.callbacks.onDone({ draft, meta: draftMeta(draft, estimated) });
     } catch (error) {
+      console.error("Building the room failed.", error);
       this.buildError = error instanceof Error ? error.message : "Solving failed just now.";
       this.render();
     }
@@ -1010,7 +1065,14 @@ export class PhotoFlow {
       if (intake === null) continue;
       labelPhotos.push({ wall: letter, image: intake.labelUrl });
     }
-    const result = await postLabel({ photos: labelPhotos });
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), LABEL_TIMEOUT_MS);
+    let result: Awaited<ReturnType<typeof postLabel>>;
+    try {
+      result = await postLabel({ photos: labelPhotos }, { signal: controller.signal });
+    } finally {
+      clearTimeout(timer);
+    }
     if (result.status !== "ok") return defaultRoomLabel(["A", "B", "C", "D"]);
     const data = result.data as RoomLabelAnswer;
     if (typeof data !== "object" || data === null || !Array.isArray(data.photos)) {

@@ -16,6 +16,21 @@ export interface StoredPhoto extends IntakePhoto {
 const DB_NAME = "fitroom-photos";
 const DB_STORE = "photos";
 
+/** Time limit for each IndexedDB operation (5 s). */
+export const PHOTO_STORE_TIMEOUT_MS = 5000;
+
+async function withTimeout<T>(work: Promise<T>, message: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => reject(new Error(message)), PHOTO_STORE_TIMEOUT_MS);
+  });
+  try {
+    return await Promise.race([work, timeout]);
+  } finally {
+    if (timer !== undefined) clearTimeout(timer);
+  }
+}
+
 function idb(): IDBFactory | null {
   try {
     return typeof indexedDB === "undefined" ? null : indexedDB;
@@ -71,10 +86,13 @@ const memory = new Map<string, StoredPhoto>();
 /** Save one wall's downscaled photos. */
 export async function savePhoto(photo: StoredPhoto): Promise<void> {
   memory.set(photo.wall, photo);
-  const db = await openDb();
+  const db = await withTimeout(openDb(), "Saving your photo timed out. Try again.");
   if (db === null) return;
   try {
-    await tx(db, "readwrite", (store) => store.put(photo, photo.wall));
+    await withTimeout(
+      tx(db, "readwrite", (store) => store.put(photo, photo.wall)),
+      "Saving your photo timed out. Try again.",
+    );
   } finally {
     db.close();
   }
@@ -82,10 +100,13 @@ export async function savePhoto(photo: StoredPhoto): Promise<void> {
 
 /** Load one wall's downscaled photos, or null when never saved. */
 export async function loadPhoto(wall: WallLetter): Promise<StoredPhoto | null> {
-  const db = await openDb();
+  const db = await withTimeout(openDb(), "Restoring your photo timed out. Try again.");
   if (db === null) return memory.get(wall) ?? null;
   try {
-    const stored = await tx<StoredPhoto | undefined>(db, "readonly", (store) => store.get(wall));
+    const stored = await withTimeout(
+      tx<StoredPhoto | undefined>(db, "readonly", (store) => store.get(wall)),
+      "Restoring your photo timed out. Try again.",
+    );
     if (stored !== undefined) {
       memory.set(wall, stored);
       return stored;
@@ -99,10 +120,13 @@ export async function loadPhoto(wall: WallLetter): Promise<StoredPhoto | null> {
 /** Drop one wall's photos (retake). */
 export async function clearPhoto(wall: WallLetter): Promise<void> {
   memory.delete(wall);
-  const db = await openDb();
+  const db = await withTimeout(openDb(), "Discarding your photo timed out. Try again.");
   if (db === null) return;
   try {
-    await tx(db, "readwrite", (store) => store.delete(wall));
+    await withTimeout(
+      tx(db, "readwrite", (store) => store.delete(wall)),
+      "Discarding your photo timed out. Try again.",
+    );
   } finally {
     db.close();
   }
@@ -111,10 +135,13 @@ export async function clearPhoto(wall: WallLetter): Promise<void> {
 /** Drop every stored photo (a fresh From-photos run). */
 export async function clearAllPhotos(): Promise<void> {
   memory.clear();
-  const db = await openDb();
+  const db = await withTimeout(openDb(), "Discarding your photos timed out. Try again.");
   if (db === null) return;
   try {
-    await tx(db, "readwrite", (store) => store.clear());
+    await withTimeout(
+      tx(db, "readwrite", (store) => store.clear()),
+      "Discarding your photos timed out. Try again.",
+    );
   } finally {
     db.close();
   }

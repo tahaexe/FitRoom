@@ -21,6 +21,12 @@ import { segmentInstances } from "../capture/sam";
 
 export const SEGMENT_CONCEPTS = ["wall", "floor", "ceiling", "door", "window"] as const;
 
+/** Time limit for each segment request (60 s). */
+export const SEGMENT_TIMEOUT_MS = 60000;
+
+/** Time limit for the label request (30 s). */
+export const LABEL_TIMEOUT_MS = 30000;
+
 export type SegmentProgress = (done: number, total: number) => void;
 
 export interface WallAnalysis {
@@ -84,13 +90,17 @@ export async function analyseWallPhoto(
   const total = SEGMENT_CONCEPTS.length;
   let done = 0;
   onProgress(0, total);
-  const perConcept = SEGMENT_CONCEPTS.map((concept) =>
-    postSegment({ image: segUrl, concept }).then((result) => {
-      done += 1;
-      onProgress(done, total);
-      return { concept, result };
-    }),
-  );
+  const perConcept = SEGMENT_CONCEPTS.map((concept) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SEGMENT_TIMEOUT_MS);
+    return postSegment({ image: segUrl, concept }, { signal: controller.signal })
+      .then((result) => {
+        done += 1;
+        onProgress(done, total);
+        return { concept, result };
+      })
+      .finally(() => clearTimeout(timer));
+  });
   const answers = await Promise.all(perConcept);
   for (const { result } of answers) {
     if (result.status === "demo-miss") return { demoMiss: true };
