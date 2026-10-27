@@ -185,6 +185,7 @@ export class RecommendPanel {
     row.className = "recommend-row";
     const budget = document.createElement("input");
     budget.type = "number";
+    budget.name = "recommend-budget";
     budget.min = "0";
     budget.placeholder = "Budget $ (optional)";
     budget.setAttribute("aria-label", "Budget in USD (optional)");

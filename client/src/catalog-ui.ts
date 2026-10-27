@@ -40,6 +40,7 @@ export class CatalogPanel {
     this.root.innerHTML = "";
     const search = document.createElement("input");
     search.type = "search";
+    search.name = "catalog-search";
     search.placeholder = "Search catalog…";
     search.setAttribute("aria-label", "Search catalog");
     search.value = this.query;

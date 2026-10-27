@@ -239,6 +239,7 @@ export class RenderViewer {
     range.min = "0";
     range.max = "100";
     range.value = "50";
+    range.name = "before-after";
     range.setAttribute("aria-label", "Before and after slider");
     range.className = "render-slider";
     const apply = (): void => {

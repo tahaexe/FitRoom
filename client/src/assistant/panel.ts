@@ -100,6 +100,7 @@ export class AssistantPanel {
     row.className = "assistant-row";
     const input = document.createElement("input");
     input.type = "text";
+    input.name = "arrange-request";
     input.placeholder = "Arrange the room in plain language…";
     input.setAttribute("aria-label", "Ask the layout assistant");
     input.addEventListener("keydown", (event) => {
