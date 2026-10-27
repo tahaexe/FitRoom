@@ -14,8 +14,9 @@
  * with the first moved east; request 5 by what the shopper asked — the TV
  * unit on the west wall clear of the door's swing, the sofa turned to face
  * it at a comfortable viewing distance with the coffee table between them;
- * the impossible turn unchanged with both lengths named), and that demo
- * mode makes zero upstream calls.
+ * the impossible turn unchanged with both lengths named), that every stored
+ * assistant answer is reached by the six turns (it lists unreachable files),
+ * and that demo mode makes zero upstream calls.
  *
  * Prints PASS or FAIL per request and exits non-zero on any FAIL. Demo mode
  * only: no live Meta calls.
@@ -24,7 +25,7 @@
 /* global console, process */
 import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
-import { cpSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -50,6 +51,7 @@ import { META_MODELS } from "../src/config.js";
 import { ASSISTANT_DEMO_REQUESTS, buildAssistantDemoRequests } from "../src/assistant-demo.js";
 import { DEMO_REQUESTS } from "../src/demo-requests.js";
 import { gatewayKey } from "../src/meta/keys.js";
+import { assistantKeyInput } from "../src/routes/assistant.js";
 
 const PORT = 8790;
 const BASE = `http://127.0.0.1:${String(PORT)}`;
@@ -130,7 +132,11 @@ async function fetchRound(body: unknown): Promise<{ status: number; payload: unk
   }
 }
 
-async function replayTurn(first: AssistantRequest, start: SceneState): Promise<Replay> {
+async function replayTurn(
+  first: AssistantRequest,
+  start: SceneState,
+  reached: Set<string>,
+): Promise<Replay> {
   const draft = cloneScene(start);
   const messages: AssistantMessage[] = JSON.parse(
     JSON.stringify(first.messages),
@@ -152,6 +158,8 @@ async function replayTurn(first: AssistantRequest, start: SceneState): Promise<R
       room: first.room,
       scene: draft,
     };
+    // The key the pipeline reads for this round (same key input it uses).
+    reached.add(gatewayKey("assistant", META_MODELS.spark, assistantKeyInput(body)));
     const fetched = await fetchRound(body);
     if (fetched === null) {
       return { ok: false, answer: "", rounds: round, draft };
@@ -285,10 +293,11 @@ async function main(): Promise<void> {
     }
 
     const firsts = rebuilt;
+    const reached = new Set<string>();
     for (let i = 0; i < firsts.length; i += 1) {
       const first = firsts[i] as AssistantRequest;
       const tag = `request ${String(i + 1)}`;
-      const replay = await replayTurn(first, scene);
+      const replay = await replayTurn(first, scene, reached);
       check(
         `${tag} replays from the store to a text answer`,
         replay.ok,
@@ -437,6 +446,19 @@ async function main(): Promise<void> {
         );
       }
     }
+
+    // Every stored assistant answer is reached by the six demo turns;
+    // anything else is a leftover of an earlier recording (like the old
+    // turn-6 rounds) and must be removed from the committed store.
+    const stored = readdirSync(join(dataDir, "demo", "assistant"))
+      .filter((name) => name.endsWith(".json"))
+      .map((name) => name.slice(0, -".json".length));
+    const unreachable = stored.filter((key) => !reached.has(key)).sort();
+    check(
+      "demo store holds no unreachable assistant files",
+      unreachable.length === 0,
+      unreachable.length === 0 ? undefined : `remove: ${unreachable.join(", ")}`,
+    );
 
     const costsFile = join(logsDir, "costs.csv");
     const lines = existsSync(costsFile)
