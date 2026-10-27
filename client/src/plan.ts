@@ -177,7 +177,10 @@ export class PlanOverlay {
       } else if (anchor === "end") {
         s.x = Math.min(Math.max(s.x, w + MARGIN), Math.max(w + MARGIN, width - MARGIN));
       } else {
-        s.x = Math.min(Math.max(s.x, w / 2 + MARGIN), Math.max(w / 2 + MARGIN, width - w / 2 - MARGIN));
+        s.x = Math.min(
+          Math.max(s.x, w / 2 + MARGIN),
+          Math.max(w / 2 + MARGIN, width - w / 2 - MARGIN),
+        );
       }
       s.y = Math.min(Math.max(s.y, 14 + MARGIN), Math.max(14 + MARGIN, height - MARGIN));
     }

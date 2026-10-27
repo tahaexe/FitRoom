@@ -129,8 +129,7 @@ function updateLiveSwitch(): void {
   for (const option of root.querySelectorAll(".live-option")) {
     if (!(option instanceof HTMLElement)) continue;
     const active =
-      (option.dataset["value"] === "live" && live) ||
-      (option.dataset["value"] === "demo" && !live);
+      (option.dataset["value"] === "live" && live) || (option.dataset["value"] === "demo" && !live);
     option.dataset["active"] = String(active);
   }
 }

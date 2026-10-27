@@ -259,9 +259,7 @@ export function summarizeAssistantTurn(
         `Moved ${subjectName(item, prev)} ${describePlace(room, end, item, byId, addedIds)}`,
       );
     } else if (turned) {
-      parts.push(
-        `Turned ${subjectName(item, prev)} to face ${compassFacing(item.rotationY)}`,
-      );
+      parts.push(`Turned ${subjectName(item, prev)} to face ${compassFacing(item.rotationY)}`);
     } else if (prev.variant !== item.variant) {
       parts.push(`Changed ${subjectName(item, prev)} to ${item.variant}`);
     }

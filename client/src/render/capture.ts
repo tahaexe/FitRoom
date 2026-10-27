@@ -100,16 +100,15 @@ export function captureView(
   const isPerspective = camera instanceof THREE.PerspectiveCamera;
   const isOrtho = camera instanceof THREE.OrthographicCamera;
   const prevAspect = isPerspective ? camera.aspect : null;
-  const prevOrtho =
-    isOrtho
-      ? {
-          left: camera.left,
-          right: camera.right,
-          top: camera.top,
-          bottom: camera.bottom,
-          position: camera.position.clone(),
-        }
-      : null;
+  const prevOrtho = isOrtho
+    ? {
+        left: camera.left,
+        right: camera.right,
+        top: camera.top,
+        bottom: camera.bottom,
+        position: camera.position.clone(),
+      }
+    : null;
   const prevPosition = camera.position.clone();
   const prevQuaternion = camera.quaternion.clone();
 

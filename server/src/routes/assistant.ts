@@ -102,14 +102,14 @@ async function callAssistantRound(
   const messages: ChatMessage[] = buildAssistantUpstreamMessages(input, loadCatalog());
   let lengthRetried = false;
   let emptyRetried = false;
-  let lastUsage: UpstreamResult["usage"] | null = null;
+  const attempts: UpstreamResult["usage"][] = [];
   for (;;) {
     const result = await callSpark(apiKey, {
       messages,
       tools: ASSISTANT_TOOLS,
       maxTokens: ASSISTANT_MAX_TOKENS,
     });
-    lastUsage = result.usage;
+    attempts.push(result.usage);
     if (result.finishReason === "length" && !lengthRetried) {
       lengthRetried = true;
       continue;
@@ -121,7 +121,8 @@ async function callAssistantRound(
     if (emptyRetried) break;
     emptyRetried = true;
   }
-  throw new UpstreamFriendlyError(ASSISTANT_FRIENDLY_ERROR, lastUsage ?? emptyUsage());
+  const billed = attempts[attempts.length - 1] ?? emptyUsage();
+  throw new UpstreamFriendlyError(ASSISTANT_FRIENDLY_ERROR, billed);
 }
 
 function parseAssistantBody(body: unknown): ParsedBody | { error: string } {
