@@ -172,35 +172,34 @@ async function main(): Promise<void> {
     );
   }
   // `--only furnish` records only brief (furnish) turns: never re-records
-  // the six existing arrangement turns.
+  // the six existing arrangement turns. npm parses `--only furnish` as its
+  // own config (it never reaches argv — npm warns `invalid config
+  // only="furnish"`), so the env fallback `npm_config_only=furnish` that npm
+  // sets for scripts counts too; so does `--only=furnish`/`--only-furnish`.
   const args = process.argv.slice(3);
-  const onlyFurnish = args.includes("--only") && args.includes("furnish");
+  const onlyFurnish =
+    (args.includes("--only") && args.includes("furnish")) ||
+    args.includes("--only=furnish") ||
+    args.includes("--only-furnish") ||
+    args.includes("--only furnish") ||
+    process.env["npm_config_only"] === "furnish";
   if (args.includes("--only") && !onlyFurnish) {
     fail(`invalid filter "${args.join(" ")}" (only "--only furnish" is supported).`);
   }
   const only = new Set<number>();
   for (const arg of args) {
-    if (arg === "--only" || arg === "furnish") continue;
+    if (arg === "--" || arg === "--only" || arg === "furnish") continue;
     const n = Number(arg);
     if (!Number.isInteger(n) || n < 1) {
       fail(`invalid request number "${arg}".`);
     }
     only.add(n);
   }
-  const config = loadGatewayConfig();
-  if (config.mock) {
-    fail("refuses to record mock answers (unset META_MOCK).");
-  }
-  if (config.apiKey === "") {
-    fail("needs META_API_KEY in the environment.");
-  }
   const requests = DEMO_REQUESTS[route as keyof typeof DEMO_REQUESTS];
   if (requests.length === 0) {
     console.log(`demo:record: no demo requests listed for ${route}; nothing to do.`);
     return;
   }
-  let recorded = 0;
-  let totalUsd = 0;
   const isBriefTurn = (item: unknown): boolean =>
     typeof item === "object" &&
     item !== null &&
@@ -209,9 +208,22 @@ async function main(): Promise<void> {
     (_, index) =>
       (only.size === 0 || only.has(index + 1)) && (!onlyFurnish || isBriefTurn(requests[index])),
   );
+  console.log(
+    `demo:record: selected ${String(picked.length)} of ${String(requests.length)} ` +
+      `${route} request(s)${onlyFurnish ? " (--only furnish)" : ""}.`,
+  );
   if (picked.length === 0) {
     fail("no requests selected.");
   }
+  const config = loadGatewayConfig();
+  if (config.mock) {
+    fail("refuses to record mock answers (unset META_MOCK).");
+  }
+  if (config.apiKey === "") {
+    fail("needs META_API_KEY in the environment.");
+  }
+  let recorded = 0;
+  let totalUsd = 0;
   for (const item of picked) {
     if (route === "assistant") {
       totalUsd =

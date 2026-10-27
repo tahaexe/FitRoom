@@ -183,6 +183,10 @@ async function replayTurn(
   // answer composed from the tool records.
   const records: AssistantToolRecord[] = [];
   let clean: SceneState | null = null;
+  // One context for the whole turn, like the client and the recorder: the
+  // brief's new-piece set accumulates across rounds (budget refusals and the
+  // check_fit status line replay exactly as recorded).
+  const ctx = createAssistantContext(room, replayCatalog, first.brief);
   for (let round = 0; round < ASSISTANT_MAX_ROUNDS; round += 1) {
     const body = {
       request: first.request,
@@ -216,8 +220,6 @@ async function replayTurn(
       return { ok: true, answer: data.text, rounds: round + 1, draft };
     }
     messages.push({ role: "assistant", content: data.text, toolCalls: data.toolCalls });
-    // The brief rides along so budget refusals replay exactly as recorded.
-    const ctx = createAssistantContext(room, replayCatalog, first.brief);
     const step = executeTurnRound(ctx, draft, data.toolCalls);
     records.push(...step);
     messages.push(...assistantToolMessages(data.toolCalls, step));
