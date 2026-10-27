@@ -12,6 +12,63 @@ export const CATEGORIES: Array<CatalogCategory | "all"> = [
   "decor",
 ];
 
+/** Readable chip names (never the raw slugs). */
+export const CATEGORY_LABELS: Record<CatalogCategory | "all", string> = {
+  all: "All",
+  sofa: "Sofas",
+  armchair: "Armchairs",
+  ottoman: "Ottomans",
+  "coffee-table": "Coffee tables",
+  "side-table": "Side tables",
+  "tv-unit": "TV units",
+  shelf: "Shelves",
+  decor: "Decor",
+};
+
+/** Common words mapped onto the catalog's own vocabulary. */
+const SYNONYMS: Array<{ words: string[]; match: (item: CatalogItem) => boolean }> = [
+  { words: ["couch", "couches", "sofa", "sofas"], match: (item) => item.category === "sofa" },
+  {
+    words: ["chair", "chairs", "armchair", "armchairs"],
+    match: (item) => item.category === "armchair",
+  },
+  {
+    words: ["table", "tables"],
+    match: (item) => item.category === "coffee-table" || item.category === "side-table",
+  },
+  { words: ["plant", "plants"], match: (item) => item.category === "decor" },
+  {
+    words: ["cabinet", "cabinets", "stand", "stands", "console", "consoles"],
+    match: (item) => item.category === "tv-unit",
+  },
+  {
+    words: ["bookcase", "bookcases", "bookshelf", "bookshelves"],
+    match: (item) => item.category === "shelf",
+  },
+  { words: ["ottoman", "ottomans", "footstool"], match: (item) => item.category === "ottoman" },
+];
+
+/** True when the item matches a free-text query, including common synonyms. */
+export function matchesCatalogQuery(item: CatalogItem, rawQuery: string): boolean {
+  const q = rawQuery.trim().toLowerCase();
+  if (q === "") return true;
+  const hay =
+    `${item.name} ${item.category} ${item.styleTags.join(" ")} ${item.colors.join(" ")}`.toLowerCase();
+  if (hay.includes(q)) return true;
+  const tokens = q.split(/[^a-z0-9]+/).filter((token) => token.length > 0);
+  return SYNONYMS.some(
+    (group) =>
+      (tokens.some((token) => group.words.includes(token)) ||
+        group.words.some((word) => q.includes(word))) &&
+      group.match(item),
+  );
+}
+
+/** Top bar readout: "4 items · $3,280" (never a bare "$3,280 · 4"). */
+export function formatTopBar(count: number, total: number): string {
+  return `${String(count)} ${count === 1 ? "item" : "items"} · $${total.toLocaleString("en-US")}`;
+}
+
 /** Left catalog panel: search + category chips + product cards. */
 export class CatalogPanel {
   private query = "";
@@ -26,13 +83,9 @@ export class CatalogPanel {
   }
 
   private filtered(): CatalogItem[] {
-    const q = this.query.trim().toLowerCase();
     return this.items.filter((item) => {
       if (this.chip !== "all" && item.category !== this.chip) return false;
-      if (q === "") return true;
-      const hay =
-        `${item.name} ${item.category} ${item.styleTags.join(" ")} ${item.colors.join(" ")}`.toLowerCase();
-      return hay.includes(q);
+      return matchesCatalogQuery(item, this.query);
     });
   }
 
@@ -55,7 +108,8 @@ export class CatalogPanel {
     for (const c of CATEGORIES) {
       const b = document.createElement("button");
       b.type = "button";
-      b.textContent = c;
+      b.textContent = CATEGORY_LABELS[c];
+      b.dataset["category"] = c;
       b.dataset["active"] = String(c === this.chip);
       b.addEventListener("click", () => {
         this.chip = c;
@@ -75,7 +129,19 @@ export class CatalogPanel {
     const host = list ?? this.root.querySelector(".catalog-list");
     if (host === null || host === undefined) return;
     host.innerHTML = "";
-    for (const item of this.filtered()) {
+    const matches = this.filtered();
+    if (matches.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "catalog-empty";
+      const q = this.query.trim();
+      empty.textContent =
+        q === ""
+          ? "Nothing in this category yet — try All."
+          : `No matches for “${q}”. Try a category: Sofas, Armchairs, Coffee tables, Side tables, TV units, Shelves or Decor.`;
+      host.appendChild(empty);
+      return;
+    }
+    for (const item of matches) {
       const card = document.createElement("button");
       card.type = "button";
       card.className = "catalog-card";

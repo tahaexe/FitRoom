@@ -36,7 +36,7 @@ import {
   summarizeAssistantTurn,
   turnErrors,
 } from "@fitroom/shared";
-import { isLive, postAssistant, type ApiResult } from "../api";
+import { isLive, postAssistant, setLive, type ApiResult } from "../api";
 
 /** The six scripted demo requests (same list as the server demo store). */
 export const ASSISTANT_DEMO_CHIPS: string[] = [
@@ -56,6 +56,8 @@ export interface AssistantDeps {
   applyTurn: (endScene: SceneState) => void;
   /** Load the demo room as one undo step. */
   resetDemoRoom: () => void;
+  /** True when the live scene still matches the sample layout. */
+  isSampleScene: () => boolean;
 }
 
 export class AssistantPanel {
@@ -210,6 +212,43 @@ export class AssistantPanel {
     log.scrollTop = log.scrollHeight;
   }
 
+  /**
+   * Demo miss: the message plus a way out in the same card — reset the demo
+   * room (one undo step) and, where it applies, Live AI. No "Try again"
+   * that would repeat the same miss.
+   */
+  private addDemoMiss(message: string): void {
+    const log = this.logEl();
+    if (log === null) return;
+    const card = document.createElement("div");
+    card.className = "assistant-card";
+    const note = document.createElement("p");
+    note.className = "assistant-answer";
+    note.textContent = message;
+    const row = document.createElement("div");
+    row.className = "assistant-row";
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "assistant-go";
+    reset.textContent = "Reset demo room";
+    reset.addEventListener("click", () => this.deps.resetDemoRoom());
+    row.appendChild(reset);
+    if (!isLive()) {
+      const live = document.createElement("button");
+      live.type = "button";
+      live.className = "assistant-quiet";
+      live.textContent = "Turn on Live AI";
+      live.addEventListener("click", () => {
+        setLive(true);
+        this.syncMode();
+      });
+      row.appendChild(live);
+    }
+    card.append(note, row);
+    log.appendChild(card);
+    log.scrollTop = log.scrollHeight;
+  }
+
   private addAnswer(answer: string, summary: string, records: AssistantToolRecord[]): void {
     const log = this.logEl();
     if (log === null) return;
@@ -259,11 +298,55 @@ export class AssistantPanel {
     if (input instanceof HTMLInputElement) input.toggleAttribute("disabled", on);
   }
 
-  /** Demo chip: load the demo room first, then run the scripted request. */
+  /**
+   * Demo chip: the scripted request replays from the sample layout. When the
+   * room already differs, ask first — never reset it silently.
+   */
+  private pendingDemo: string | null = null;
+
   private async sendDemo(text: string): Promise<void> {
     if (this.sending) return;
+    if (this.pendingDemo !== text && !this.deps.isSampleScene()) {
+      this.pendingDemo = text;
+      this.addSampleConfirm(text);
+      return;
+    }
+    this.pendingDemo = null;
     this.deps.resetDemoRoom();
     await this.send(text);
+  }
+
+  /** Confirm before a recorded example replaces an edited room (undoable). */
+  private addSampleConfirm(text: string): void {
+    const log = this.logEl();
+    if (log === null) return;
+    const card = document.createElement("div");
+    card.className = "assistant-card";
+    const note = document.createElement("p");
+    note.className = "assistant-answer";
+    note.textContent = "This example starts from the sample layout. You can undo it.";
+    const row = document.createElement("div");
+    row.className = "assistant-row";
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "assistant-go";
+    go.textContent = "Continue";
+    go.addEventListener("click", () => {
+      card.remove();
+      void this.sendDemo(text);
+    });
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "assistant-quiet";
+    cancel.textContent = "Cancel";
+    cancel.addEventListener("click", () => {
+      this.pendingDemo = null;
+      card.remove();
+    });
+    row.append(go, cancel);
+    card.append(note, row);
+    log.appendChild(card);
+    log.scrollTop = log.scrollHeight;
   }
 
   private async send(raw: string): Promise<void> {
@@ -310,7 +393,7 @@ export class AssistantPanel {
       const result = await this.round(request, messages, draft);
       if (result.status !== "ok") {
         if (result.status === "demo-miss" || result.status === "capped") {
-          this.addNotice(result.message);
+          this.addDemoMiss(result.message);
         } else if (result.status === "not-ready") {
           this.addNotice(
             "The assistant isn't ready yet. Turn on Live AI or reset to the demo room.",

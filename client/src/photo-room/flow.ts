@@ -25,7 +25,7 @@ import {
   type Uncertain,
   type WallLetter,
 } from "@fitroom/shared";
-import { postLabel, setLive } from "../api";
+import { isLive, postLabel, setLive } from "../api";
 import { processPhotoFile, type IntakePhoto } from "./intake";
 import { clearPhoto, loadPhoto, savePhoto, type StoredPhoto } from "./photo-store";
 import {
@@ -368,6 +368,18 @@ export class PhotoFlow {
       privacy.textContent =
         "Your photos are sent to Meta's AI models for analysis and may be used to improve them.";
       host.appendChild(privacy);
+      if (!isLive()) {
+        const demo = document.createElement("p");
+        demo.className = "photo-sheet-note";
+        demo.textContent = "Measuring your photos uses Live AI (it calls Meta's models).";
+        host.appendChild(demo);
+        const live = document.createElement("button");
+        live.type = "button";
+        live.className = "photo-primary";
+        live.textContent = "Turn on Live AI";
+        live.addEventListener("click", () => setLive(true));
+        host.appendChild(live);
+      }
       host.appendChild(this.picker(letter));
       if (state.error !== null) {
         const message = document.createElement("p");
@@ -465,6 +477,13 @@ export class PhotoFlow {
           : "That photo could not be read. Please try another.";
     } finally {
       state.reading = false;
+    }
+    // Demo mode measures nothing: explain now instead of failing later.
+    if (state.intake !== null && !isLive()) {
+      state.error = null;
+      state.demoMiss = true;
+      this.render();
+      return;
     }
     this.render();
     if (state.intake !== null) void this.analyse(letter, null);
@@ -566,7 +585,7 @@ export class PhotoFlow {
     if (state.demoMiss) {
       const message = document.createElement("p");
       message.className = "photo-sheet-note";
-      message.textContent = "Turn on Live AI to analyse your photos";
+      message.textContent = "Measuring your photos uses Live AI (it calls Meta's models).";
       const live = document.createElement("button");
       live.type = "button";
       live.className = "photo-primary";

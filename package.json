@@ -28,6 +28,7 @@
     "check:sam-decode": "tsx scripts/check-sam-decode.ts",
     "check:geometry": "tsx scripts/check-geometry.ts",
     "check:photo-intake": "npm run check:photo-intake -w @fitroom/client",
+    "check:guidance": "npm run check:guidance -w @fitroom/client",
     "check:orbit-resolution": "npm run check:orbit-resolution -w @fitroom/client",
     "check:pointer-ownership": "npm run check:pointer-ownership -w @fitroom/client",
     "check:scene-sync": "npm run check:scene-sync -w @fitroom/client",

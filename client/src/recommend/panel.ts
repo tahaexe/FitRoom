@@ -38,7 +38,7 @@ import {
 } from "@fitroom/shared";
 import { isLive, postRecommend, setLive, type ApiResult } from "../api";
 
-const CATEGORIES: RecommendCategory[] = [
+const CATEGORIES: Array<Exclude<RecommendCategory, "any">> = [
   "sofa",
   "armchair",
   "ottoman",
@@ -48,6 +48,18 @@ const CATEGORIES: RecommendCategory[] = [
   "shelf",
   "decor",
 ];
+
+/** Readable chip names (never the raw slugs). */
+const CATEGORY_LABELS: Record<Exclude<RecommendCategory, "any">, string> = {
+  sofa: "Sofas",
+  armchair: "Armchairs",
+  ottoman: "Ottomans",
+  "coffee-table": "Coffee tables",
+  "side-table": "Side tables",
+  "tv-unit": "TV units",
+  shelf: "Shelves",
+  decor: "Decor",
+};
 
 export interface RecommendDeps {
   room: RoomLayout;
@@ -169,12 +181,14 @@ export class RecommendPanel {
     for (const c of CATEGORIES) {
       const b = document.createElement("button");
       b.type = "button";
-      b.textContent = c;
+      b.textContent = CATEGORY_LABELS[c];
+      b.dataset["category"] = c;
       b.dataset["active"] = String(c === this.category);
       b.addEventListener("click", () => {
         this.category = c as CatalogCategory;
         for (const other of chips.querySelectorAll("button")) {
-          other.dataset["active"] = String(other.textContent === c);
+          if (!(other instanceof HTMLButtonElement)) continue;
+          other.dataset["active"] = String(other.dataset["category"] === c);
         }
       });
       chips.appendChild(b);
@@ -640,7 +654,7 @@ export class RecommendPanel {
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "btn-quiet";
-    reset.textContent = "Reset to the demo room";
+    reset.textContent = "Reset demo room";
     reset.addEventListener("click", () => this.deps.resetDemoRoom());
     row.appendChild(reset);
     if (!isLive()) {

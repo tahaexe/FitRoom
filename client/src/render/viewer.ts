@@ -7,7 +7,7 @@
 
 import { buildRenderPrompt } from "@fitroom/shared";
 import type { CatalogItem, RenderWallView, RoomLayout, SceneState } from "@fitroom/shared";
-import { isLive, postRender } from "../api";
+import { isLive, postRender, setLive } from "../api";
 import { captureView } from "./capture";
 
 export interface RenderViewerDeps {
@@ -17,6 +17,8 @@ export interface RenderViewerDeps {
   getCapture: () => { dataUrl: string; base64: string; width: number; height: number };
   cameraPreset: () => string;
   wallView: () => RenderWallView | undefined;
+  /** Load the demo room as one undo step. */
+  resetDemoRoom: () => void;
 }
 
 const MODEL_LABEL = "AI visualisation by Muse Image";
@@ -95,6 +97,8 @@ export class RenderViewer {
     this.busy = false;
     if (result.status === "ok") {
       this.showAnswer(capture.dataUrl, result.data, capture.width, capture.height);
+    } else if (result.status === "demo-miss" || result.status === "capped") {
+      this.showDemoMiss(messageFor(result));
     } else {
       this.showNotice(messageFor(result));
     }
@@ -155,6 +159,56 @@ export class RenderViewer {
       const secs = Math.floor((Date.now() - this.startedAt) / 1000);
       status.textContent = `Visualising… ${String(secs)}s`;
     }, 500);
+  }
+
+  /**
+   * Demo miss: the message plus a way out in the same card — reset the demo
+   * room (one undo step) and, where it applies, Live AI. No "Try again"
+   * that would repeat the same miss.
+   */
+  private showDemoMiss(message: string): void {
+    this.clearTimer();
+    this.root.innerHTML = "";
+    const wrap = document.createElement("div");
+    wrap.className = "render-card";
+    const title = document.createElement("h2");
+    title.textContent = "Visualise";
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "render-close";
+    close.textContent = "×";
+    close.title = "Close visualisation";
+    close.addEventListener("click", () => this.close());
+    const head = document.createElement("div");
+    head.className = "render-head";
+    head.append(title, close);
+    wrap.appendChild(head);
+    const note = document.createElement("p");
+    note.className = "render-empty";
+    note.textContent = message;
+    wrap.appendChild(note);
+    const row = document.createElement("div");
+    row.className = "render-row";
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "render-go";
+    reset.textContent = "Reset demo room";
+    reset.addEventListener("click", () => this.deps.resetDemoRoom());
+    row.appendChild(reset);
+    if (!isLive()) {
+      const live = document.createElement("button");
+      live.type = "button";
+      live.className = "render-quiet";
+      live.textContent = "Turn on Live AI";
+      live.addEventListener("click", () => setLive(true));
+      row.appendChild(live);
+    }
+    wrap.appendChild(row);
+    const model = document.createElement("p");
+    model.className = "render-model";
+    model.textContent = MODEL_LABEL;
+    wrap.appendChild(model);
+    this.root.appendChild(wrap);
   }
 
   private showNotice(message: string): void {

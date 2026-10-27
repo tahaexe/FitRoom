@@ -39,7 +39,7 @@ import rotatedOverlapScene from "../../shared/samples/fit-tests/rotated-overlap.
 import rotatedOutsideScene from "../../shared/samples/fit-tests/rotated-outside.json";
 import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.json";
 import { initLiveSwitch } from "./api";
-import { CatalogPanel } from "./catalog-ui";
+import { CatalogPanel, formatTopBar } from "./catalog-ui";
 import { RecommendPanel } from "./recommend/panel";
 import { AssistantPanel } from "./assistant/panel";
 import { applyVariant, loadModel } from "./models";
@@ -473,6 +473,7 @@ class FitRoomApp {
         getScene: () => this.store.state,
         applyTurn: (endScene) => this.applyAssistantTurn(endScene),
         resetDemoRoom: () => this.resetDemoRoom(),
+        isSampleScene: () => this.isSampleScene(),
       });
     }
 
@@ -482,6 +483,7 @@ class FitRoomApp {
         room: ROOM,
         catalog: CATALOG,
         getScene: () => this.store.state,
+        resetDemoRoom: () => this.resetDemoRoom(),
         getCapture: () => {
           const shot = captureView(this.renderer, this.scene, this.activeCamera(), this.container);
           return {
@@ -538,6 +540,7 @@ class FitRoomApp {
     this.updateSelectionTools();
     this.updateMeasure();
     this.updateTopBar();
+    this.maybeShowCoachMarks();
     this.updateUndoRedo();
     // Render on demand: frames only while the camera moves, after scene or
     // selection changes, or when a texture finishes loading. No idle loop.
@@ -683,6 +686,23 @@ class FitRoomApp {
     });
   }
 
+  /** True when the live scene still matches the sample layout. */
+  private isSampleScene(): boolean {
+    const sample = (validScene as unknown as SceneState).items.map((item) => ({
+      productId: item.productId,
+      position: item.position,
+      rotationY: item.rotationY,
+      variant: item.variant,
+    }));
+    const live = this.store.state.items.map((item) => ({
+      productId: item.productId,
+      position: item.position,
+      rotationY: item.rotationY,
+      variant: item.variant,
+    }));
+    return JSON.stringify(live) === JSON.stringify(sample);
+  }
+
   /** Stash the live room layout so switching rooms keeps each room's own walls, openings and blocks. */
   private stashRoomLayout(): void {
     this.savedRoomLayouts.set(ROOM.id, JSON.parse(JSON.stringify(ROOM)) as RoomLayout);
@@ -730,6 +750,24 @@ class FitRoomApp {
     } else if (id === "edit") {
       this.editorStore?.load(ROOM);
       this.openEditor();
+    } else if (id === "reset-demo") {
+      // A reset that always exists: restores the sample layout as one
+      // undoable step, even from another room.
+      if (ROOM.id !== SAMPLE_ROOM.id) {
+        this.stashRoomLayout();
+        applyRoomLayout(
+          ROOM,
+          this.roomLayoutFor(
+            SAMPLE_ROOM.id,
+            () => JSON.parse(JSON.stringify(SAMPLE_ROOM)) as RoomLayout,
+          ),
+        );
+        this.editor?.setPhotoDraft(null);
+        this.closeEditor();
+        this.rebuildRoom();
+      }
+      this.resetDemoRoom();
+      this.menuChoice = "sample";
     } else if (id === "photos") {
       if (this.menuChoice !== "photos") this.menuBeforePhotos = this.menuChoice;
       this.menuChoice = "photos";
@@ -770,6 +808,11 @@ class FitRoomApp {
     this.roomMenu?.setItems(
       [
         { id: "sample", label: "Sample living room", hint: "Today's furnished demo room" },
+        {
+          id: "reset-demo",
+          label: "Reset demo room",
+          hint: "Restore the sample layout (one undo step)",
+        },
         {
           id: "manual",
           label: "Build a room",
@@ -829,11 +872,13 @@ class FitRoomApp {
     this.select(null);
     this.showSidePanel("none");
     this.editor?.element.removeAttribute("hidden");
+    this.updateEmptyHint(this.store.state.items.length);
   }
 
   private closeEditor(): void {
     this.editing = false;
     this.editor?.element.setAttribute("hidden", "");
+    this.updateEmptyHint(this.store.state.items.length);
   }
 
   /** Leave the editor for the 3D room view with catalogue and fit checks. */
@@ -1471,7 +1516,7 @@ class FitRoomApp {
     this.store.replace({ ...next, camera: this.store.state.camera });
   }
 
-  /** Room total in the top bar (sum of placed pieces, tabular figures). */
+  /** Room total in the top bar: "4 items · $3,280" (labelled, tabular figures). */
   private updateTopBar(): void {
     const el = document.getElementById("cart-total");
     if (el === null) return;
@@ -1483,11 +1528,92 @@ class FitRoomApp {
       total += entry.price;
       count += 1;
     }
-    el.textContent = count === 0 ? "$0" : `$${total.toLocaleString("en-US")} · ${count}`;
+    el.textContent = formatTopBar(count, total);
+    el.title = count === 0 ? "Your cart is empty" : `${formatTopBar(count, total)} in your cart`;
+    const cart = document.getElementById("tool-cart");
+    if (cart instanceof HTMLButtonElement) {
+      cart.disabled = total === 0;
+      cart.title = total === 0 ? "Add furniture to the room first" : "Download your cart as JSON";
+    }
+    this.updateEmptyHint(count);
+  }
+
+  /** Empty room hint: the 3D view never sits blank without a next step. */
+  private updateEmptyHint(count: number): void {
+    let hint = document.getElementById("empty-hint");
+    if (count > 0 || this.editing) {
+      hint?.setAttribute("hidden", "");
+      return;
+    }
+    if (hint === null) {
+      hint = document.createElement("div");
+      hint.id = "empty-hint";
+      hint.className = "empty-hint";
+      hint.textContent = "This room is empty. Add furniture from the catalog on the left.";
+      this.container.appendChild(hint);
+    }
+    hint.removeAttribute("hidden");
+  }
+
+  /**
+   * First-visit coach marks: three short steps in order (click a piece,
+   * drag it, add more from the catalog), dismissible, shown once
+   * (remembered locally). The bar is anchored to the bottom chrome above
+   * the toolbar, so it never covers a piece in the room.
+   */
+  private maybeShowCoachMarks(): void {
+    const seen = ((): boolean => {
+      try {
+        return window.localStorage.getItem("fitroom.coach-seen") === "1";
+      } catch {
+        return true;
+      }
+    })();
+    if (seen) return;
+    const steps = [
+      "Click a piece to select it.",
+      "Drag a piece to move it.",
+      "Add more from the catalog on the left.",
+    ];
+    let at = 0;
+    const bar = document.createElement("div");
+    bar.className = "coach-marks";
+    bar.setAttribute("role", "status");
+    const text = document.createElement("span");
+    text.className = "coach-text";
+    const next = document.createElement("button");
+    next.type = "button";
+    next.className = "coach-next";
+    const skip = document.createElement("button");
+    skip.type = "button";
+    skip.className = "coach-skip";
+    skip.textContent = "Skip tour";
+    const done = (): void => {
+      try {
+        window.localStorage.setItem("fitroom.coach-seen", "1");
+      } catch {
+        // Private mode: the tour simply shows again next visit.
+      }
+      bar.remove();
+    };
+    const draw = (): void => {
+      text.textContent = `${String(at + 1)} of ${String(steps.length)} · ${steps[at] ?? ""}`;
+      next.textContent = at === steps.length - 1 ? "Got it" : "Next";
+    };
+    next.addEventListener("click", () => {
+      at += 1;
+      if (at >= steps.length) done();
+      else draw();
+    });
+    skip.addEventListener("click", done);
+    bar.append(text, next, skip);
+    this.container.appendChild(bar);
+    draw();
   }
 
   /** Download the current cart (room + placed pieces + total) as JSON. */
   private downloadCart(): void {
+    if (this.store.state.items.length === 0) return;
     const items = this.store.state.items.map((item) => {
       const entry = CATALOG_MAP.get(item.productId);
       return {
