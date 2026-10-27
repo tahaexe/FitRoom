@@ -788,17 +788,41 @@ class FitRoomApp {
     });
   }
 
-  /** Reset to the demo room scene, as one undo step. */
+  /**
+   * Reset to the demo room scene, as one undo step. From any other room this
+   * first switches to the sample room itself (room and layout, stashing the
+   * live room so it stays saved in the room menu), then resets the layout.
+   */
   private resetDemoRoom(): void {
+    if (ROOM.id !== SAMPLE_ROOM.id) {
+      const leavingPhotos = ROOM.id === "photos-room";
+      this.stashRoomLayout();
+      applyRoomLayout(
+        ROOM,
+        this.roomLayoutFor(
+          SAMPLE_ROOM.id,
+          () => JSON.parse(JSON.stringify(SAMPLE_ROOM)) as RoomLayout,
+        ),
+      );
+      if (leavingPhotos) clearRoomLayout("photos-room");
+      if (this.photoDraft !== null || leavingPhotos) this.discardPhotoSession();
+      this.editor?.setPhotoDraft(null);
+      this.closeEditor();
+      this.rebuildRoom();
+      this.menuChoice = "sample";
+      this.refreshMenu();
+    }
     const clone = JSON.parse(JSON.stringify(validScene)) as SceneState;
     this.select(null);
     this.store.commit((draft) => {
       draft.items = clone.items;
     });
+    this.syncRoomId();
   }
 
-  /** True when the live scene still matches the sample layout. */
+  /** True when live in the sample room with the sample layout. */
   private isSampleScene(): boolean {
+    if (ROOM.id !== SAMPLE_ROOM.id) return false;
     const sample = (validScene as unknown as SceneState).items.map((item) => ({
       productId: item.productId,
       position: item.position,
@@ -1436,8 +1460,17 @@ class FitRoomApp {
     });
     host.append(text, btn);
     host.removeAttribute("hidden");
+    this.placeToastAboveToolbar(host);
     window.clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => this.hideDeleteToast(), 5000);
+  }
+
+  /** Toasts sit above the toolbar whatever its wrapped height is, so the toast never covers a control. */
+  private placeToastAboveToolbar(host: HTMLElement): void {
+    const toolbar = this.container.querySelector(".bottom-toolbar");
+    const toolbarHeight =
+      toolbar instanceof HTMLElement ? toolbar.getBoundingClientRect().height : 52;
+    host.style.bottom = `${String(Math.ceil(toolbarHeight) + 24)}px`;
   }
 
   private hideDeleteToast(): void {
@@ -1898,6 +1931,7 @@ class FitRoomApp {
     });
     host.append(text, btn);
     host.removeAttribute("hidden");
+    this.placeToastAboveToolbar(host);
     window.clearTimeout(this.toastTimer);
     this.toastTimer = window.setTimeout(() => this.hideDeleteToast(), 5000);
   }

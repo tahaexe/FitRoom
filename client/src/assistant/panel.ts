@@ -953,7 +953,7 @@ export class AssistantPanel {
     card.className = "assistant-card";
     const note = document.createElement("p");
     note.className = "assistant-answer";
-    note.textContent = "This example starts from the sample layout. You can undo it.";
+    note.textContent = "This example uses the sample room; your room stays saved in the room menu.";
     const row = document.createElement("div");
     row.className = "assistant-row";
     const go = document.createElement("button");

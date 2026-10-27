@@ -694,7 +694,7 @@ check(
   "firstopen:build-gate",
   firstOpenSource.includes("size-build-reason") &&
     firstOpenSource.includes("to build your room.") &&
-    firstOpenSource.includes("toggleAttribute(\"disabled\""),
+    firstOpenSource.includes('toggleAttribute("disabled"'),
   "Build stays disabled until both sides are valid, with a one-line reason",
 );
 check(

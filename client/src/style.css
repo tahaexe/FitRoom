@@ -136,7 +136,7 @@ button {
 
 .delete-toast {
   position: absolute;
-  bottom: 64px;
+  bottom: 76px;
   left: 50%;
   transform: translateX(-50%);
   display: flex;
