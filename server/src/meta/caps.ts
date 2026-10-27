@@ -36,6 +36,32 @@ export function createCapsState(): CapsState {
   return { sessions: new Map(), rateHits: new Map() };
 }
 
+/**
+ * Drop rate buckets idle for longer than `maxAgeMs`, visiting at most
+ * `maxSweep` keys so the sweep stays cheap. Callers run this as part of a
+ * normal rate-limit write; the limit itself is unchanged.
+ */
+export function pruneRateHits(
+  state: CapsState,
+  nowMs: number,
+  maxAgeMs = 86_400_000,
+  maxSweep = 100,
+): number {
+  let removed = 0;
+  let visited = 0;
+  for (const [key, hits] of state.rateHits) {
+    if (visited >= maxSweep) break;
+    visited += 1;
+    while (hits.length > 0 && (hits[0]?.at ?? 0) <= nowMs - 60_000) hits.shift();
+    const last = hits.length === 0 ? 0 : (hits[hits.length - 1]?.at ?? 0);
+    if (hits.length === 0 || last < nowMs - maxAgeMs) {
+      state.rateHits.delete(key);
+      removed += 1;
+    }
+  }
+  return removed;
+}
+
 function sessionOf(state: CapsState, sessionId: string): SessionState {
   let entry = state.sessions.get(sessionId);
   if (entry === undefined) {

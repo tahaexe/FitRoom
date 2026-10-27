@@ -17,6 +17,8 @@
  *   inserted `upstream` row trips the global budget for live requests while
  *   mock requests still pass);
  * - after restarting `wrangler dev` the D1 rows are still there;
+ * - rate rows hold a salted hash, never the address (same address maps to
+ *   the same row), and rows older than one day are pruned on writes;
  * - `X-Forwarded-For` is never trusted (shared IP bucket across sessions);
  * - the dry-run Worker bundle gzips under 3 MB;
  * - neither the Worker bundle nor `client/dist` holds the `META_API_KEY`
@@ -811,6 +813,96 @@ async function main(): Promise<void> {
         "upstream sum holds the probe row only",
         total.ok && total.rows[0]?.["total"] === 999,
         JSON.stringify(total.rows),
+      );
+    }
+
+    // 9b. Rate rows hold a salted hash, never the address: every `rate`
+    // row id is 64 hex chars (local dev has no CF-Connecting-IP, so every
+    // request buckets under one address and must share one row).
+    const HEX64 = /^[0-9a-f]{64}$/;
+    {
+      const before = await d1Rows(
+        stateDir,
+        "SELECT id, updated_at FROM counters WHERE kind = 'rate'",
+      );
+      const ids = before.rows.map((row) => row["id"]);
+      check(
+        "rate rows exist after mock traffic",
+        before.ok && ids.length >= 1,
+        JSON.stringify(ids),
+      );
+      check(
+        "no rate row id is a raw address",
+        before.ok &&
+          ids.length >= 1 &&
+          ids.every(
+            (id) =>
+              typeof id === "string" &&
+              HEX64.test(id) &&
+              id !== "direct" &&
+              !id.includes(".") &&
+              !id.includes(":"),
+          ),
+        JSON.stringify(ids),
+      );
+      // A stale row plus two more requests from the same address: the
+      // stale row goes away on the writes, and the address still maps to
+      // its single row.
+      const staleId = "ab".repeat(32);
+      const staleAt = Date.now() - 2 * 86_400_000;
+      check(
+        "stale rate row inserted",
+        await d1Exec(
+          stateDir,
+          "INSERT INTO counters (kind, id, value, updated_at) VALUES " +
+            `('rate', ${sqlQuote(staleId)}, '[]', ${String(staleAt)})`,
+        ),
+      );
+      const port4 = await freePort();
+      worker = await startWorker(port4, stateDir, {
+        META_MOCK: "1",
+        META_API_KEY: sentinel,
+        META_RATE_PER_MIN: "1000",
+      });
+      const base4 = `http://127.0.0.1:${String(port4)}`;
+      check(
+        "rate worker starts",
+        await waitForHealth(base4),
+        `no /api/health on ${String(port4)}`,
+      );
+      {
+        const rateJar = new Jar(base4);
+        const one = await rateJar.post(
+          "render",
+          { prompt: `worker rate ${runTag} one` },
+          { live: true },
+        );
+        const two = await rateJar.post(
+          "render",
+          { prompt: `worker rate ${runTag} two` },
+          { live: true },
+        );
+        check(
+          "same address still answers twice",
+          one.status === 200 && two.status === 200,
+          JSON.stringify({ one: one.status, two: two.status }),
+        );
+      }
+      await stopWorker(worker);
+      worker = null;
+      const after = await d1Rows(stateDir, "SELECT id FROM counters WHERE kind = 'rate'");
+      const afterIds = after.rows.map((row) => row["id"]);
+      check(
+        "rate rows older than one day go away",
+        after.ok && !afterIds.includes(staleId),
+        JSON.stringify(afterIds),
+      );
+      check(
+        "the same address maps to the same row",
+        after.ok &&
+          afterIds.length === ids.length &&
+          afterIds.every((id) => typeof id === "string" && HEX64.test(id)),
+        JSON.stringify(afterIds),
       );
     }
 

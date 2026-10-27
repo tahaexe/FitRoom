@@ -19,6 +19,7 @@ import {
   checkRateLimit as checkNodeRateLimit,
   createCapsState,
   noteGeneration as noteNodeGeneration,
+  pruneRateHits,
   type CapsState,
 } from "./caps.js";
 import { listDemoStore, readDemoStore } from "./demo.js";
@@ -102,6 +103,27 @@ export interface GatewayStore {
   ): Promise<void>;
 }
 
+/**
+ * The per-IP rate limit never stores a raw address: the row id (D1) or map
+ * key (Node) is the hex SHA-256 of `salt + ":" + ip`. The salt is random
+ * per deployment, kept server-side only, and never logged or sent out.
+ */
+function bytesToHex(bytes: Uint8Array): string {
+  return Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+function newSalt(): string {
+  const bytes = new Uint8Array(32);
+  crypto.getRandomValues(bytes);
+  return bytesToHex(bytes);
+}
+
+function rateRowId(salt: string, ip: string): Promise<string> {
+  return crypto.subtle
+    .digest("SHA-256", new TextEncoder().encode(`${salt}:${ip}`))
+    .then((digest) => bytesToHex(new Uint8Array(digest)));
+}
+
 // ---- Node file implementation ---------------------------------------------
 
 export interface NodeStoreOptions {
@@ -112,6 +134,9 @@ export interface NodeStoreOptions {
 export function createNodeStore(options: NodeStoreOptions): GatewayStore {
   const { dataDir, logsDir } = options;
   const caps: CapsState = createCapsState();
+  // One salt per server process (the Node deployment); it lives in this
+  // closure only, so it is never logged or sent to a client.
+  const rateSalt = newSalt();
   // Cached upstream total, loaded from costs.csv on first use so the
   // budget survives restarts (mirrors the previous caps behaviour).
   let upstreamTotalUsd: number | null = null;
@@ -147,8 +172,17 @@ export function createNodeStore(options: NodeStoreOptions): GatewayStore {
     upstreamTotalUsd(): Promise<number> {
       return Promise.resolve(loadUpstreamTotal());
     },
-    checkRateLimit(ip, limitPerMinute, nowMs, weight = 1): Promise<boolean> {
-      return Promise.resolve(checkNodeRateLimit(caps, limitPerMinute, ip, nowMs, weight));
+    async checkRateLimit(ip, limitPerMinute, nowMs, weight = 1): Promise<boolean> {
+      // Hash first: the raw address never reaches the map (nor any log).
+      const allowed = checkNodeRateLimit(
+        caps,
+        limitPerMinute,
+        await rateRowId(rateSalt, ip),
+        nowMs,
+        weight,
+      );
+      pruneRateHits(caps, nowMs);
+      return allowed;
     },
     checkGenerationCap(
       sessionId,
@@ -306,6 +340,25 @@ async function writeCounter(
     .run();
 }
 
+/**
+ * The Worker's rate-limit salt: random hex, generated once and kept in D1
+ * (`config` / `rate-salt`) so every isolate of the deployment hashes an
+ * address to the same row id. `INSERT OR IGNORE` plus a re-read keeps
+ * concurrent first writes to one salt; the value is never logged or sent
+ * to a client.
+ */
+async function d1RateSalt(db: D1DatabaseLike): Promise<string> {
+  const existing = await readCounter(db, "config", "rate-salt");
+  if (typeof existing === "string" && /^[0-9a-f]{64}$/.test(existing)) return existing;
+  await db
+    .prepare("INSERT OR IGNORE INTO counters (kind, id, value, updated_at) VALUES (?, ?, ?, ?)")
+    .bind("config", "rate-salt", newSalt(), Date.now())
+    .run();
+  const stored = await readCounter(db, "config", "rate-salt");
+  if (typeof stored === "string" && stored !== "") return stored;
+  return newSalt();
+}
+
 export function createD1Store(db: D1DatabaseLike, bundled: BundledGatewayData): GatewayStore {
   return {
     readDemo(route, model, key): Promise<DemoStoreFile | null> {
@@ -385,14 +438,21 @@ export function createD1Store(db: D1DatabaseLike, bundled: BundledGatewayData): 
         : 0;
     },
     async checkRateLimit(ip, limitPerMinute, nowMs, weight = 1): Promise<boolean> {
+      // Hash first: the raw address never reaches the row (nor any log).
+      const id = await rateRowId(await d1RateSalt(db), ip);
       const windowStart = nowMs - 60_000;
-      const hits = parseRateHits(await readCounter(db, "rate", ip)).filter(
+      const hits = parseRateHits(await readCounter(db, "rate", id)).filter(
         (hit) => hit.at > windowStart,
       );
       const spent = hits.reduce((sum, hit) => sum + hit.weight, 0);
       if (spent + weight > limitPerMinute + 1e-9) return false;
       hits.push({ at: nowMs, weight });
-      await writeCounter(db, "rate", ip, JSON.stringify(hits), nowMs);
+      await writeCounter(db, "rate", id, JSON.stringify(hits), nowMs);
+      // Cheap, bounded prune of rate rows older than one day.
+      await db
+        .prepare("DELETE FROM counters WHERE kind = 'rate' AND updated_at < ? LIMIT 50")
+        .bind(nowMs - 86_400_000)
+        .run();
       return true;
     },
     async checkGenerationCap(
