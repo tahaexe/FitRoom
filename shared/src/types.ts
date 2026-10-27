@@ -135,7 +135,21 @@ export interface RoomLayout {
 }
 
 export type CatalogCategory =
-  "sofa" | "armchair" | "ottoman" | "coffee-table" | "side-table" | "tv-unit" | "shelf" | "decor";
+  | "sofa"
+  | "armchair"
+  | "ottoman"
+  | "coffee-table"
+  | "side-table"
+  | "tv-unit"
+  | "shelf"
+  | "decor"
+  | "dining-table"
+  | "dining-chair"
+  | "bed"
+  | "wardrobe"
+  | "cabinet"
+  | "bookcase"
+  | "storage";
 
 export type VariantKind = "gltf" | "fabric";
 

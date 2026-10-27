@@ -4,10 +4,17 @@ export const CATEGORIES: Array<CatalogCategory | "all"> = [
   "all",
   "sofa",
   "armchair",
-  "ottoman",
+  "dining-table",
+  "dining-chair",
   "coffee-table",
   "side-table",
+  "bed",
+  "wardrobe",
+  "cabinet",
+  "bookcase",
+  "storage",
   "tv-unit",
+  "ottoman",
   "shelf",
   "decor",
 ];
@@ -23,6 +30,13 @@ export const CATEGORY_LABELS: Record<CatalogCategory | "all", string> = {
   "tv-unit": "TV units",
   shelf: "Shelves",
   decor: "Decor",
+  "dining-table": "Dining tables",
+  "dining-chair": "Dining chairs",
+  bed: "Beds",
+  wardrobe: "Wardrobes",
+  cabinet: "Cabinets",
+  bookcase: "Bookcases",
+  storage: "Storage",
 };
 
 /** Common words mapped onto the catalog's own vocabulary. */
@@ -39,11 +53,30 @@ const SYNONYMS: Array<{ words: string[]; match: (item: CatalogItem) => boolean }
   { words: ["plant", "plants"], match: (item) => item.category === "decor" },
   {
     words: ["cabinet", "cabinets", "stand", "stands", "console", "consoles"],
-    match: (item) => item.category === "tv-unit",
+    match: (item) =>
+      item.category === "tv-unit" ||
+      item.category === "cabinet" ||
+      item.category === "storage",
   },
   {
     words: ["bookcase", "bookcases", "bookshelf", "bookshelves"],
-    match: (item) => item.category === "shelf",
+    match: (item) => item.category === "shelf" || item.category === "bookcase",
+  },
+  {
+    words: ["bed", "beds"],
+    match: (item) => item.category === "bed",
+  },
+  {
+    words: ["wardrobe", "wardrobes", "armoire", "armoires"],
+    match: (item) => item.category === "wardrobe",
+  },
+  {
+    words: ["dining"],
+    match: (item) => item.category === "dining-table" || item.category === "dining-chair",
+  },
+  {
+    words: ["storage", "dresser", "drawers", "chest"],
+    match: (item) => item.category === "storage",
   },
   { words: ["ottoman", "ottomans", "footstool"], match: (item) => item.category === "ottoman" },
 ];
@@ -151,7 +184,7 @@ export class CatalogPanel {
       empty.textContent =
         q === ""
           ? "Nothing in this category yet — try All."
-          : `No matches for “${q}”. Try a category: Sofas, Armchairs, Coffee tables, Side tables, TV units, Shelves or Decor.`;
+          : `No matches for “${q}”. Try a category: Sofas, Armchairs, Dining tables, Dining chairs, Coffee tables, Side tables, Beds, Wardrobes, Cabinets, Bookcases, Storage, TV units, Shelves or Decor.`;
       host.appendChild(empty);
       return;
     }

@@ -192,6 +192,260 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
   - assets/models/polyhaven/potted_plant_02/textures/potted_plant_02_pot_rough_1k.jpg
   - assets/models/polyhaven/potted_plant_02/thumb.png
 
+## painted_wooden_sofa
+
+- Credit: Painted Wooden Sofa by Kirill Sannikov, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/painted_wooden_sofa)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/painted_wooden_sofa/painted_wooden_sofa.bin
+  - assets/models/polyhaven/painted_wooden_sofa/painted_wooden_sofa_1k.gltf
+  - assets/models/polyhaven/painted_wooden_sofa/textures/painted_wooden_sofa_arm_1k.jpg
+  - assets/models/polyhaven/painted_wooden_sofa/textures/painted_wooden_sofa_diff_1k.jpg
+  - assets/models/polyhaven/painted_wooden_sofa/textures/painted_wooden_sofa_nor_gl_1k.jpg
+  - assets/models/polyhaven/painted_wooden_sofa/thumb.png
+
+## vintage_day_bed
+
+- Credit: Vintage Day Bed by Aron Łyczek, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/vintage_day_bed)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/vintage_day_bed/textures/vintage_day_bed_arm_1k.jpg
+  - assets/models/polyhaven/vintage_day_bed/textures/vintage_day_bed_diff_1k.jpg
+  - assets/models/polyhaven/vintage_day_bed/textures/vintage_day_bed_nor_gl_1k.jpg
+  - assets/models/polyhaven/vintage_day_bed/thumb.png
+  - assets/models/polyhaven/vintage_day_bed/vintage_day_bed.bin
+  - assets/models/polyhaven/vintage_day_bed/vintage_day_bed_1k.gltf
+
+## Rockingchair_01
+
+- Credit: Rockingchair 01 by Jorge Camacho, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/Rockingchair_01)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/Rockingchair_01/Rockingchair_01.bin
+  - assets/models/polyhaven/Rockingchair_01/Rockingchair_01_1k.gltf
+  - assets/models/polyhaven/Rockingchair_01/textures/Rockingchair_01_arm_1k.jpg
+  - assets/models/polyhaven/Rockingchair_01/textures/Rockingchair_01_diff_1k.jpg
+  - assets/models/polyhaven/Rockingchair_01/textures/Rockingchair_01_nor_gl_1k.jpg
+  - assets/models/polyhaven/Rockingchair_01/thumb.png
+
+## round_wooden_table_01
+
+- Credit: Round Wooden Table 01 by Ulan Cabanilla, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/round_wooden_table_01)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/round_wooden_table_01/round_wooden_table_01.bin
+  - assets/models/polyhaven/round_wooden_table_01/round_wooden_table_01_1k.gltf
+  - assets/models/polyhaven/round_wooden_table_01/textures/round_wooden_table_01_arm_1k.jpg
+  - assets/models/polyhaven/round_wooden_table_01/textures/round_wooden_table_01_diff_1k.jpg
+  - assets/models/polyhaven/round_wooden_table_01/textures/round_wooden_table_01_nor_gl_1k.jpg
+  - assets/models/polyhaven/round_wooden_table_01/thumb.png
+
+## painted_wooden_table
+
+- Credit: Painted Wooden Table by Kirill Sannikov, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/painted_wooden_table)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/painted_wooden_table/painted_wooden_table.bin
+  - assets/models/polyhaven/painted_wooden_table/painted_wooden_table_1k.gltf
+  - assets/models/polyhaven/painted_wooden_table/textures/painted_wooden_table_arm_1k.jpg
+  - assets/models/polyhaven/painted_wooden_table/textures/painted_wooden_table_diff_1k.jpg
+  - assets/models/polyhaven/painted_wooden_table/textures/painted_wooden_table_nor_gl_1k.jpg
+  - assets/models/polyhaven/painted_wooden_table/thumb.png
+
+## painted_wooden_chair_01
+
+- Credit: Painted Wooden Chair 01 by Kuutti Siitonen, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/painted_wooden_chair_01)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/painted_wooden_chair_01/painted_wooden_chair_01.bin
+  - assets/models/polyhaven/painted_wooden_chair_01/painted_wooden_chair_01_1k.gltf
+  - assets/models/polyhaven/painted_wooden_chair_01/textures/painted_wooden_chair_01_arm_1k.jpg
+  - assets/models/polyhaven/painted_wooden_chair_01/textures/painted_wooden_chair_01_diff_1k.jpg
+  - assets/models/polyhaven/painted_wooden_chair_01/textures/painted_wooden_chair_01_nor_gl_1k.jpg
+  - assets/models/polyhaven/painted_wooden_chair_01/thumb.png
+
+## painted_wooden_chair_02
+
+- Credit: Painted Wooden Chair 02 by Kirill Sannikov, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/painted_wooden_chair_02)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/painted_wooden_chair_02/painted_wooden_chair_02.bin
+  - assets/models/polyhaven/painted_wooden_chair_02/painted_wooden_chair_02_1k.gltf
+  - assets/models/polyhaven/painted_wooden_chair_02/textures/painted_wooden_chair_02_arm_1k.jpg
+  - assets/models/polyhaven/painted_wooden_chair_02/textures/painted_wooden_chair_02_diff_1k.jpg
+  - assets/models/polyhaven/painted_wooden_chair_02/textures/painted_wooden_chair_02_nor_gl_1k.jpg
+  - assets/models/polyhaven/painted_wooden_chair_02/thumb.png
+
+## modern_coffee_table_02
+
+- Credit: Modern Coffee Table 02 by Amin, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/modern_coffee_table_02)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/modern_coffee_table_02/modern_coffee_table_02.bin
+  - assets/models/polyhaven/modern_coffee_table_02/modern_coffee_table_02_1k.gltf
+  - assets/models/polyhaven/modern_coffee_table_02/textures/modern_coffee_table_02_base_diff_1k.jpg
+  - assets/models/polyhaven/modern_coffee_table_02/textures/modern_coffee_table_02_base_nor_gl_1k.jpg
+  - assets/models/polyhaven/modern_coffee_table_02/textures/modern_coffee_table_02_base_rough_1k.jpg
+  - assets/models/polyhaven/modern_coffee_table_02/textures/modern_coffee_table_02_wood_diff_1k.jpg
+  - assets/models/polyhaven/modern_coffee_table_02/textures/modern_coffee_table_02_wood_nor_gl_1k.jpg
+  - assets/models/polyhaven/modern_coffee_table_02/textures/modern_coffee_table_02_wood_rough_1k.jpg
+  - assets/models/polyhaven/modern_coffee_table_02/thumb.png
+
+## industrial_coffee_table
+
+- Credit: Industrial Coffee Table by Ulan Cabanilla, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/industrial_coffee_table)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/industrial_coffee_table/industrial_coffee_table.bin
+  - assets/models/polyhaven/industrial_coffee_table/industrial_coffee_table_1k.gltf
+  - assets/models/polyhaven/industrial_coffee_table/textures/industrial_coffee_table_arm_1k.jpg
+  - assets/models/polyhaven/industrial_coffee_table/textures/industrial_coffee_table_diff_1k.jpg
+  - assets/models/polyhaven/industrial_coffee_table/textures/industrial_coffee_table_nor_gl_1k.jpg
+  - assets/models/polyhaven/industrial_coffee_table/thumb.png
+
+## CoffeeTable_01
+
+- Credit: Coffee Table 01 by Fernando Quinn, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/CoffeeTable_01)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/CoffeeTable_01/CoffeeTable_01.bin
+  - assets/models/polyhaven/CoffeeTable_01/CoffeeTable_01_1k.gltf
+  - assets/models/polyhaven/CoffeeTable_01/textures/CoffeeTable_01_arm_1k.jpg
+  - assets/models/polyhaven/CoffeeTable_01/textures/CoffeeTable_01_diff_1k.jpg
+  - assets/models/polyhaven/CoffeeTable_01/textures/CoffeeTable_01_nor_gl_1k.jpg
+  - assets/models/polyhaven/CoffeeTable_01/thumb.png
+
+## GothicBed_01
+
+- Credit: Gothic Bed 01 by Kirill Sannikov, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/GothicBed_01)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/GothicBed_01/GothicBed_01.bin
+  - assets/models/polyhaven/GothicBed_01/GothicBed_01_1k.gltf
+  - assets/models/polyhaven/GothicBed_01/textures/GothicBed_01_arm_1k.jpg
+  - assets/models/polyhaven/GothicBed_01/textures/GothicBed_01_diff_1k.jpg
+  - assets/models/polyhaven/GothicBed_01/textures/GothicBed_01_nor_gl_1k.jpg
+  - assets/models/polyhaven/GothicBed_01/thumb.png
+
+## GothicCabinet_01
+
+- Credit: Gothic Cabinet 01 by Kirill Sannikov, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/GothicCabinet_01)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/GothicCabinet_01/GothicCabinet_01.bin
+  - assets/models/polyhaven/GothicCabinet_01/GothicCabinet_01_1k.gltf
+  - assets/models/polyhaven/GothicCabinet_01/textures/GothicCabinet_01_arm_1k.jpg
+  - assets/models/polyhaven/GothicCabinet_01/textures/GothicCabinet_01_diff_1k.jpg
+  - assets/models/polyhaven/GothicCabinet_01/textures/GothicCabinet_01_nor_gl_1k.jpg
+  - assets/models/polyhaven/GothicCabinet_01/thumb.png
+
+## vintage_cabinet_01
+
+- Credit: Vintage Cabinet 01 by Rico Cilliers, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/vintage_cabinet_01)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/vintage_cabinet_01/textures/vintage_cabinet_01_a_arm_1k.jpg
+  - assets/models/polyhaven/vintage_cabinet_01/textures/vintage_cabinet_01_a_diff_1k.jpg
+  - assets/models/polyhaven/vintage_cabinet_01/textures/vintage_cabinet_01_a_nor_gl_1k.jpg
+  - assets/models/polyhaven/vintage_cabinet_01/textures/vintage_cabinet_01_a_rough_1k.jpg
+  - assets/models/polyhaven/vintage_cabinet_01/textures/vintage_cabinet_01_b_diff_1k.jpg
+  - assets/models/polyhaven/vintage_cabinet_01/textures/vintage_cabinet_01_b_nor_gl_1k.jpg
+  - assets/models/polyhaven/vintage_cabinet_01/textures/vintage_cabinet_01_b_rough_1k.jpg
+  - assets/models/polyhaven/vintage_cabinet_01/thumb.png
+  - assets/models/polyhaven/vintage_cabinet_01/vintage_cabinet_01.bin
+  - assets/models/polyhaven/vintage_cabinet_01/vintage_cabinet_01_1k.gltf
+
+## Shelf_01
+
+- Credit: Shelf 01 by Gabriel Radić, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/Shelf_01)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/Shelf_01/Shelf_01.bin
+  - assets/models/polyhaven/Shelf_01/Shelf_01_1k.gltf
+  - assets/models/polyhaven/Shelf_01/textures/Shelf_01_arm_1k.jpg
+  - assets/models/polyhaven/Shelf_01/textures/Shelf_01_diff_1k.jpg
+  - assets/models/polyhaven/Shelf_01/textures/Shelf_01_nor_gl_1k.jpg
+  - assets/models/polyhaven/Shelf_01/thumb.png
+
+## steel_frame_shelves_01
+
+- Credit: Steel Frame Shelves 01 by James Ray Cock, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/steel_frame_shelves_01)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/steel_frame_shelves_01/steel_frame_shelves_01.bin
+  - assets/models/polyhaven/steel_frame_shelves_01/steel_frame_shelves_01_1k.gltf
+  - assets/models/polyhaven/steel_frame_shelves_01/textures/steel_frame_shelves_01_arm_1k.jpg
+  - assets/models/polyhaven/steel_frame_shelves_01/textures/steel_frame_shelves_01_diff_1k.jpg
+  - assets/models/polyhaven/steel_frame_shelves_01/textures/steel_frame_shelves_01_nor_gl_1k.jpg
+  - assets/models/polyhaven/steel_frame_shelves_01/thumb.png
+
+## steel_frame_shelves_02
+
+- Credit: Steel Frame Shelves 02 by James Ray Cock, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/steel_frame_shelves_02)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/steel_frame_shelves_02/steel_frame_shelves_02.bin
+  - assets/models/polyhaven/steel_frame_shelves_02/steel_frame_shelves_02_1k.gltf
+  - assets/models/polyhaven/steel_frame_shelves_02/textures/steel_frame_shelves_02_arm_1k.jpg
+  - assets/models/polyhaven/steel_frame_shelves_02/textures/steel_frame_shelves_02_diff_1k.jpg
+  - assets/models/polyhaven/steel_frame_shelves_02/textures/steel_frame_shelves_02_nor_gl_1k.jpg
+  - assets/models/polyhaven/steel_frame_shelves_02/thumb.png
+
+## drawer_cabinet
+
+- Credit: Drawer Cabinet by Ulan Cabanilla, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/drawer_cabinet)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/drawer_cabinet/drawer_cabinet.bin
+  - assets/models/polyhaven/drawer_cabinet/drawer_cabinet_1k.gltf
+  - assets/models/polyhaven/drawer_cabinet/textures/drawer_cabinet_arm_1k.jpg
+  - assets/models/polyhaven/drawer_cabinet/textures/drawer_cabinet_diff_1k.jpg
+  - assets/models/polyhaven/drawer_cabinet/textures/drawer_cabinet_nor_gl_1k.jpg
+  - assets/models/polyhaven/drawer_cabinet/thumb.png
+
+## WoodenTable_03
+
+- Credit: Wooden Table 03 by Gabriel Radić, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/WoodenTable_03)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/WoodenTable_03/WoodenTable_03.bin
+  - assets/models/polyhaven/WoodenTable_03/WoodenTable_03_1k.gltf
+  - assets/models/polyhaven/WoodenTable_03/textures/WoodenTable_03_arm_1k.jpg
+  - assets/models/polyhaven/WoodenTable_03/textures/WoodenTable_03_diff_1k.jpg
+  - assets/models/polyhaven/WoodenTable_03/textures/WoodenTable_03_nor_gl_1k.jpg
+  - assets/models/polyhaven/WoodenTable_03/thumb.png
+
+## vintage_wooden_drawer_01
+
+- Credit: Vintage Wooden Drawer 01 by James Ray Cock, Poly Haven (CC0)
+- Source: Poly Haven (https://polyhaven.com/a/vintage_wooden_drawer_01)
+- License: CC0-1.0
+- Files:
+  - assets/models/polyhaven/vintage_wooden_drawer_01/textures/vintage_wooden_drawer_01_arm_1k.jpg
+  - assets/models/polyhaven/vintage_wooden_drawer_01/textures/vintage_wooden_drawer_01_diff_1k.jpg
+  - assets/models/polyhaven/vintage_wooden_drawer_01/textures/vintage_wooden_drawer_01_nor_gl_1k.jpg
+  - assets/models/polyhaven/vintage_wooden_drawer_01/thumb.png
+  - assets/models/polyhaven/vintage_wooden_drawer_01/vintage_wooden_drawer_01.bin
+  - assets/models/polyhaven/vintage_wooden_drawer_01/vintage_wooden_drawer_01_1k.gltf
+
 ## SheenChair
 
 - Credit: Sheen Chair by Eric Chadwick (Wayfair, LLC), via Khronos glTF-Sample-Assets (CC0)

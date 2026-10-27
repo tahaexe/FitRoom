@@ -402,5 +402,385 @@
     "thumbnail": "assets/models/polyhaven/potted_plant_02/thumb.png",
     "credit": "Potted Plant 02 by Rico Cilliers, Poly Haven (CC0)",
     "license": "CC0-1.0"
+  },
+  {
+    "id": "painted_wooden_sofa",
+    "name": "Vintage Painted Settee",
+    "category": "sofa",
+    "price": 990,
+    "seats": 2,
+    "size": {
+      "w": 192.6,
+      "d": 61.9,
+      "h": 100.7
+    },
+    "styleTags": ["rustic", "vintage"],
+    "colors": ["distressed white wood", "striped cushion"],
+    "roomTypes": ["living room", "bedroom"],
+    "variants": [],
+    "model": "assets/models/polyhaven/painted_wooden_sofa/painted_wooden_sofa_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/painted_wooden_sofa/thumb.png",
+    "credit": "Painted Wooden Sofa by Kirill Sannikov, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "vintage_day_bed",
+    "name": "Vintage Wooden Daybed",
+    "category": "sofa",
+    "price": 1050,
+    "seats": 2,
+    "size": {
+      "w": 166.9,
+      "d": 72.3,
+      "h": 95.4
+    },
+    "styleTags": ["vintage", "colonial"],
+    "colors": ["dark wood", "natural mattress"],
+    "roomTypes": ["bedroom", "living room"],
+    "variants": [],
+    "model": "assets/models/polyhaven/vintage_day_bed/vintage_day_bed_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/vintage_day_bed/thumb.png",
+    "credit": "Vintage Day Bed by Aron Łyczek, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "Rockingchair_01",
+    "name": "Classic Rocking Chair",
+    "category": "armchair",
+    "price": 420,
+    "seats": 1,
+    "size": {
+      "w": 56.9,
+      "d": 67.0,
+      "h": 79.9
+    },
+    "styleTags": ["classic", "country"],
+    "colors": ["medium wood", "woven seat"],
+    "roomTypes": ["living room", "bedroom"],
+    "variants": [],
+    "model": "assets/models/polyhaven/Rockingchair_01/Rockingchair_01_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/Rockingchair_01/thumb.png",
+    "credit": "Rockingchair 01 by Jorge Camacho, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "round_wooden_table_01",
+    "name": "Round Oak Dining Table",
+    "category": "dining-table",
+    "price": 640,
+    "seats": 0,
+    "size": {
+      "w": 104.4,
+      "d": 104.4,
+      "h": 75.0
+    },
+    "styleTags": ["rustic", "farmhouse"],
+    "colors": ["solid oak"],
+    "roomTypes": ["dining room", "kitchen"],
+    "variants": [],
+    "model": "assets/models/polyhaven/round_wooden_table_01/round_wooden_table_01_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/round_wooden_table_01/thumb.png",
+    "credit": "Round Wooden Table 01 by Ulan Cabanilla, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "painted_wooden_table",
+    "name": "Farmhouse Painted Dining Table",
+    "category": "dining-table",
+    "price": 880,
+    "seats": 0,
+    "size": {
+      "w": 188.1,
+      "d": 88.9,
+      "h": 75.0
+    },
+    "styleTags": ["farmhouse", "rustic"],
+    "colors": ["painted top", "solid wood legs"],
+    "roomTypes": ["dining room", "kitchen"],
+    "variants": [],
+    "model": "assets/models/polyhaven/painted_wooden_table/painted_wooden_table_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/painted_wooden_table/thumb.png",
+    "credit": "Painted Wooden Table by Kirill Sannikov, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "painted_wooden_chair_01",
+    "name": "Country Painted Dining Chair",
+    "category": "dining-chair",
+    "price": 160,
+    "seats": 1,
+    "size": {
+      "w": 43.2,
+      "d": 54.0,
+      "h": 95.6
+    },
+    "styleTags": ["country", "rustic"],
+    "colors": ["painted wood"],
+    "roomTypes": ["dining room", "kitchen"],
+    "variants": [],
+    "model": "assets/models/polyhaven/painted_wooden_chair_01/painted_wooden_chair_01_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/painted_wooden_chair_01/thumb.png",
+    "credit": "Painted Wooden Chair 01 by Kuutti Siitonen, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "painted_wooden_chair_02",
+    "name": "High-Back Painted Dining Chair",
+    "category": "dining-chair",
+    "price": 190,
+    "seats": 1,
+    "size": {
+      "w": 50.5,
+      "d": 52.3,
+      "h": 99.8
+    },
+    "styleTags": ["country", "classic"],
+    "colors": ["painted wood", "woven rush seat"],
+    "roomTypes": ["dining room", "kitchen"],
+    "variants": [],
+    "model": "assets/models/polyhaven/painted_wooden_chair_02/painted_wooden_chair_02_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/painted_wooden_chair_02/thumb.png",
+    "credit": "Painted Wooden Chair 02 by Kirill Sannikov, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "modern_coffee_table_02",
+    "name": "Duo Square Coffee Table",
+    "category": "coffee-table",
+    "price": 420,
+    "seats": 0,
+    "size": {
+      "w": 119.9,
+      "d": 120.0,
+      "h": 36.9
+    },
+    "styleTags": ["modern", "minimalist"],
+    "colors": ["oak top", "black base"],
+    "roomTypes": ["living room"],
+    "variants": [],
+    "model": "assets/models/polyhaven/modern_coffee_table_02/modern_coffee_table_02_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/modern_coffee_table_02/thumb.png",
+    "credit": "Modern Coffee Table 02 by Amin, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "industrial_coffee_table",
+    "name": "Industrial Loft Side Table",
+    "category": "side-table",
+    "price": 240,
+    "seats": 0,
+    "size": {
+      "w": 77.8,
+      "d": 75.8,
+      "h": 63.8
+    },
+    "styleTags": ["industrial", "loft"],
+    "colors": ["reclaimed wood", "black steel"],
+    "roomTypes": ["living room", "study"],
+    "variants": [],
+    "model": "assets/models/polyhaven/industrial_coffee_table/industrial_coffee_table_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/industrial_coffee_table/thumb.png",
+    "credit": "Industrial Coffee Table by Ulan Cabanilla, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "CoffeeTable_01",
+    "name": "Atelier Long Coffee Table",
+    "category": "coffee-table",
+    "price": 480,
+    "seats": 0,
+    "size": {
+      "w": 147.2,
+      "d": 93.0,
+      "h": 50.0
+    },
+    "styleTags": ["modern", "craftsman"],
+    "colors": ["solid wood"],
+    "roomTypes": ["living room"],
+    "variants": [],
+    "model": "assets/models/polyhaven/CoffeeTable_01/CoffeeTable_01_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/CoffeeTable_01/thumb.png",
+    "credit": "Coffee Table 01 by Fernando Quinn, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "GothicBed_01",
+    "name": "Gothic Carved Double Bed",
+    "category": "bed",
+    "price": 1490,
+    "seats": 0,
+    "size": {
+      "w": 149.4,
+      "d": 204.0,
+      "h": 153.4
+    },
+    "styleTags": ["gothic", "ornate"],
+    "colors": ["carved dark wood"],
+    "roomTypes": ["bedroom"],
+    "variants": [],
+    "model": "assets/models/polyhaven/GothicBed_01/GothicBed_01_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/GothicBed_01/thumb.png",
+    "credit": "Gothic Bed 01 by Kirill Sannikov, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "GothicCabinet_01",
+    "name": "Gothic Carved Armoire",
+    "category": "wardrobe",
+    "price": 1290,
+    "seats": 0,
+    "size": {
+      "w": 171.9,
+      "d": 112.9,
+      "h": 236.1
+    },
+    "styleTags": ["gothic", "ornate"],
+    "colors": ["carved dark wood"],
+    "roomTypes": ["bedroom"],
+    "variants": [],
+    "model": "assets/models/polyhaven/GothicCabinet_01/GothicCabinet_01_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/GothicCabinet_01/thumb.png",
+    "credit": "Gothic Cabinet 01 by Kirill Sannikov, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "vintage_cabinet_01",
+    "name": "Vintage Panel Cabinet",
+    "category": "cabinet",
+    "price": 860,
+    "seats": 0,
+    "size": {
+      "w": 202.2,
+      "d": 67.0,
+      "h": 223.5
+    },
+    "styleTags": ["vintage", "classic"],
+    "colors": ["painted panels", "dark wood"],
+    "roomTypes": ["living room", "dining room"],
+    "variants": [],
+    "model": "assets/models/polyhaven/vintage_cabinet_01/vintage_cabinet_01_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/vintage_cabinet_01/thumb.png",
+    "credit": "Vintage Cabinet 01 by Rico Cilliers, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "Shelf_01",
+    "name": "Compact Oak Bookcase",
+    "category": "bookcase",
+    "price": 320,
+    "seats": 0,
+    "size": {
+      "w": 100.3,
+      "d": 25.7,
+      "h": 208.0
+    },
+    "styleTags": ["Scandinavian", "simple"],
+    "colors": ["light oak"],
+    "roomTypes": ["living room", "study", "kids"],
+    "variants": [],
+    "model": "assets/models/polyhaven/Shelf_01/Shelf_01_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/Shelf_01/thumb.png",
+    "credit": "Shelf 01 by Gabriel Radić, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "steel_frame_shelves_01",
+    "name": "Steel Frame Double Bookcase",
+    "category": "bookcase",
+    "price": 380,
+    "seats": 0,
+    "size": {
+      "w": 109.7,
+      "d": 50.2,
+      "h": 214.1
+    },
+    "styleTags": ["industrial", "modern"],
+    "colors": ["black steel", "wood shelves"],
+    "roomTypes": ["living room", "study"],
+    "variants": [],
+    "model": "assets/models/polyhaven/steel_frame_shelves_01/steel_frame_shelves_01_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/steel_frame_shelves_01/thumb.png",
+    "credit": "Steel Frame Shelves 01 by James Ray Cock, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "steel_frame_shelves_02",
+    "name": "Steel Frame Single Bookcase",
+    "category": "bookcase",
+    "price": 290,
+    "seats": 0,
+    "size": {
+      "w": 59.3,
+      "d": 50.2,
+      "h": 214.2
+    },
+    "styleTags": ["industrial", "modern"],
+    "colors": ["black steel", "wood shelves"],
+    "roomTypes": ["living room", "study", "kids"],
+    "variants": [],
+    "model": "assets/models/polyhaven/steel_frame_shelves_02/steel_frame_shelves_02_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/steel_frame_shelves_02/thumb.png",
+    "credit": "Steel Frame Shelves 02 by James Ray Cock, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "drawer_cabinet",
+    "name": "Tall Drawer Chest",
+    "category": "storage",
+    "price": 640,
+    "seats": 0,
+    "size": {
+      "w": 114.1,
+      "d": 48.8,
+      "h": 188.1
+    },
+    "styleTags": ["classic", "country"],
+    "colors": ["painted drawers", "wood top"],
+    "roomTypes": ["bedroom", "living room"],
+    "variants": [],
+    "model": "assets/models/polyhaven/drawer_cabinet/drawer_cabinet_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/drawer_cabinet/thumb.png",
+    "credit": "Drawer Cabinet by Ulan Cabanilla, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "WoodenTable_03",
+    "name": "Oak Console TV Stand",
+    "category": "tv-unit",
+    "price": 520,
+    "seats": 0,
+    "size": {
+      "w": 132.7,
+      "d": 57.5,
+      "h": 83.0
+    },
+    "styleTags": ["rustic", "simple"],
+    "colors": ["solid oak"],
+    "roomTypes": ["living room", "bedroom"],
+    "variants": [],
+    "model": "assets/models/polyhaven/WoodenTable_03/WoodenTable_03_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/WoodenTable_03/thumb.png",
+    "credit": "Wooden Table 03 by Gabriel Radić, Poly Haven (CC0)",
+    "license": "CC0-1.0"
+  },
+  {
+    "id": "vintage_wooden_drawer_01",
+    "name": "Vintage Chest TV Stand",
+    "category": "tv-unit",
+    "price": 680,
+    "seats": 0,
+    "size": {
+      "w": 171.5,
+      "d": 100.7,
+      "h": 109.1
+    },
+    "styleTags": ["vintage", "rustic"],
+    "colors": ["aged wood", "metal pulls"],
+    "roomTypes": ["living room", "bedroom"],
+    "variants": [],
+    "model": "assets/models/polyhaven/vintage_wooden_drawer_01/vintage_wooden_drawer_01_1k.gltf",
+    "thumbnail": "assets/models/polyhaven/vintage_wooden_drawer_01/thumb.png",
+    "credit": "Vintage Wooden Drawer 01 by James Ray Cock, Poly Haven (CC0)",
+    "license": "CC0-1.0"
   }
 ]
