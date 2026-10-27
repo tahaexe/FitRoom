@@ -45,39 +45,19 @@ function el<K extends keyof HTMLElementTagNameMap>(
   return node;
 }
 
-/** Small furnished-sample picture: top-view plan of the 420 x 360 room. */
-function sampleThumb(): SVGSVGElement {
-  const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
-  svg.setAttribute("viewBox", "0 0 210 180");
-  svg.setAttribute("role", "img");
-  svg.setAttribute("aria-label", "Top view of the furnished sample room, 420 by 360 centimetres");
-  svg.classList.add("setup-thumb");
-  const room = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-  room.setAttribute("x", "8");
-  room.setAttribute("y", "8");
-  room.setAttribute("width", "194");
-  room.setAttribute("height", "164");
-  room.setAttribute("rx", "8");
-  room.setAttribute("class", "setup-thumb-room");
-  svg.appendChild(room);
-  const blocks: Array<[number, number, number, number, string]> = [
-    [18, 18, 84, 34, "setup-thumb-sofa"],
-    [18, 60, 60, 44, "setup-thumb-bed"],
-    [120, 18, 72, 52, "setup-thumb-table"],
-    [120, 120, 40, 40, "setup-thumb-chair"],
-    [164, 120, 28, 40, "setup-thumb-chair"],
-  ];
-  for (const [x, y, w, h, cls] of blocks) {
-    const r = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    r.setAttribute("x", String(x));
-    r.setAttribute("y", String(y));
-    r.setAttribute("width", String(w));
-    r.setAttribute("height", String(h));
-    r.setAttribute("rx", "4");
-    r.setAttribute("class", cls);
-    svg.appendChild(r);
-  }
-  return svg;
+/**
+ * Sample-room picture: the sample room's recorded photoreal Visualise
+ * answer, cropped to the card with the room size over it.
+ */
+function sampleThumb(): HTMLElement {
+  const wrap = el("div", "setup-thumb-wrap");
+  const img = document.createElement("img");
+  img.className = "setup-thumb";
+  img.src = "assets/sample-room.webp";
+  img.alt = "Photoreal view of the furnished sample room, 420 by 360 centimetres";
+  const badge = el("span", "setup-thumb-size", "420 × 360 cm");
+  wrap.append(img, badge);
+  return wrap;
 }
 
 export class FirstOpen {

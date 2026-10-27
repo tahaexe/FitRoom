@@ -710,6 +710,12 @@ check(
 );
 check("firstopen:photos-live", firstOpenSource.includes("Uses Live AI"));
 check("firstopen:sample-size", firstOpenSource.includes("420 × 360 cm"));
+check(
+  "firstopen:sample-photo",
+  firstOpenSource.includes("assets/sample-room.webp") &&
+    firstOpenSource.includes("setup-thumb-size"),
+  "the sample card shows the recorded photoreal picture with its size over it",
+);
 check("firstopen:measure-hint", firstOpenSource.includes("Measure wall to wall at floor level."));
 check(
   "firstopen:not-rectangle",
