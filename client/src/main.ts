@@ -221,6 +221,9 @@ class FitRoomApp {
   private menuChoice = "sample";
   private menuBeforePhotos = "sample";
   private photoFlow: PhotoFlow | null = null;
+  /** Photo-built draft kept while its editor session is open (photos + solver output). */
+  private photoDraft: import("@fitroom/shared").RoomDraft | null = null;
+  private photoMeta: import("./photo-room/flow").PhotoFlowDone["meta"] | null = null;
   /** Edited room layouts stashed by room id, so each room keeps its own walls, openings and own blocks. */
   private savedRoomLayouts = new Map<string, RoomLayout>();
   private drag: { pointerId: number; id: string; offsetX: number; offsetZ: number } | null = null;
@@ -873,10 +876,15 @@ class FitRoomApp {
     this.rebuildRoom();
     this.editorStore?.load(ROOM);
     this.editor?.setPhotoDraft(result.meta);
+    // The shopper's photos and what the solver found on them stay available
+    // while the editor is open for this photo-built room; they are deleted
+    // on Build ("finishBuild") or Cancel ("cancelEditor"), never sent
+    // anywhere else.
+    this.photoDraft = result.draft;
+    this.photoMeta = result.meta;
     this.openEditor();
     this.menuChoice = "photos";
     this.refreshMenu();
-    void clearAllPhotos();
   }
 
   private openEditor(): void {
@@ -898,6 +906,14 @@ class FitRoomApp {
   private finishBuild(): void {
     this.menuChoice = ROOM.source === "manual" ? "manual" : "sample";
     this.editorBase = null;
+    // Building consumes the photo session: drop the stored photos now that
+    // the room is confirmed, as before.
+    if (this.photoDraft !== null) {
+      this.photoDraft = null;
+      this.photoMeta = null;
+      this.editor?.setPhotoDraft(null);
+      void clearAllPhotos();
+    }
     this.closeEditor();
     this.rebuildRoom();
     this.refreshMenu();
@@ -911,6 +927,13 @@ class FitRoomApp {
       this.editorStore?.load(ROOM);
       this.syncRoomId();
       this.rebuildRoom();
+    }
+    // Cancelling a photo-built room also drops its stored photos.
+    if (this.photoDraft !== null) {
+      this.photoDraft = null;
+      this.photoMeta = null;
+      this.editor?.setPhotoDraft(null);
+      void clearAllPhotos();
     }
     this.editorBase = null;
     this.closeEditor();
