@@ -32,7 +32,7 @@ Client: http://localhost:5173 (proxies `/api` to the server). Server: http://loc
 - `npm start` — serve the built API and the built client from one process.
 - `npm run dev:worker` — build everything and run the Cloudflare Worker locally.
 - `npm run check:worker` — end-to-end Worker check, all local (no Meta call, no account).
-- `npm run deploy` — ship the Worker to Cloudflare (needs credentials, part B).
+- `npm run deploy` — ship the Worker to Cloudflare (needs Cloudflare credentials).
 
 ## Deploy
 
@@ -55,7 +55,7 @@ and checks the app, the API, demo/mock/cache behaviour, caps, the budget
 sum, restart persistence and the Worker's gzip size (under the free plan's
 3 MB limit).
 
-Deploying (part B, not run here) needs three values in the environment —
+Deploying needs three values in the environment —
 never in a file, log or commit:
 
 - `CLOUDFLARE_API_TOKEN`
@@ -69,8 +69,10 @@ npm run deploy
 The script finds the `fitroom` D1 database by name (or creates it),
 writes its id into the generated, git-ignored `wrangler.deploy.jsonc` so
 no account data is committed, applies `server/migrations/` remotely,
-pipes the Meta key to `wrangler secret put` on standard input (never on a
-command line, never printed), deploys, and prints the public URL.
+deploys, pipes the Meta key to `wrangler secret put` on standard input
+(never on a command line, never printed), and prints the public URL.
+Live AI routes may briefly answer unavailable until the secret lands;
+demo mode answers throughout.
 
 ## How it's built
 

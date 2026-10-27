@@ -2,7 +2,7 @@
   // FitRoom on Cloudflare: one Worker serves the built client and the API,
   // with the gateway's durable state in D1. Local use stays on Node
   // (`npm run dev`, `npm start`); `npm run dev:worker` runs this Worker
-  // locally and `npm run deploy` (part B) ships it.
+  // locally and `npm run deploy` ships it.
   //
   // No secrets here: the Meta key is a Worker secret named META_API_KEY,
   // set by the deploy script from its own environment.
