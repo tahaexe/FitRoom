@@ -35,10 +35,7 @@ export interface RectangleSize {
 
 function clampSide(value: number): number {
   if (!Number.isFinite(value)) return MIN_RECTANGLE_SIDE_CM;
-  return Math.min(
-    MAX_RECTANGLE_SIDE_CM,
-    Math.max(MIN_RECTANGLE_SIDE_CM, Math.round(value)),
-  );
+  return Math.min(MAX_RECTANGLE_SIDE_CM, Math.max(MIN_RECTANGLE_SIDE_CM, Math.round(value)));
 }
 
 function wallLengthOf(wall: Wall): number {
@@ -48,12 +45,7 @@ function wallLengthOf(wall: Wall): number {
 function isAxisRectangle(room: RoomLayout): boolean {
   if (room.walls.length !== 4) return false;
   const ids = room.walls.map((w) => w.id);
-  if (
-    ids[0] !== "wall-1" ||
-    ids[1] !== "wall-2" ||
-    ids[2] !== "wall-3" ||
-    ids[3] !== "wall-4"
-  ) {
+  if (ids[0] !== "wall-1" || ids[1] !== "wall-2" || ids[2] !== "wall-3" || ids[3] !== "wall-4") {
     return false;
   }
   const [w1, w2, w3, w4] = room.walls as [Wall, Wall, Wall, Wall];
@@ -92,10 +84,8 @@ export function isRectangleRoom(room: RoomLayout): boolean {
 export function rectangleSize(room: RoomLayout): RectangleSize {
   const w1 = room.walls[0];
   const w2 = room.walls[1];
-  const widthCm =
-    w1 === undefined ? 0 : Math.round(wallLengthOf(w1));
-  const depthCm =
-    w2 === undefined ? 0 : Math.round(wallLengthOf(w2));
+  const widthCm = w1 === undefined ? 0 : Math.round(wallLengthOf(w1));
+  const depthCm = w2 === undefined ? 0 : Math.round(wallLengthOf(w2));
   const heightCm = w1 === undefined ? DEFAULT_RECTANGLE_WALL_HEIGHT_CM : Math.round(w1.height);
   return { widthCm, depthCm, heightCm };
 }
