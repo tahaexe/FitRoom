@@ -43,15 +43,20 @@
       </button>
       <div id="fit-list" class="fit-list" hidden></div>
       <div class="bottom-toolbar" aria-label="View tools">
-        <button id="tool-recommend" type="button" data-active="true">Recommend</button>
-        <button id="tool-assistant" type="button" data-active="false">Arrange</button>
+        <button id="tool-recommend" type="button" data-active="true" aria-pressed="false">
+          Recommend
+        </button>
+        <button id="tool-assistant" type="button" data-active="false" aria-pressed="false">
+          Arrange
+        </button>
         <button id="tool-render" type="button" data-active="false">Visualise</button>
-        <button id="tool-orbit" type="button" data-active="true">Orbit</button>
-        <button id="tool-plan" type="button" data-active="false">Plan</button>
+        <button id="tool-orbit" type="button" data-active="true" aria-pressed="true">Orbit</button>
+        <button id="tool-plan" type="button" data-active="false" aria-pressed="false">Plan</button>
         <button
           id="tool-clearance"
           type="button"
           data-active="false"
+          aria-pressed="false"
           title="Shade the blocked walkway cells"
         >
           Clearance

@@ -1317,6 +1317,14 @@ class FitRoomApp {
     };
   }
 
+  /** Toolbar toggle state, announced (aria-pressed) and visible. */
+  private setToggle(id: string, on: boolean): void {
+    const el = document.getElementById(id);
+    if (el === null) return;
+    el.setAttribute("data-active", String(on));
+    el.setAttribute("aria-pressed", String(on));
+  }
+
   /** Right-hand column: one panel at a time (Inspector, Recommend, Arrange). */
   private showSidePanel(name: "inspector" | "recommend" | "assistant" | "none"): void {
     const inspector = document.getElementById("inspector");
@@ -1332,12 +1340,8 @@ class FitRoomApp {
     } else {
       assistant?.setAttribute("hidden", "");
     }
-    document
-      .getElementById("tool-recommend")
-      ?.setAttribute("data-active", String(name === "recommend"));
-    document
-      .getElementById("tool-assistant")
-      ?.setAttribute("data-active", String(name === "assistant"));
+    this.setToggle("tool-recommend", name === "recommend");
+    this.setToggle("tool-assistant", name === "assistant");
     // Panels float over the 3D view: the stage keeps its size, so the
     // cameras keep their aspect and nothing under the pointer moves.
     this.resize();
@@ -2094,7 +2098,7 @@ class FitRoomApp {
   private toggleClearance(): void {
     const next = !this.fitOverlay.clearanceVisible;
     this.fitOverlay.setClearanceVisible(next);
-    document.getElementById("tool-clearance")?.setAttribute("data-active", String(next));
+    this.setToggle("tool-clearance", next);
     this.requestRender();
   }
 
@@ -2107,8 +2111,8 @@ class FitRoomApp {
   private setMode(mode: "orbit" | "plan"): void {
     if (this.devCam) return;
     this.mode = mode;
-    document.getElementById("tool-orbit")?.setAttribute("data-active", String(mode === "orbit"));
-    document.getElementById("tool-plan")?.setAttribute("data-active", String(mode === "plan"));
+    this.setToggle("tool-orbit", mode === "orbit");
+    this.setToggle("tool-plan", mode === "plan");
     this.planOverlay.setVisible(mode === "plan");
     this.controls.object = mode === "plan" ? this.planCam : this.orbitCam;
     this.controls.enableRotate = mode === "orbit";

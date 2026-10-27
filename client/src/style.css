@@ -704,7 +704,8 @@ button.danger {
   background: var(--panel-bg);
 }
 
-.bottom-toolbar button[data-active="true"] {
+.bottom-toolbar button[data-active="true"],
+.bottom-toolbar button[aria-pressed="true"] {
   background: var(--coral);
   border-color: var(--coral);
   color: var(--on-coral);
