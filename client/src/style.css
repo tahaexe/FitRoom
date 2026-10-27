@@ -1,6 +1,10 @@
 :root {
   color-scheme: light;
   --top-bar-height: 64px;
+  --top-bar-phone: 48px;
+  --phone-bar-height: 56px;
+  --sheet-peek: 40dvh;
+  --sheet-full: 88dvh;
   --catalog-width: 300px;
   --inspector-width: 264px;
   --gap: 16px;
@@ -130,6 +134,63 @@ button {
 }
 
 .btn-quiet[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+/* ---- shared button style: primary, secondary, ghost (one style everywhere) ---- */
+
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-ghost {
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  border-radius: 999px;
+  padding: 8px 16px;
+  min-height: 44px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-primary {
+  background: var(--coral);
+  color: var(--on-coral);
+  border: 0;
+}
+
+.btn-primary:hover {
+  background: var(--coral-hover);
+}
+
+.btn-primary:active {
+  background: var(--coral-pressed);
+}
+
+.btn-secondary {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background: var(--panel-bg);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--ink);
+  border: 1px solid transparent;
+}
+
+.btn-ghost:hover {
+  background: var(--panel-bg);
+}
+
+.btn-primary[disabled],
+.btn-secondary[disabled],
+.btn-ghost[disabled] {
   opacity: 0.45;
   cursor: default;
 }
@@ -2217,5 +2278,400 @@ button.danger {
   .size-head {
     flex-direction: column;
     align-items: stretch;
+  }
+}
+
+/* ---- phone chrome: hidden on desktop, the only bars on a phone ---- */
+
+#tool-phone-menu,
+#phone-bar {
+  display: none;
+}
+
+.phone-menu {
+  position: fixed;
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  z-index: 40;
+  min-width: 200px;
+}
+
+.phone-menu[hidden] {
+  display: none;
+}
+
+.phone-menu button {
+  background: #ffffff;
+  color: var(--ink);
+  border: 0;
+  border-radius: 8px;
+  padding: 8px 16px;
+  min-height: 44px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.phone-menu button:hover {
+  background: var(--panel-bg);
+}
+
+/* Sheet handles and inspector quick actions only exist on a phone. */
+.sheet-handle {
+  display: none;
+}
+
+.inspector-actions {
+  display: none;
+}
+
+/* ---- phone layout: width ≤ 720 px, or landscape height ≤ 500 px ----
+ * The desktop layout above stays as it is; everything below only applies
+ * on a phone. The 3D view fills the screen between a 48 px top bar and a
+ * 56 px bottom bar; every panel becomes a bottom sheet. */
+
+@media (max-width: 720px), (max-height: 500px) and (orientation: landscape) {
+  html,
+  body {
+    overflow-x: clip;
+  }
+
+  /* 48 px top bar: logo mark, Undo, Redo, ⋯ menu. */
+  .top-bar {
+    height: calc(var(--top-bar-phone) + env(safe-area-inset-top));
+    padding: env(safe-area-inset-top) 8px 0;
+    gap: 4px;
+  }
+
+  .wordmark {
+    font-size: 18px;
+  }
+
+  .top-bar-left {
+    gap: 8px;
+  }
+
+  #room-name,
+  #live-switch,
+  #cart-total,
+  #tool-cart,
+  #tool-credits,
+  #api-status {
+    display: none;
+  }
+
+  #tool-undo,
+  #tool-redo {
+    border-color: transparent;
+    padding: 8px 12px;
+  }
+
+  #tool-phone-menu {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 44px;
+    min-height: 44px;
+    font-size: 20px;
+    padding: 8px 12px;
+  }
+
+  #phone-menu {
+    top: calc(var(--top-bar-phone) + env(safe-area-inset-top) + 4px);
+    right: 8px;
+  }
+
+  .top-bar-actions {
+    gap: 4px;
+    margin-left: auto;
+  }
+
+  /* Desktop toolbar off; 56 px bottom bar on: Catalog, AI, Visualise, cart. */
+  .bottom-toolbar {
+    display: none;
+  }
+
+  #phone-bar {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: calc(var(--phone-bar-height) + env(safe-area-inset-bottom));
+    padding: 6px 8px calc(6px + env(safe-area-inset-bottom));
+    background: #ffffff;
+    border-top: 1px solid var(--border-color);
+    z-index: 20;
+  }
+
+  #phone-bar > button {
+    flex: 1 1 0;
+    min-width: 0;
+    background: #ffffff;
+    color: var(--ink);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    padding: 8px 4px;
+    min-height: 44px;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  #phone-bar > button[data-active="true"] {
+    background: var(--coral);
+    border-color: var(--coral);
+    color: var(--on-coral);
+  }
+
+  .phone-cart {
+    flex: 1 1 0;
+    min-width: 0;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--ink);
+    font-variant-numeric: tabular-nums;
+    text-align: right;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    padding: 0 4px;
+  }
+
+  #phone-ai-menu {
+    bottom: calc(var(--phone-bar-height) + env(safe-area-inset-bottom) + 4px);
+    left: 8px;
+    right: auto;
+  }
+
+  /* The room fills the screen between the two bars. */
+  #scene-container {
+    top: calc(var(--top-bar-phone) + env(safe-area-inset-top));
+    bottom: calc(var(--phone-bar-height) + env(safe-area-inset-bottom));
+    left: 0;
+    right: 0;
+    border: 0;
+    border-radius: 0;
+    box-shadow: none;
+  }
+
+  /* Full-screen flows sit under the 48 px bar on a phone. */
+  .photo-flow {
+    top: calc(var(--top-bar-phone) + env(safe-area-inset-top));
+  }
+
+  .room-editor {
+    top: calc(var(--top-bar-phone) + env(safe-area-inset-top) + 8px);
+    bottom: calc(var(--phone-bar-height) + env(safe-area-inset-bottom) + 8px);
+  }
+
+  /* Panels become bottom sheets: drag handle, peek ~40 %, full ~88 %. */
+  #catalog,
+  #inspector,
+  #recommend-panel,
+  #assistant-panel,
+  #render-viewer {
+    position: fixed;
+    top: auto;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    height: var(--sheet-peek);
+    max-height: var(--sheet-full);
+    border-radius: 16px 16px 0 0;
+    z-index: 10;
+    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    overscroll-behavior: contain;
+  }
+
+  #catalog[data-sheet="full"],
+  #inspector[data-sheet="full"],
+  #recommend-panel[data-sheet="full"],
+  #assistant-panel[data-sheet="full"],
+  #render-viewer[data-sheet="full"] {
+    height: var(--sheet-full);
+  }
+
+  #render-viewer {
+    left: 0;
+    top: auto;
+    transform: none;
+    width: auto;
+    max-height: var(--sheet-full);
+    overflow-y: auto;
+  }
+
+  .sheet-handle {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 24px;
+    touch-action: none;
+    cursor: grab;
+  }
+
+  .sheet-handle::before {
+    content: "";
+    width: 40px;
+    height: 4px;
+    border-radius: 999px;
+    background: var(--border-color);
+  }
+
+  /* The side-panel offset never applies on a phone: sheets cover the
+   * bottom, the badge keeps the top-right corner of the room. */
+  #scene-container.has-side-panel .fit-badge,
+  #scene-container.has-side-panel .fit-list {
+    right: 16px;
+  }
+
+  /* Badges, pills, tips and toasts stay above an open sheet, never under
+   * it — and they sit clear of the sheet's own handle and controls. */
+  body[data-sheet-open="true"] .fit-badge {
+    z-index: 30;
+  }
+
+  body[data-sheet-open="true"] .fit-list {
+    z-index: 30;
+    max-height: calc(100dvh - var(--sheet-peek) - 120px);
+    overflow-y: auto;
+  }
+
+  body[data-sheet-open="true"] .coach-marks,
+  body[data-sheet-open="true"] .delete-toast,
+  body[data-sheet-open="true"] .door-tip {
+    bottom: calc(var(--sheet-peek) + 12px);
+    z-index: 30;
+  }
+
+  body[data-sheet-open="true"][data-sheet-size="full"] .coach-marks,
+  body[data-sheet-open="true"][data-sheet-size="full"] .delete-toast,
+  body[data-sheet-open="true"][data-sheet-size="full"] .door-tip {
+    bottom: calc(var(--sheet-full) + 12px);
+  }
+
+  .fit-list {
+    left: 16px;
+    right: 16px;
+    width: auto;
+  }
+
+  .coach-marks,
+  .delete-toast,
+  .door-tip {
+    max-width: calc(100% - 16px);
+    white-space: normal;
+  }
+
+  .measure {
+    width: auto;
+    max-width: calc(100% - 32px);
+  }
+
+  /* Inspector on a phone: main actions first, position fields behind More. */
+  .inspector-more {
+    display: inline-flex;
+  }
+
+  #inspector:not([data-expanded="true"]) .inspector-pos {
+    display: none;
+  }
+
+  .inspector-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    margin: 8px 0;
+  }
+
+  .inspector-actions button {
+    flex: 1 1 0;
+    min-height: 44px;
+  }
+}
+
+/* Inspector "More" toggle: desktop shows every field, so it stays hidden. */
+.inspector-more {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 8px 16px;
+  min-height: 44px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  width: 100%;
+  margin-top: 8px;
+}
+
+/* ---- touch screens: every control is a 44 px target in one button style ---- */
+
+@media (pointer: coarse) {
+  button,
+  input,
+  select,
+  textarea,
+  .chips button,
+  .bottom-toolbar button,
+  .fit-list button,
+  .phone-menu button,
+  .recommend-run,
+  .assistant-chip,
+  .recommend-go,
+  .assistant-go,
+  .render-go,
+  .render-quiet,
+  .assistant-quiet,
+  .room-menu-pill,
+  .room-menu-item,
+  .editor-pill,
+  .photo-pill,
+  .plan-pill,
+  .furnish-step {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Text never drops below 13 px on touch screens. */
+  .size-tag,
+  .measure,
+  .api-status,
+  .recommend-model,
+  .render-model,
+  .photo-wall-status,
+  .photo-mini-letter,
+  .source-mark,
+  .fit-fits-label,
+  .photo-opening-tag,
+  .photo-tape-label {
+    font-size: 13px;
+  }
+
+  /* Inputs never drop below 16 px: no zoom on focus. */
+  input,
+  select,
+  textarea {
+    font-size: 16px;
   }
 }

@@ -2,7 +2,7 @@
 <html lang="en">
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>FitRoom</title>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
   </head>
@@ -30,8 +30,36 @@
         <button id="tool-redo" class="btn-quiet" type="button" title="Redo (Ctrl+Y)">Redo</button>
         <button id="tool-credits" class="btn-quiet" type="button">Credits</button>
         <span id="api-status" class="api-status" data-state="checking">API: checking…</span>
+        <button
+          id="tool-phone-menu"
+          class="btn-ghost"
+          type="button"
+          aria-haspopup="menu"
+          aria-expanded="false"
+          title="More actions"
+        >
+          ⋯
+        </button>
+      </div>
+      <div id="phone-menu" class="phone-menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-phone-action="plan">Plan</button>
+        <button type="button" role="menuitem" data-phone-action="clearance">Clearance</button>
+        <button type="button" role="menuitem" data-phone-action="reset-view">Reset view</button>
+        <button type="button" role="menuitem" data-phone-action="edit-room">Edit room</button>
+        <button type="button" role="menuitem" data-phone-action="credits">Credits</button>
       </div>
     </header>
+    <nav id="phone-bar" aria-label="Room actions">
+      <button id="phone-catalog" type="button">Catalog</button>
+      <button id="phone-ai" type="button" aria-haspopup="menu" aria-expanded="false">AI</button>
+      <button id="phone-visualise" type="button">Visualise</button>
+      <span id="phone-cart" class="phone-cart" aria-live="polite"></span>
+      <div id="phone-ai-menu" class="phone-menu" role="menu" hidden>
+        <button type="button" role="menuitem" data-phone-action="arrange">Arrange</button>
+        <button type="button" role="menuitem" data-phone-action="furnish">Furnish</button>
+        <button type="button" role="menuitem" data-phone-action="recommend">Recommend</button>
+      </div>
+    </nav>
     <aside id="catalog" aria-label="Furniture catalog"></aside>
     <main id="scene-container" aria-label="True-scale 3D fitting room">
       <div id="recommend-panel" aria-label="Furniture recommendations" hidden></div>
@@ -222,7 +250,7 @@
       </p>
       <p>Type: Nunito via @fontsource/nunito (SIL Open Font License 1.1).</p>
       <p>Test photos: eight CC0-1.0 room photos via Wikimedia Commons (see CREDITS.md).</p>
-      <form method="dialog"><button type="submit">Close</button></form>
+      <form method="dialog"><button type="submit" class="btn-secondary">Close</button></form>
     </dialog>
     <script type="module" src="/src/main.ts"></script>
   </body>

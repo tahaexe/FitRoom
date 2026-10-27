@@ -930,7 +930,7 @@
   font-weight: 600;
 }
 
-@media (max-width: 720px) {
+@media (max-width: 720px), (max-height: 500px) and (orientation: landscape) {
   .photo-confirm {
     grid-template-columns: minmax(0, 1fr);
   }
