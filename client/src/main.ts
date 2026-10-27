@@ -57,7 +57,7 @@ import { EditorStore } from "./editor/editor-store";
 import { RoomEditor } from "./editor/editor";
 import { RoomMenu } from "./editor/room-menu";
 import { PhotoFlow, type PhotoFlowDone } from "./photo-room/flow";
-import { clearAllPhotos } from "./photo-room/photo-store";
+import { clearAllPhotos, loadPhoto } from "./photo-room/photo-store";
 import "./photo-room/photo-room.css";
 import "./editor/editor.css";
 import {
@@ -927,6 +927,36 @@ class FitRoomApp {
     // reload reopens it with its pieces.
     this.photoDraft = result.draft;
     this.photoMeta = result.meta;
+    void (async (): Promise<void> => {
+      const sizes = {
+        A: { width: 1280, height: 960 },
+        B: { width: 1280, height: 960 },
+        C: { width: 1280, height: 960 },
+        D: { width: 1280, height: 960 },
+      };
+      for (const letter of ["A", "B", "C", "D"] as const) {
+        try {
+          const stored = (await loadPhoto(letter)) as unknown as {
+            segWidth?: number;
+            segHeight?: number;
+          } | null;
+          if (stored !== null && stored !== undefined) {
+            sizes[letter] = {
+              width: stored.segWidth ?? 1280,
+              height: stored.segHeight ?? 960,
+            };
+          }
+        } catch {
+          // Keep the fallback frame; the solver refuses out-of-frame moves.
+        }
+      }
+      this.editorStore?.setPhoto({
+        draft: result.draft,
+        sizes,
+        activeWall: "A",
+        seen: ["A"],
+      });
+    })();
     if (ROOM.id === "photos-room") saveRoomLayout(ROOM);
     this.openEditor();
     this.menuChoice = "photos";
@@ -962,6 +992,7 @@ class FitRoomApp {
       this.photoDraft = null;
       this.photoMeta = null;
       this.editor?.setPhotoDraft(null);
+      this.editorStore?.setPhoto(null);
       void clearAllPhotos();
     }
     this.closeEditor();
@@ -983,6 +1014,7 @@ class FitRoomApp {
       this.photoDraft = null;
       this.photoMeta = null;
       this.editor?.setPhotoDraft(null);
+      this.editorStore?.setPhoto(null);
       void clearAllPhotos();
     }
     this.editorBase = null;

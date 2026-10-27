@@ -43,6 +43,12 @@ import {
   matchesCatalogQuery,
 } from "../src/catalog-ui.js";
 import { measuredMarkText, photoBandText, tapeWallLabel } from "../src/editor/source-mark.js";
+import {
+  cornerHandleLabel,
+  openingBoxLabel,
+  openingBoxText,
+  wallCardStatus,
+} from "../src/editor/photo-confirm.js";
 
 let failures = 0;
 
@@ -387,6 +393,35 @@ check(
 // The band's tape pill names the next estimated wall letter.
 check("tape:wall-a", tapeWallLabel("A") === "Tape wall A", tapeWallLabel("A"));
 check("tape:wall-c", tapeWallLabel("C") === "Tape wall C", tapeWallLabel("C"));
+
+// ---- "AI drafts, you confirm" texts ----
+check(
+  "confirm:corner-name",
+  cornerHandleLabel("m1", "B") === "Corner top left of wall B",
+  cornerHandleLabel("m1", "B"),
+);
+check(
+  "confirm:corner-shift",
+  cornerHandleLabel("m3", "D") === "Corner bottom right of wall D",
+  cornerHandleLabel("m3", "D"),
+);
+check(
+  "confirm:opening-box",
+  openingBoxLabel("window", "C", 120) === "Window on wall C, 120 cm",
+  openingBoxLabel("window", "C", 120),
+);
+check(
+  "confirm:opening-door",
+  openingBoxLabel("door", "A", 90) === "Door on wall A, 90 cm",
+  openingBoxLabel("door", "A", 90),
+);
+check(
+  "confirm:opening-tag",
+  openingBoxText("window", 120, 140) === "Window 120 × 140",
+  openingBoxText("window", 120, 140),
+);
+check("confirm:active", wallCardStatus(true) === "Active", wallCardStatus(true));
+check("confirm:done", wallCardStatus(false) === "Done", wallCardStatus(false));
 
 if (failures > 0) process.exit(1);
 console.log("guidance: all checks passed");

@@ -514,7 +514,40 @@ export class PhotoFlow {
     img.alt = `Wall ${letter} photo`;
     if (state.tapping) {
       img.classList.add("tapping");
+      img.tabIndex = 0;
+      img.setAttribute("role", "button");
+      img.setAttribute(
+        "aria-label",
+        `Wall ${letter} photo: arrow keys move the door marker, Enter sets it`,
+      );
       img.addEventListener("click", (event) => this.tapPhoto(letter, event, img));
+      img.addEventListener("keydown", (event) => {
+        const tapState = this.stateOf(letter);
+        const current = tapState.tap ?? {
+          x: Math.round(intake.segWidth / 2),
+          y: Math.round(intake.segHeight / 2),
+        };
+        const step = event.shiftKey ? 50 : 10;
+        let next: { x: number; y: number };
+        if (event.key === "ArrowLeft") next = { x: current.x - step, y: current.y };
+        else if (event.key === "ArrowRight") next = { x: current.x + step, y: current.y };
+        else if (event.key === "ArrowUp") next = { x: current.x, y: current.y - step };
+        else if (event.key === "ArrowDown") next = { x: current.x, y: current.y + step };
+        else if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          tapState.tapping = false;
+          void this.analyse(letter, this.tapFor(letter));
+          return;
+        } else return;
+        event.preventDefault();
+        tapState.tap = {
+          x: Math.min(Math.max(0, Math.round(next.x)), Math.max(1, intake.segWidth - 1)),
+          y: Math.min(Math.max(0, Math.round(next.y)), Math.max(1, intake.segHeight - 1)),
+        };
+        this.render();
+        const again = this.body.querySelector(".photo-img") as HTMLElement | null;
+        again?.focus();
+      });
     }
     wrap.appendChild(img);
     const overlay = document.createElement("div");
