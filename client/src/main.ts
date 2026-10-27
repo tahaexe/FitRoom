@@ -121,6 +121,9 @@ const CATALOG_MAP = new Map<string, CatalogItem>(CATALOG.map((c) => [c.id, c]));
 const MAX_PIXEL_RATIO = 2;
 const MIN_POLAR = 0.12;
 const MAX_POLAR = Math.PI / 2 - 0.03;
+/** Selection coral (matches --coral) + a lighter hover coral, both readable on dark and light. */
+const SELECT_CORAL = 0xf54e49;
+const HOVER_CORAL = 0xff8f88;
 
 function apiPill(): HTMLElement | null {
   return document.getElementById("api-status");
@@ -180,9 +183,13 @@ class FitRoomApp {
   private raycaster = new THREE.Raycaster();
   private floorMesh: THREE.Mesh | null = null;
   private selectedId: string | null = null;
-  /** Neutral selection outline: the footprint on the floor, turns with the piece. */
+  /** Coral selection outline: the footprint on the floor, turns with the piece. */
   private outline: THREE.LineLoop | null = null;
-  private rotateHandle: THREE.Mesh;
+  /** Lighter coral hover outline for the piece under the pointer. */
+  private hoverOutline: THREE.LineLoop | null = null;
+  private hoverId: string | null = null;
+  private rotateHandle: THREE.Group;
+  private rotateRingRadiusM = 0.5;
   private sizeTag: HTMLElement;
   private measureEl: HTMLElement;
   private planOverlay: PlanOverlay;
@@ -385,12 +392,29 @@ class FitRoomApp {
       outward: e.outward,
     }));
 
-    // Selection outline + rotate handle + size tag.
-    this.rotateHandle = new THREE.Mesh(
-      new THREE.SphereGeometry(0.07, 16, 16),
-      new THREE.MeshBasicMaterial({ color: 0xf54e49 }),
-    );
+    // Selection outline + rotate ring + size tag.
+    this.rotateHandle = new THREE.Group();
     this.rotateHandle.name = "fitroom-rotate-handle";
+    const ringVisible = new THREE.Mesh(
+      new THREE.RingGeometry(0.42, 0.5, 48),
+      new THREE.MeshBasicMaterial({
+        color: SELECT_CORAL,
+        transparent: true,
+        opacity: 0.95,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      }),
+    );
+    ringVisible.rotation.x = -Math.PI / 2;
+    ringVisible.renderOrder = 6;
+    // Generous invisible hit ring so the ring is easy to grab.
+    const ringHit = new THREE.Mesh(
+      new THREE.RingGeometry(0.3, 0.62, 32),
+      new THREE.MeshBasicMaterial({ visible: false, side: THREE.DoubleSide }),
+    );
+    ringHit.rotation.x = -Math.PI / 2;
+    ringHit.name = "fitroom-rotate-hit";
+    this.rotateHandle.add(ringVisible, ringHit);
     this.rotateHandle.visible = false;
     this.scene.add(this.rotateHandle);
 
@@ -416,6 +440,7 @@ class FitRoomApp {
       onVariant: (id, variant) => this.commitVariant(id, variant),
       onDelete: (id) => this.deleteItem(id),
     });
+    this.inspector.setBounds(roomBounds(ROOM));
 
     const catalogHost = document.getElementById("catalog");
     if (catalogHost !== null) {
@@ -510,6 +535,7 @@ class FitRoomApp {
     this.showSidePanel("none");
     void this.syncInstances();
     this.refreshIssues();
+    this.updateSelectionTools();
     this.updateMeasure();
     this.updateTopBar();
     this.updateUndoRedo();
@@ -886,6 +912,7 @@ class FitRoomApp {
     this.planOverlay = new PlanOverlay(this.container, ROOM);
     this.planOverlay.setVisible(this.mode === "plan");
     this.fitEngine = new FitEngine(ROOM, catalogProducts(CATALOG_MAP));
+    this.inspector.setBounds(roomBounds(ROOM));
     this.refreshIssues();
     this.updateMeasure();
     this.recommendPanel?.refresh();
@@ -969,12 +996,33 @@ class FitRoomApp {
   }
 
   private commitMove(id: string, x: number, z: number): void {
+    const clamped = this.clampToRoom(x, z);
     this.store.commit((draft) => {
       const it = draft.items.find((i) => i.instanceId === id);
       if (it !== undefined) {
-        it.position = { x: Math.round(x), z: Math.round(z) };
+        it.position = { x: clamped.x, z: clamped.z };
       }
     });
+  }
+
+  /** Arrow-key nudge as one undo step per press, with live fit feedback. */
+  private nudgeSelected(dxCm: number, dzCm: number): void {
+    const id = this.selectedId;
+    if (id === null) return;
+    const item = this.store.state.items.find((i) => i.instanceId === id);
+    if (item === undefined) return;
+    this.store.checkpoint();
+    const clamped = this.clampToRoom(item.position.x + dxCm, item.position.z + dzCm);
+    item.position = { x: clamped.x, z: clamped.z };
+    const live = this.instances.get(id);
+    if (live !== undefined) {
+      live.group.position.set(cmToMeters(clamped.x), 0, cmToMeters(clamped.z));
+      this.positionHandle(live);
+    }
+    this.updateMeasure();
+    this.refreshIssues([id]);
+    this.store.touch();
+    this.requestRender();
   }
 
   private commitRotate(id: string, deg: number): void {
@@ -1093,16 +1141,30 @@ class FitRoomApp {
 
   /** Follow the selected piece every frame so the outline turns with it. */
   private updateOutline(): void {
-    if (this.outline === null || this.selectedId === null) return;
-    const item = this.store.state.items.find((i) => i.instanceId === this.selectedId);
-    const entry = item === undefined ? undefined : CATALOG_MAP.get(item.productId);
-    if (item === undefined || entry === undefined) return;
-    const rect = orientedFootprint(entry.size, item.position, item.rotationY);
-    const pos = this.outline.geometry.getAttribute("position") as THREE.BufferAttribute;
-    rect.corners.forEach((c, i) => {
-      pos.setXYZ(i, cmToMeters(c.x), 0.03, cmToMeters(c.z));
-    });
-    pos.needsUpdate = true;
+    if (this.outline !== null && this.selectedId !== null) {
+      const item = this.store.state.items.find((i) => i.instanceId === this.selectedId);
+      const entry = item === undefined ? undefined : CATALOG_MAP.get(item.productId);
+      if (item !== undefined && entry !== undefined) {
+        const rect = orientedFootprint(entry.size, item.position, item.rotationY);
+        const pos = this.outline.geometry.getAttribute("position") as THREE.BufferAttribute;
+        rect.corners.forEach((c, i) => {
+          pos.setXYZ(i, cmToMeters(c.x), 0.03, cmToMeters(c.z));
+        });
+        pos.needsUpdate = true;
+      }
+    }
+    if (this.hoverOutline !== null && this.hoverId !== null) {
+      const item = this.store.state.items.find((i) => i.instanceId === this.hoverId);
+      const entry = item === undefined ? undefined : CATALOG_MAP.get(item.productId);
+      if (item !== undefined && entry !== undefined) {
+        const rect = orientedFootprint(entry.size, item.position, item.rotationY);
+        const pos = this.hoverOutline.geometry.getAttribute("position") as THREE.BufferAttribute;
+        rect.corners.forEach((c, i) => {
+          pos.setXYZ(i, cmToMeters(c.x), 0.03, cmToMeters(c.z));
+        });
+        pos.needsUpdate = true;
+      }
+    }
   }
 
   /** Rebuild the neutral selection outline from the current scene item. */
@@ -1123,15 +1185,51 @@ class FitRoomApp {
     );
     this.outline = new THREE.LineLoop(
       geo,
-      new THREE.LineBasicMaterial({ color: 0x2b2c30, depthWrite: false }),
+      new THREE.LineBasicMaterial({ color: SELECT_CORAL, depthWrite: false }),
     );
     this.outline.renderOrder = 5;
     this.scene.add(this.outline);
   }
 
+  /** Rebuild the lighter hover outline for the piece under the pointer. */
+  private rebuildHoverOutline(): void {
+    if (this.hoverOutline !== null) {
+      this.scene.remove(this.hoverOutline);
+      this.hoverOutline.geometry.dispose();
+      (this.hoverOutline.material as THREE.Material).dispose();
+      this.hoverOutline = null;
+    }
+    const id = this.hoverId;
+    if (id === null || id === this.selectedId) return;
+    const item = this.store.state.items.find((i) => i.instanceId === id);
+    const entry = item === undefined ? undefined : CATALOG_MAP.get(item.productId);
+    if (item === undefined || entry === undefined) return;
+    const rect = orientedFootprint(entry.size, item.position, item.rotationY);
+    const geo = new THREE.BufferGeometry().setFromPoints(
+      rect.corners.map((c) => new THREE.Vector3(cmToMeters(c.x), 0.03, cmToMeters(c.z))),
+    );
+    this.hoverOutline = new THREE.LineLoop(
+      geo,
+      new THREE.LineBasicMaterial({ color: HOVER_CORAL, depthWrite: false }),
+    );
+    this.hoverOutline.renderOrder = 4;
+    this.scene.add(this.hoverOutline);
+  }
+
+  private setHover(id: string | null): void {
+    if (this.hoverId === id) return;
+    this.hoverId = id;
+    this.rebuildHoverOutline();
+    this.renderer.domElement.style.cursor = id === null ? "" : "grab";
+    this.requestRender();
+  }
+
   private select(id: string | null): void {
     this.selectedId = id;
     this.rebuildOutline();
+    // The hover outline never doubles the selection.
+    if (this.hoverId !== null && this.hoverId === id) this.setHover(null);
+    else this.rebuildHoverOutline();
     const entry = id === null ? undefined : this.instances.get(id);
     if (entry !== undefined) {
       this.rotateHandle.visible = true;
@@ -1143,10 +1241,34 @@ class FitRoomApp {
       id === null ? null : (this.store.state.items.find((i) => i.instanceId === id) ?? null);
     this.inspector.setSelection(current);
     this.recommendPanel?.setSelected(current);
-    // Selecting a piece shows the Inspector in the right-hand column.
+    // Selecting a piece shows the Inspector floating over the 3D view: the
+    // stage never narrows and the camera never moves.
     if (id !== null) this.showSidePanel("inspector");
+    this.updateSelectionTools();
     this.updateMeasure();
     this.requestRender();
+  }
+
+  /** Selection tools (rotate, delete) exist only while a piece is selected. */
+  private updateSelectionTools(): void {
+    const has = this.selectedId !== null;
+    for (const id of ["tool-rot-left", "tool-rot-right", "tool-delete"]) {
+      const el = document.getElementById(id);
+      if (el === null) continue;
+      if (has) el.removeAttribute("hidden");
+      else el.setAttribute("hidden", "");
+      if (el instanceof HTMLButtonElement) el.disabled = !has;
+    }
+  }
+
+  /** Clamp a room position to the floor bounds so the Inspector and arrow
+   * keys can never send a piece out of the room. */
+  private clampToRoom(x: number, z: number): { x: number; z: number } {
+    const b = roomBounds(ROOM);
+    return {
+      x: Math.min(b.maxX, Math.max(b.minX, Math.round(x))),
+      z: Math.min(b.maxZ, Math.max(b.minZ, Math.round(z))),
+    };
   }
 
   /** Right-hand column: one panel at a time (Inspector, Recommend, Arrange). */
@@ -1170,8 +1292,8 @@ class FitRoomApp {
     document
       .getElementById("tool-assistant")
       ?.setAttribute("data-active", String(name === "assistant"));
-    // The stage width follows the column: re-fit the cameras now that the
-    // container grew or shrank.
+    // Panels float over the 3D view: the stage keeps its size, so the
+    // cameras keep their aspect and nothing under the pointer moves.
     this.resize();
   }
 
@@ -1188,10 +1310,33 @@ class FitRoomApp {
     document.getElementById("api-status")?.setAttribute("hidden", "");
   }
 
+  /** Ring around the footprint centre on the floor; radius follows the piece. */
   private positionHandle(entry: InstanceEntry): void {
     const box = new THREE.Box3().setFromObject(entry.group);
     const center = box.getCenter(new THREE.Vector3());
-    this.rotateHandle.position.set(center.x, box.max.y + 0.25, center.z);
+    const sizeX = box.max.x - box.min.x;
+    const sizeZ = box.max.z - box.min.z;
+    const radiusM = Math.hypot(sizeX, sizeZ) / 2 + 0.22;
+    this.rotateRingRadiusM = Math.min(1.6, Math.max(0.45, radiusM));
+    const visible = this.rotateHandle.children[0];
+    const hit = this.rotateHandle.children[1];
+    if (visible instanceof THREE.Mesh) {
+      visible.geometry.dispose();
+      visible.geometry = new THREE.RingGeometry(
+        Math.max(0.05, this.rotateRingRadiusM - 0.045),
+        this.rotateRingRadiusM,
+        48,
+      );
+    }
+    if (hit instanceof THREE.Mesh) {
+      hit.geometry.dispose();
+      hit.geometry = new THREE.RingGeometry(
+        Math.max(0.05, this.rotateRingRadiusM - 0.2),
+        this.rotateRingRadiusM + 0.2,
+        32,
+      );
+    }
+    this.rotateHandle.position.set(center.x, 0.045, center.z);
   }
 
   // ---- sync ----
@@ -1209,6 +1354,8 @@ class FitRoomApp {
     } else if (this.selectedId !== null) {
       this.select(this.selectedId);
     }
+    if (this.hoverId !== null && !this.instances.has(this.hoverId)) this.setHover(null);
+    else this.rebuildHoverOutline();
     this.updateMeasure();
     // Models (and their textures) arrived asynchronously: draw + refresh shadows.
     this.markSceneChanged();
@@ -1445,11 +1592,12 @@ class FitRoomApp {
         const ndc = this.setPointer(event);
         this.raycaster.setFromCamera(ndc, this.activeCamera());
         if (this.rotateHandle.visible) {
-          const hits = this.raycaster.intersectObject(this.rotateHandle, false);
+          const hits = this.raycaster.intersectObject(this.rotateHandle, true);
           if (hits.length > 0 && this.selectedId !== null) {
             this.ownership.own(event.pointerId, event.clientX, event.clientY);
             this.rotating = true;
             this.rotatePointerId = event.pointerId;
+            el.style.cursor = "grabbing";
             this.store.checkpoint();
             this.applyCameraLock();
             event.stopImmediatePropagation();
@@ -1466,6 +1614,7 @@ class FitRoomApp {
         if (foundId !== null) {
           this.ownership.own(event.pointerId, event.clientX, event.clientY);
           this.select(foundId);
+          el.style.cursor = "grabbing";
           const item = this.store.state.items.find((i) => i.instanceId === foundId);
           if (item !== undefined && this.raycaster.ray.intersectPlane(floorPlane, hit)) {
             this.drag = {
@@ -1495,7 +1644,17 @@ class FitRoomApp {
     );
 
     el.addEventListener("pointermove", (event) => {
-      if (!this.ownership.isOwned(event.pointerId)) return;
+      if (!this.ownership.isOwned(event.pointerId)) {
+        // Hover highlight + grab cursor when no drag/rotate is active. The
+        // NDC comes straight from the canvas rect, so the mapping is exact
+        // in both Orbit and Plan modes.
+        if (this.drag === null && !this.rotating && event.pointerType === "mouse") {
+          const ndc = this.setPointer(event);
+          this.raycaster.setFromCamera(ndc, this.activeCamera());
+          this.setHover(this.pickInstanceId());
+        }
+        return;
+      }
       const ndc = this.setPointer(event);
       this.raycaster.setFromCamera(ndc, this.activeCamera());
       if (this.rotating && event.pointerId === this.rotatePointerId && this.selectedId !== null) {
@@ -1564,6 +1723,7 @@ class FitRoomApp {
       }
       this.ownership.release(event.pointerId);
       this.ownership.forget(event.pointerId);
+      el.style.cursor = "";
       if (isDragPointer) this.drag = null;
       if (isRotatePointer) {
         this.rotating = false;
@@ -1682,6 +1842,7 @@ class FitRoomApp {
       }
       if (this.selectedId === null) return;
       if (event.key === "Delete" || event.key === "Backspace") {
+        event.preventDefault();
         this.deleteItem(this.selectedId);
       } else if (event.key.toLowerCase() === "r") {
         const item = this.store.state.items.find((i) => i.instanceId === this.selectedId);
@@ -1689,6 +1850,15 @@ class FitRoomApp {
           const step = event.shiftKey ? 1 : 15;
           this.commitRotate(item.instanceId, item.rotationY + step);
         }
+      } else if (event.key.startsWith("Arrow")) {
+        // Arrow keys move the selected piece 1 cm (Shift: 10 cm) as one
+        // undo step per press, with live fit checks.
+        event.preventDefault();
+        const step = event.shiftKey ? 10 : 1;
+        if (event.key === "ArrowLeft") this.nudgeSelected(-step, 0);
+        else if (event.key === "ArrowRight") this.nudgeSelected(step, 0);
+        else if (event.key === "ArrowUp") this.nudgeSelected(0, -step);
+        else if (event.key === "ArrowDown") this.nudgeSelected(0, step);
       }
     });
   }
@@ -1893,8 +2063,12 @@ class FitRoomApp {
       return;
     }
     const box = new THREE.Box3().setFromObject(entry.group);
-    const c = box.getCenter(new THREE.Vector3());
-    const v = new THREE.Vector3(c.x, box.max.y + 0.12, c.z).project(this.activeCamera());
+    // Anchor the pill at the top far corner, never at the footprint centre,
+    // so it can never cover the floor rotation ring (identical in plan,
+    // where height does not separate the two).
+    const v = new THREE.Vector3(box.max.x, box.max.y + 0.14, box.max.z).project(
+      this.activeCamera(),
+    );
     const w = this.container.clientWidth;
     const h = this.container.clientHeight;
     const sx = ((v.x + 1) / 2) * w;

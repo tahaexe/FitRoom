@@ -440,17 +440,23 @@ button.danger {
   background: #ffffff;
 }
 
-/* The right-hand column only reserves stage width while a panel is open. */
-body:has(#inspector:not([hidden])) #scene-container,
-body:has(#recommend-panel:not([hidden])) #scene-container,
-body:has(#assistant-panel:not([hidden])) #scene-container {
-  right: calc(var(--inspector-width) + var(--gap) * 2);
+/* Side panels float over the 3D view: the stage keeps its size so opening
+ * a panel or selecting a piece never moves the room under the pointer. */
+#inspector,
+#recommend-panel,
+#assistant-panel {
+  z-index: 4;
 }
 
 #scene-container canvas {
   display: block;
   width: 100%;
   height: 100%;
+  cursor: default;
+}
+
+#scene-container canvas:active {
+  cursor: default;
 }
 
 .size-tag {
@@ -704,6 +710,10 @@ body:has(#assistant-panel:not([hidden])) #scene-container {
   color: var(--on-coral);
 }
 
+.bottom-toolbar button[hidden] {
+  display: none;
+}
+
 .measure {
   font-size: 12px;
   font-weight: 600;
@@ -714,6 +724,21 @@ body:has(#assistant-panel:not([hidden])) #scene-container {
   border-radius: 999px;
   padding: 8px 16px;
   white-space: nowrap;
+  /* Fixed slot so the status text length never shifts the tool buttons. */
+  flex: 0 0 auto;
+  width: 340px;
+  max-width: 38vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspector-note {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  margin: 8px 0 0;
 }
 
 #credits-dialog {

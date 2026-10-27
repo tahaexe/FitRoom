@@ -1,8 +1,18 @@
 import type { CatalogItem, SceneItem } from "@fitroom/shared";
 
+export interface InspectorBounds {
+  minX: number;
+  maxX: number;
+  minZ: number;
+  maxZ: number;
+}
+
 /** Right inspector: selection details, transform fields, variant swatches. */
 export class Inspector {
   private selected: SceneItem | null = null;
+  private bounds: InspectorBounds | null = null;
+  private lastId: string | null = null;
+  private note: string | null = null;
 
   constructor(
     private readonly root: HTMLElement,
@@ -15,7 +25,18 @@ export class Inspector {
     },
   ) {}
 
+  /** Room floor bounds in centimetres (updates when the room is rebuilt). */
+  setBounds(bounds: InspectorBounds): void {
+    this.bounds = { ...bounds };
+    this.render();
+  }
+
   setSelection(item: SceneItem | null): void {
+    const id = item?.instanceId ?? null;
+    if (id !== this.lastId) {
+      this.lastId = id;
+      this.note = null;
+    }
     this.selected = item;
     this.render();
   }
@@ -43,27 +64,80 @@ export class Inspector {
       this.root.appendChild(dims);
     }
 
+    const bounds = this.bounds;
+    const minX = bounds?.minX ?? 0;
+    const minZ = bounds?.minZ ?? 0;
+    const widthCm = bounds === null ? 0 : Math.round(bounds.maxX - bounds.minX);
+    const depthCm = bounds === null ? 0 : Math.round(bounds.maxZ - bounds.minZ);
+
     const posRow = document.createElement("div");
     posRow.className = "inspector-row";
     const xLabel = document.createElement("label");
-    xLabel.textContent = "X (cm) ";
+    xLabel.textContent = `From left wall (cm${bounds === null ? "" : `, 0–${widthCm}`}) `;
     const xInput = document.createElement("input");
     xInput.type = "number";
     xInput.name = "position-x-cm";
-    xInput.step = "5";
-    xInput.value = String(Math.round(item.position.x));
+    xInput.step = "1";
+    xInput.min = "0";
+    if (bounds !== null) xInput.max = String(widthCm);
+    xInput.value = String(Math.round(item.position.x - minX));
+    xInput.setAttribute("aria-label", "From left wall in centimetres");
     xInput.addEventListener("change", () => {
-      this.opts.onMove(item.instanceId, Number(xInput.value), item.position.z);
+      const raw = xInput.value.trim();
+      if (raw === "") {
+        // Empty field restores the previous value: no commit.
+        xInput.value = String(Math.round(item.position.x - minX));
+        return;
+      }
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) {
+        xInput.value = String(Math.round(item.position.x - minX));
+        return;
+      }
+      const dist = Math.round(parsed);
+      const absolute = minX + dist;
+      const clampedX =
+        bounds === null ? absolute : Math.min(bounds.maxX, Math.max(bounds.minX, absolute));
+      if (clampedX !== absolute && bounds !== null) {
+        this.note = `Clamped to the room (0–${widthCm} cm from the left wall).`;
+      } else {
+        this.note = null;
+      }
+      this.renderNote();
+      this.opts.onMove(item.instanceId, clampedX, item.position.z);
     });
     const zLabel = document.createElement("label");
-    zLabel.textContent = "Z (cm) ";
+    zLabel.textContent = `From door wall (cm${bounds === null ? "" : `, 0–${depthCm}`}) `;
     const zInput = document.createElement("input");
     zInput.type = "number";
     zInput.name = "position-z-cm";
-    zInput.step = "5";
-    zInput.value = String(Math.round(item.position.z));
+    zInput.step = "1";
+    zInput.min = "0";
+    if (bounds !== null) zInput.max = String(depthCm);
+    zInput.value = String(Math.round(item.position.z - minZ));
+    zInput.setAttribute("aria-label", "From door wall in centimetres");
     zInput.addEventListener("change", () => {
-      this.opts.onMove(item.instanceId, item.position.x, Number(zInput.value));
+      const raw = zInput.value.trim();
+      if (raw === "") {
+        zInput.value = String(Math.round(item.position.z - minZ));
+        return;
+      }
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) {
+        zInput.value = String(Math.round(item.position.z - minZ));
+        return;
+      }
+      const dist = Math.round(parsed);
+      const absolute = minZ + dist;
+      const clampedZ =
+        bounds === null ? absolute : Math.min(bounds.maxZ, Math.max(bounds.minZ, absolute));
+      if (clampedZ !== absolute && bounds !== null) {
+        this.note = `Clamped to the room (0–${depthCm} cm from the door wall).`;
+      } else {
+        this.note = null;
+      }
+      this.renderNote();
+      this.opts.onMove(item.instanceId, item.position.x, clampedZ);
     });
     posRow.append(xLabel, xInput, zLabel, zInput);
     this.root.appendChild(posRow);
@@ -78,10 +152,22 @@ export class Inspector {
     rInput.step = "15";
     rInput.value = String(Math.round(item.rotationY));
     rInput.addEventListener("change", () => {
-      this.opts.onRotate(item.instanceId, Number(rInput.value));
+      const raw = rInput.value.trim();
+      if (raw === "") {
+        rInput.value = String(Math.round(item.rotationY));
+        return;
+      }
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed)) {
+        rInput.value = String(Math.round(item.rotationY));
+        return;
+      }
+      this.opts.onRotate(item.instanceId, parsed);
     });
     rotRow.append(rLabel, rInput);
     this.root.appendChild(rotRow);
+
+    this.renderNote();
 
     if (entry !== undefined && entry.variants.length > 0) {
       const vTitle = document.createElement("h3");
@@ -112,5 +198,15 @@ export class Inspector {
     del.textContent = "Delete (Del)";
     del.addEventListener("click", () => this.opts.onDelete(item.instanceId));
     this.root.appendChild(del);
+  }
+
+  private renderNote(): void {
+    this.root.querySelector(".inspector-note")?.remove();
+    if (this.note === null) return;
+    const note = document.createElement("p");
+    note.className = "inspector-note";
+    note.setAttribute("role", "status");
+    note.textContent = this.note;
+    this.root.appendChild(note);
   }
 }
