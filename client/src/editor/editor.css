@@ -656,6 +656,11 @@
   color: var(--green);
 }
 
+.photo-wall-status.todo {
+  background: var(--panel-bg);
+  color: var(--muted);
+}
+
 .photo-confirm-centre {
   background: var(--card);
   border: 1px solid var(--border-color);

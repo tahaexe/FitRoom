@@ -63,9 +63,13 @@ export function openingBoxText(type: "door" | "window", widthCm: number, heightC
   return `${kind} ${String(Math.round(widthCm))} × ${String(Math.round(heightCm))}`;
 }
 
-/** Wall card status: the wall on screen reads Active, a visited wall Done. Pure. */
-export function wallCardStatus(active: boolean): "Active" | "Done" {
-  return active ? "Active" : "Done";
+/**
+ * Wall card status: the wall on screen reads Active, a wall the shopper has
+ * opened reads Done, and an unopened wall reads To do. Pure.
+ */
+export function wallCardStatus(active: boolean, seen: boolean): "Active" | "Done" | "To do" {
+  if (active) return "Active";
+  return seen ? "Done" : "To do";
 }
 
 export interface PhotoConfirmActions {
@@ -327,10 +331,17 @@ export class PhotoConfirmView {
       name.textContent = `Wall ${letter}`;
       const status = document.createElement("span");
       const active = session.activeWall === letter;
-      status.className = active ? "photo-wall-status active" : "photo-wall-status done";
-      status.textContent = wallCardStatus(active);
+      const seen = session.seen.includes(letter);
+      const state = wallCardStatus(active, seen);
+      status.className =
+        state === "Active"
+          ? "photo-wall-status active"
+          : state === "Done"
+            ? "photo-wall-status done"
+            : "photo-wall-status todo";
+      status.textContent = state;
       card.append(thumb, name, status);
-      card.setAttribute("aria-label", `Wall ${letter}, ${wallCardStatus(active).toLowerCase()}`);
+      card.setAttribute("aria-label", `Wall ${letter}, ${state.toLowerCase()}`);
       card.addEventListener("click", () => this.actions.onSelectWall(letter));
       this.wallsEl.appendChild(card);
     }
