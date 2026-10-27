@@ -220,10 +220,15 @@ export class AssistantPanel {
     const text = document.createElement("p");
     text.className = "assistant-answer";
     text.textContent = answer;
-    const sum = document.createElement("p");
-    sum.className = "assistant-summary";
-    sum.textContent = summary;
-    card.append(label, text, sum);
+    card.append(label, text);
+    // A turn that ends at the round cap composes its answer from the summary:
+    // show it once instead of repeating the same paragraph twice.
+    if (summary !== answer) {
+      const sum = document.createElement("p");
+      sum.className = "assistant-summary";
+      sum.textContent = summary;
+      card.append(sum);
+    }
     if (records.length > 0) {
       const details = document.createElement("details");
       details.className = "assistant-did";

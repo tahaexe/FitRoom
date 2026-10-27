@@ -106,14 +106,17 @@ function pointSegmentDistance(
 }
 
 /**
- * Shopper-words place for one item: against a wall, under a window, beside
- * the nearest piece, or in the middle of the room. Never coordinates.
+ * Shopper-words place for one item: under a window, against a wall, beside
+ * the nearest piece, or in the middle of the room. Never coordinates. An
+ * opening or a wall always wins over another piece; two pieces of one
+ * product are told apart ("the first one", "the new one", "the other one").
  */
 function describePlace(
   room: RoomLayout,
   scene: SceneState,
   item: SceneItem,
   byId: Map<string, CatalogItem>,
+  addedIds: ReadonlySet<string> = new Set(),
 ): string {
   const entry = byId.get(item.productId);
   const size = entry === undefined ? { w: 60, d: 60, h: 60 } : entry.size;
@@ -124,8 +127,8 @@ function describePlace(
     { x: box.x1, z: box.z1 },
     { x: box.x0, z: box.z1 },
   ];
-  let snap: { wallId: string; offset: number } | null = null;
-  let snapDist = 8;
+  let near: { wallId: string; offset: number } | null = null;
+  let nearDist = Infinity;
   for (const wall of room.walls) {
     let dist = Infinity;
     for (const corner of corners) {
@@ -141,10 +144,10 @@ function describePlace(
         ),
       );
     }
-    if (dist < snapDist) {
-      snapDist = dist;
+    if (dist < nearDist) {
+      nearDist = dist;
       const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z) || 1;
-      snap = {
+      near = {
         wallId: wall.id,
         offset:
           ((item.position.x - wall.start.x) * (wall.end.x - wall.start.x) +
@@ -153,9 +156,12 @@ function describePlace(
       };
     }
   }
-  if (snap !== null) {
-    const wallId: string = snap.wallId;
-    const offset: number = snap.offset;
+  // A window still reads when the piece stands a little off its wall; a
+  // wall still reads when the piece sits close to it. Both beat the
+  // neighbouring piece below.
+  if (near !== null && nearDist <= 80) {
+    const wallId: string = near.wallId;
+    const offset: number = near.offset;
     const name = wallDisplayName(room, wallId);
     const opening = room.openings.find(
       (candidate) =>
@@ -170,21 +176,28 @@ function describePlace(
       }
       return `in front of the window on the ${name}`;
     }
-    return `against the ${name}`;
+    if (nearDist <= 8) return `against the ${name}`;
   }
-  let nearest: CatalogItem | null = null;
+  let nearest: SceneItem | null = null;
   let nearestDist = 170;
   for (const other of scene.items) {
     if (other.instanceId === item.instanceId) continue;
-    const candidate = byId.get(other.productId);
-    if (candidate === undefined) continue;
+    if (byId.get(other.productId) === undefined) continue;
     const dist = Math.hypot(other.position.x - item.position.x, other.position.z - item.position.z);
     if (dist < nearestDist) {
       nearestDist = dist;
-      nearest = candidate;
+      nearest = other;
     }
   }
-  if (nearest !== null) return `beside the ${nearest.name}`;
+  if (nearest !== null) {
+    const candidate = byId.get(nearest.productId);
+    if (candidate !== undefined && nearest.productId === item.productId) {
+      if (addedIds.has(item.instanceId)) return "beside the first one";
+      if (addedIds.has(nearest.instanceId)) return "beside the new one";
+      return "beside the other one";
+    }
+    if (candidate !== undefined) return `beside the ${candidate.name}`;
+  }
   return "in the middle of the room";
 }
 
@@ -203,11 +216,31 @@ export function summarizeAssistantTurn(
   const parts: string[] = [];
   const before = new Map(start.items.map((i) => [i.instanceId, i]));
   const after = new Map(end.items.map((i) => [i.instanceId, i]));
+  const addedIds = new Set<string>();
+  const addedProducts = new Set<string>();
+  const siblings = new Map<string, number>();
+  for (const item of end.items) {
+    siblings.set(item.productId, (siblings.get(item.productId) ?? 0) + 1);
+    if (!before.has(item.instanceId)) {
+      addedIds.add(item.instanceId);
+      addedProducts.add(item.productId);
+    }
+  }
+  // Two pieces of one product are told apart: the added one is "the new
+  // X", a moved earlier one is "the first X" (or "the other X" when nothing
+  // was added). Single pieces keep their plain name.
+  const subjectName = (item: SceneItem, prev: SceneItem | undefined): string => {
+    const name = itemName(byId, item.productId);
+    if ((siblings.get(item.productId) ?? 0) < 2) return name;
+    if (prev === undefined) return `the new ${name}`;
+    if (addedProducts.has(item.productId)) return `the first ${name}`;
+    return `the other ${name}`;
+  };
   for (const item of end.items) {
     const prev = before.get(item.instanceId);
     if (prev === undefined) {
       parts.push(
-        `Added ${itemName(byId, item.productId)} ${describePlace(room, end, item, byId)} facing ${compassFacing(item.rotationY)}`,
+        `Added ${subjectName(item, prev)} ${describePlace(room, end, item, byId, addedIds)} facing ${compassFacing(item.rotationY)}`,
       );
       continue;
     }
@@ -215,20 +248,22 @@ export function summarizeAssistantTurn(
     const turned = prev.rotationY !== item.rotationY;
     if (prev.productId !== item.productId) {
       parts.push(
-        `Swapped ${itemName(byId, prev.productId)} for ${itemName(byId, item.productId)} ${describePlace(room, end, item, byId)}`,
+        `Swapped ${itemName(byId, prev.productId)} for ${itemName(byId, item.productId)} ${describePlace(room, end, item, byId, addedIds)}`,
       );
     } else if (moved && turned) {
       parts.push(
-        `Moved ${itemName(byId, item.productId)} ${describePlace(room, end, item, byId)}, facing ${compassFacing(item.rotationY)}`,
+        `Moved ${subjectName(item, prev)} ${describePlace(room, end, item, byId, addedIds)}, facing ${compassFacing(item.rotationY)}`,
       );
     } else if (moved) {
-      parts.push(`Moved ${itemName(byId, item.productId)} ${describePlace(room, end, item, byId)}`);
+      parts.push(
+        `Moved ${subjectName(item, prev)} ${describePlace(room, end, item, byId, addedIds)}`,
+      );
     } else if (turned) {
       parts.push(
-        `Turned ${itemName(byId, item.productId)} to face ${compassFacing(item.rotationY)}`,
+        `Turned ${subjectName(item, prev)} to face ${compassFacing(item.rotationY)}`,
       );
     } else if (prev.variant !== item.variant) {
-      parts.push(`Changed ${itemName(byId, item.productId)} to ${item.variant}`);
+      parts.push(`Changed ${subjectName(item, prev)} to ${item.variant}`);
     }
   }
   for (const item of start.items) {
@@ -270,25 +305,25 @@ function shortResult(room: RoomLayout, result: Record<string, unknown>): string 
   if (typeof result["rotationY"] === "number") parts.push(`facing ${String(result["rotationY"])}°`);
   if (typeof result["variant"] === "string") parts.push(`variant ${result["variant"] as string}`);
   if (result["removed"] !== undefined) parts.push(`removed ${String(result["removed"])}`);
-  const issues = result["issues"];
-  if (Array.isArray(issues)) {
-    const errors = issues.filter(
+  // One verdict per line: `fits` already carries the issues count, so a
+  // result holding both prints it only once.
+  const issues = Array.isArray(result["issues"]) ? result["issues"] : null;
+  const errorCount = (list: unknown[]): number =>
+    list.filter(
       (i) =>
         typeof i === "object" &&
         i !== null &&
         (i as Record<string, unknown>)["severity"] === "error",
     ).length;
-    parts.push(errors === 0 ? "fits" : `${String(errors)} issue(s)`);
-  }
   if (typeof result["fits"] === "boolean") {
-    const list = Array.isArray(result["issues"]) ? (result["issues"] as unknown[]) : [];
-    const errors = list.filter(
-      (i) =>
-        typeof i === "object" &&
-        i !== null &&
-        (i as Record<string, unknown>)["severity"] === "error",
-    ).length;
-    parts.push((result["fits"] as boolean) ? "fits" : `${String(errors)} issue(s)`);
+    if (result["fits"] === true) {
+      parts.push("fits");
+    } else {
+      parts.push(`${String(errorCount(issues ?? []))} issue(s)`);
+    }
+  } else if (issues !== null) {
+    const errors = errorCount(issues);
+    parts.push(errors === 0 ? "fits" : `${String(errors)} issue(s)`);
   }
   return parts.join(" ");
 }
