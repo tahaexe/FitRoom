@@ -291,6 +291,15 @@ export class PhotoConfirmView {
     return this.dragCorner !== null || this.dragEdge !== null || this.dragOpening !== null;
   }
 
+  /**
+   * True while a corner, edge or opening drag is in progress. The editor's
+   * own Esc handler must leave the keypress alone while this is true: Esc
+   * then cancels only the drag (see `onEscape` above).
+   */
+  isDragging(): boolean {
+    return this.dragging();
+  }
+
   private render(): void {
     const session = this.session();
     if (session === null) {
@@ -484,10 +493,20 @@ export class PhotoConfirmView {
     const size = session.sizes[session.activeWall];
     for (const opening of draft.openings) {
       if (opening.wall !== session.activeWall) continue;
-      const x0 = clamp(opening.offset.value, 0, mapping.wallLenCm);
-      const x1 = clamp(opening.offset.value + opening.width.value, 0, mapping.wallLenCm);
-      const y0 = clamp(opening.sillHeight.value, 0, mapping.ceilCm);
-      const y1 = clamp(opening.sillHeight.value + opening.height.value, 0, mapping.ceilCm);
+      // The plan (`store.room`) is the re-solved truth; the draft copy can
+      // lag it after a corner re-solve. Read the box numbers from the room
+      // when it knows this opening, so the visible tag always shows the same
+      // numbers as the accessible name and the plan.
+      const roomOpening = this.store.room.openings.find((o) => o.id === opening.id);
+      const kind = roomOpening?.type ?? opening.type;
+      const offsetCm = roomOpening?.offset ?? opening.offset.value;
+      const widthCm = roomOpening?.width ?? opening.width.value;
+      const sillCm = roomOpening?.sillHeight ?? opening.sillHeight.value;
+      const heightCm = roomOpening?.height ?? opening.height.value;
+      const x0 = clamp(offsetCm, 0, mapping.wallLenCm);
+      const x1 = clamp(offsetCm + widthCm, 0, mapping.wallLenCm);
+      const y0 = clamp(sillCm, 0, mapping.ceilCm);
+      const y1 = clamp(sillCm + heightCm, 0, mapping.ceilCm);
       const quad = [
         mapping.toPhoto(x0, y0),
         mapping.toPhoto(x1, y0),
@@ -512,14 +531,11 @@ export class PhotoConfirmView {
       box.style.height = `${String(Math.max(3, heightPct))}%`;
       box.tabIndex = 0;
       box.setAttribute("role", "button");
-      box.setAttribute(
-        "aria-label",
-        openingBoxLabel(opening.type, session.activeWall, opening.width.value),
-      );
+      box.setAttribute("aria-label", openingBoxLabel(kind, session.activeWall, widthCm));
       box.dataset["opening"] = opening.id;
       const tag = document.createElement("span");
       tag.className = "photo-opening-tag";
-      tag.textContent = openingBoxText(opening.type, opening.width.value, opening.height.value);
+      tag.textContent = openingBoxText(kind, widthCm, heightCm);
       box.appendChild(tag);
       for (const side of ["left", "right", "top", "bottom"] as const) {
         const grip = document.createElement("span");
@@ -537,11 +553,7 @@ export class PhotoConfirmView {
         if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
           event.preventDefault();
           const dir = event.key === "ArrowLeft" ? -1 : 1;
-          const next = clamp(
-            opening.offset.value + dir * stepCm,
-            0,
-            Math.max(0, wallLenCm - opening.width.value),
-          );
+          const next = clamp(offsetCm + dir * stepCm, 0, Math.max(0, wallLenCm - widthCm));
           this.actions.onOpeningMove(opening.id, Math.round(next), "commit");
         } else if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
@@ -610,11 +622,15 @@ export class PhotoConfirmView {
       return p === null ? null : { x: p.x, y: p.y };
     };
 
-    // Esc cancels the drag wherever focus sits; the store restores the
-    // pre-drag state with no new undo step.
+    // Esc cancels the drag wherever focus sits and stops there: the store
+    // restores the pre-drag state with no new undo step, and the editor's
+    // own Esc handler never runs, so the editor stays open. Capture phase
+    // runs before any bubble-phase editor handler on the same keypress.
     const onEscape = (event: KeyboardEvent): void => {
       if (event.key === "Escape") {
         event.preventDefault();
+        event.stopPropagation();
+        event.stopImmediatePropagation();
         finish(false);
       }
     };
@@ -649,7 +665,7 @@ export class PhotoConfirmView {
         this.dragEdge = null;
         this.dragOpening = null;
         start = { ...corners };
-        document.addEventListener("keydown", onEscape);
+        document.addEventListener("keydown", onEscape, true);
         try {
           wrap.setPointerCapture(event.pointerId);
         } catch {
@@ -674,7 +690,7 @@ export class PhotoConfirmView {
             this.grabOffsetCm = wallX - openingStart.offset;
           }
         }
-        document.addEventListener("keydown", onEscape);
+        document.addEventListener("keydown", onEscape, true);
         try {
           wrap.setPointerCapture(event.pointerId);
         } catch {
@@ -698,7 +714,7 @@ export class PhotoConfirmView {
             this.grabOffsetCm = wallX - openingStart.offset;
           }
         }
-        document.addEventListener("keydown", onEscape);
+        document.addEventListener("keydown", onEscape, true);
         try {
           wrap.setPointerCapture(event.pointerId);
         } catch {
@@ -714,7 +730,7 @@ export class PhotoConfirmView {
           this.dragCorner = null;
           this.dragOpening = null;
           start = { ...corners };
-          document.addEventListener("keydown", onEscape);
+          document.addEventListener("keydown", onEscape, true);
           try {
             wrap.setPointerCapture(event.pointerId);
           } catch {
@@ -790,7 +806,7 @@ export class PhotoConfirmView {
     const finish = (commit: boolean): void => {
       if (!this.dragging()) return;
       this.hideLens(lens);
-      document.removeEventListener("keydown", onEscape);
+      document.removeEventListener("keydown", onEscape, true);
       if (this.raf !== 0) {
         cancelAnimationFrame(this.raf);
         this.raf = 0;
@@ -843,7 +859,11 @@ export class PhotoConfirmView {
       lastClient = null;
       sentCorners = null;
       this.dragStartClient = null;
-      if (!commit) this.render();
+      // A commit dispatches while the drag flags are still set, so the store
+      // subscription's render skips the stage (to protect pointer capture).
+      // Rebuild here, with the flags cleared, so every opening's visible box
+      // label follows the re-solve like its accessible name and the plan.
+      this.render();
     };
 
     wrap.addEventListener("pointerup", () => finish(true));

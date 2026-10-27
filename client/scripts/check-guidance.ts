@@ -13,6 +13,9 @@
  * - the selected-piece status pill reads in plain words (never symbols).
  * - a typed wall length reads "Measured ± 0.5 cm", the amber band counts
  *   down the estimated walls and its pill reads "Tape wall <letter>".
+ * - Esc mid-drag (corner, edge or box) cancels only that drag and stops
+ *   there, so the editor stays open; a committed drag rebuilds the stage
+ *   so every opening's visible box label shows the re-solved numbers.
  *
  * Prints PASS or FAIL per check and exits non-zero on any FAIL.
  */
@@ -433,6 +436,55 @@ check(
 );
 check("confirm:done", wallCardStatus(false, true) === "Done", wallCardStatus(false, true));
 check("confirm:todo", wallCardStatus(false, false) === "To do", wallCardStatus(false, false));
+
+// ---- Esc cancels only the drag; box labels follow each re-solve ----
+const confirmSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "editor", "photo-confirm.ts"),
+  "utf8",
+);
+// The drag's Esc handler stops the keypress, so the editor's own Esc
+// handler never runs and the editor stays open with the photos intact.
+check(
+  "confirm:esc-stops-there",
+  confirmSource.includes("event.stopPropagation()") &&
+    confirmSource.includes("event.stopImmediatePropagation()"),
+  "onEscape must stop the keypress reaching the editor",
+);
+check(
+  "confirm:esc-capture",
+  confirmSource.includes('document.addEventListener("keydown", onEscape, true)') &&
+    confirmSource.includes('document.removeEventListener("keydown", onEscape, true)'),
+  "drag Esc listener must run in the capture phase",
+);
+check(
+  "confirm:esc-drag-flag",
+  confirmSource.includes("isDragging(): boolean"),
+  "the view must expose whether a drag is in progress",
+);
+// A commit dispatches while the drag flags are still set (the store
+// subscription then skips the stage to protect pointer capture), so finish
+// must rebuild afterwards: the visible tag then follows the re-solve.
+check(
+  "confirm:commit-rerenders",
+  confirmSource.includes("visible box") && confirmSource.includes("follows the re-solve"),
+  "finish must re-render the stage after a commit",
+);
+// The box tag and its accessible name read the re-solved room numbers.
+check(
+  "confirm:box-label-follows-resolve",
+  confirmSource.includes("roomOpening?.width") &&
+    confirmSource.includes("roomOpening?.height") &&
+    confirmSource.includes("openingBoxText(kind, widthCm, heightCm)") &&
+    confirmSource.includes("openingBoxLabel(kind, session.activeWall, widthCm)"),
+  "box tag and accessible name must read the re-solved room numbers",
+);
+// The tag and the accessible name round the same width.
+check(
+  "confirm:label-tag-agree",
+  openingBoxLabel("door", "A", 94) === "Door on wall A, 94 cm" &&
+    openingBoxText("door", 94, 210) === "Door 94 × 210",
+  `${openingBoxLabel("door", "A", 94)} / ${openingBoxText("door", 94, 210)}`,
+);
 
 if (failures > 0) process.exit(1);
 console.log("guidance: all checks passed");
