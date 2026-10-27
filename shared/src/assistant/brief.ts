@@ -254,5 +254,6 @@ export function briefStartLine(brief: AssistantBrief, startCount: number): strin
   const pieces = startCount === 1 ? "1 piece" : `${String(startCount)} pieces`;
   if (brief.keepExisting) return `Kept the ${pieces} already here.`;
   if (startCount === 0) return "Started from an empty room.";
-  return `Started from an empty room; Undo brings back the ${pieces} that were here.`;
+  const was = startCount === 1 ? "was" : "were";
+  return `Started from an empty room; Undo brings back the ${pieces} that ${was} here.`;
 }

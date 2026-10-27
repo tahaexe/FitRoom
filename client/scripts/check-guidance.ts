@@ -23,6 +23,8 @@ import { FitEngine } from "@fitroom/shared";
 import {
   briefPromptAddition,
   briefResultCard,
+  briefShortLabel,
+  briefStartLine,
   buildBriefRequest,
   overBudgetError,
   type AssistantBrief,
@@ -205,18 +207,23 @@ const furnishBrief: AssistantBrief = {
 check(
   "brief:request",
   buildBriefRequest(furnishBrief) ===
-    "Furnish this room for 4 people, classic style, new pieces up to $2,500.",
+    "Furnish this room for 4 people, Classic style, new pieces up to $2,500.",
   buildBriefRequest(furnishBrief),
 );
 check(
   "brief:request-note",
   buildBriefRequest(furnishBrief, "leave the window wall free") ===
-    "Furnish this room for 4 people, classic style, new pieces up to $2,500. leave the window wall free",
+    "Furnish this room for 4 people, Classic style, new pieces up to $2,500. leave the window wall free",
 );
 check(
   "brief:request-singular",
   buildBriefRequest({ seats: 1, style: "modern", budget: 1500, keepExisting: false }) ===
-    "Furnish this room for 1 person, modern style, new pieces up to $1,500.",
+    "Furnish this room for 1 person, Modern style, new pieces up to $1,500.",
+);
+check(
+  "brief:request-scandinavian",
+  buildBriefRequest({ seats: 2, style: "scandinavian", budget: 1500, keepExisting: false }) ===
+    "Furnish this room for 2 people, Scandinavian style, new pieces up to $1,500.",
 );
 check(
   "brief:over-budget",
@@ -228,9 +235,46 @@ const briefAddition = briefPromptAddition(furnishBrief);
 check(
   "brief:prompt",
   briefAddition.includes(
-    "Furnishing brief: seat 4 people, classic style, new pieces at most $2,500 in total, starting from an empty room.",
+    "Furnishing brief: seat 4 people, Classic style, new pieces at most $2,500 in total, starting from an empty room.",
   ) && briefAddition.includes("Answer in at most three sentences: what you chose and why."),
   briefAddition.slice(0, 160),
+);
+// Short chip labels (the request sentence stays the chat line and store key).
+check(
+  "brief:chip-label",
+  briefShortLabel(furnishBrief) === "4 seats · Classic · up to $2,500",
+  briefShortLabel(furnishBrief),
+);
+check(
+  "brief:chip-label-singular",
+  briefShortLabel({ seats: 1, style: "modern", budget: 1500, keepExisting: false }) ===
+    "1 seat · Modern · up to $1,500",
+);
+check(
+  "brief:chip-label-note",
+  briefShortLabel(furnishBrief, "keep the window wall free") ===
+    "4 seats · Classic · up to $2,500 · keep the window wall free",
+);
+// The computed line under a brief's card (real counts, never a move list).
+check(
+  "brief:start-line-empty",
+  briefStartLine(furnishBrief, 4) ===
+    "Started from an empty room; Undo brings back the 4 pieces that were here.",
+  briefStartLine(furnishBrief, 4),
+);
+check(
+  "brief:start-line-kept",
+  briefStartLine({ ...furnishBrief, keepExisting: true }, 4) === "Kept the 4 pieces already here.",
+);
+check(
+  "brief:start-line-singular",
+  briefStartLine(furnishBrief, 1) ===
+    "Started from an empty room; Undo brings back the 1 piece that was here.",
+  briefStartLine(furnishBrief, 1),
+);
+check(
+  "brief:start-line-kept-singular",
+  briefStartLine({ ...furnishBrief, keepExisting: true }, 1) === "Kept the 1 piece already here.",
 );
 check(
   "brief:progress-choose",
@@ -258,6 +302,14 @@ check(
     "leave the window wall free",
 );
 check("brief:chip-reject", parseBriefChip("Put the sofa under the window") === null);
+// Recorded sentences predate style capitalization and still parse.
+check(
+  "brief:chip-recorded-lowercase",
+  JSON.stringify(
+    parseBriefChip("Furnish this room for 4 people, classic style, new pieces up to $2,500.")
+      ?.brief,
+  ) === JSON.stringify(furnishBrief),
+);
 
 // The result card, computed from the end scene: headline, rows, shortfall.
 const furnishCatalog = JSON.parse(

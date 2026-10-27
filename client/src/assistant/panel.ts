@@ -928,8 +928,7 @@ export class AssistantPanel {
    * Demo chip: the scripted request replays from the sample layout. When the
    * room already differs, ask first — never reset it silently.
    */
-  private pendingDemo: { text: string; brief: AssistantBrief | null; note: string } | null =
-    null;
+  private pendingDemo: { text: string; brief: AssistantBrief | null; note: string } | null = null;
 
   private async sendDemo(text: string): Promise<void> {
     if (this.sending) return;
