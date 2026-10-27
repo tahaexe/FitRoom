@@ -35,16 +35,19 @@ import {
   cloneScene,
   createAssistantContext,
   executeTurnRound,
+  footprintOf,
   impossibleAnswer,
   isAssistantRequest,
   isAssistantRoundData,
   summarizeAssistantTurn,
+  wallDisplayName,
   type AssistantMessage,
   type AssistantRequest,
   type AssistantToolRecord,
   type CatalogItem,
   type FitProducts,
   type RoomLayout,
+  type SceneItem,
   type SceneState,
 } from "@fitroom/shared";
 import { META_MODELS } from "../src/config.js";
@@ -212,6 +215,119 @@ function errorsOf(room: RoomLayout, scene: SceneState, products: FitProducts): s
   return checkFit(room, scene, products)
     .filter((i) => i.severity === "error")
     .map((i) => i.type);
+}
+
+/**
+ * Independent landmark audit for a turn summary: a clause may claim "under
+ * the window", "in front of the window" or "against the <wall>" only when
+ * the placed piece's back faces that wall (front points into the room,
+ * within 60 degrees) with at most 30 cm of gap; window phrases additionally
+ * need the piece's centre over that window's span. Recomputed here from raw
+ * geometry, not via the summary builder, so a stale landmark rule fails.
+ */
+function summaryLandmarksBacked(
+  room: RoomLayout,
+  end: SceneState,
+  catalog: CatalogItem[],
+  summary: string,
+): { ok: boolean; detail?: string } {
+  const byId = new Map(catalog.map((c) => [c.id, c]));
+  let cx = 0;
+  let cz = 0;
+  for (const wall of room.walls) {
+    cx += (wall.start.x + wall.end.x) / 2;
+    cz += (wall.start.z + wall.end.z) / 2;
+  }
+  cx /= Math.max(1, room.walls.length);
+  cz /= Math.max(1, room.walls.length);
+  const gapToWall = (item: SceneItem, wallId: string): number => {
+    const wall = room.walls.find((w) => w.id === wallId);
+    const entry = byId.get(item.productId);
+    const size = entry === undefined ? { w: 60, d: 60, h: 60 } : entry.size;
+    if (wall === undefined) return Infinity;
+    const box = footprintOf(size, item.position, item.rotationY);
+    const corners = [
+      { x: box.x0, z: box.z0 },
+      { x: box.x1, z: box.z0 },
+      { x: box.x1, z: box.z1 },
+      { x: box.x0, z: box.z1 },
+    ];
+    let best = Infinity;
+    for (const corner of corners) {
+      const dx = wall.end.x - wall.start.x;
+      const dz = wall.end.z - wall.start.z;
+      const lenSq = dx * dx + dz * dz || 1;
+      const t = Math.min(
+        1,
+        Math.max(0, ((corner.x - wall.start.x) * dx + (corner.z - wall.start.z) * dz) / lenSq),
+      );
+      best = Math.min(
+        best,
+        Math.hypot(corner.x - (wall.start.x + dx * t), corner.z - (wall.start.z + dz * t)),
+      );
+    }
+    return best;
+  };
+  const backFacesWall = (item: SceneItem, wallId: string): boolean => {
+    const wall = room.walls.find((w) => w.id === wallId);
+    if (wall === undefined) return false;
+    const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z) || 1;
+    const ux = (wall.end.x - wall.start.x) / len;
+    const uz = (wall.end.z - wall.start.z) / len;
+    const mx = (wall.start.x + wall.end.x) / 2;
+    const mz = (wall.start.z + wall.end.z) / 2;
+    const s = (cx - mx) * -uz + (cz - mz) * ux >= 0 ? 1 : -1;
+    const rad = (item.rotationY * Math.PI) / 180;
+    return Math.sin(rad) * -uz * s + Math.cos(rad) * ux * s >= 0.5;
+  };
+  const overWindowSpan = (item: SceneItem, wallId: string): boolean => {
+    const wall = room.walls.find((w) => w.id === wallId);
+    if (wall === undefined) return false;
+    const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z) || 1;
+    const offset =
+      ((item.position.x - wall.start.x) * (wall.end.x - wall.start.x) +
+        (item.position.z - wall.start.z) * (wall.end.z - wall.start.z)) /
+      len;
+    return room.openings.some(
+      (o) =>
+        o.wallId === wallId &&
+        o.type === "window" &&
+        offset >= o.offset &&
+        offset <= o.offset + o.width,
+    );
+  };
+  for (const clause of summary.split("; ")) {
+    const lower = clause.toLowerCase();
+    const claimsWindow =
+      lower.includes("under the window") || lower.includes("in front of the window");
+    const claimsWall = lower.includes("against the");
+    if (!claimsWindow && !claimsWall) continue;
+    // The clause names its product; validate the end-scene pieces of it.
+    const candidates = end.items.filter((item) => {
+      const name = byId.get(item.productId)?.name ?? item.productId;
+      return lower.includes(name.toLowerCase());
+    });
+    const pool = candidates.length > 0 ? candidates : end.items;
+    let backed = false;
+    for (const item of pool) {
+      for (const wall of room.walls) {
+        if (claimsWall) {
+          // When the clause names the wall, only that wall backs the claim.
+          const named = wallDisplayName(room, wall.id).toLowerCase();
+          if (!lower.includes(named)) continue;
+        }
+        if (gapToWall(item, wall.id) > 30.5 || !backFacesWall(item, wall.id)) continue;
+        if (claimsWindow && !overWindowSpan(item, wall.id)) continue;
+        backed = true;
+        break;
+      }
+      if (backed) break;
+    }
+    if (!backed) {
+      return { ok: false, detail: clause.slice(0, 160) };
+    }
+  }
+  return { ok: true };
 }
 
 async function main(): Promise<void> {
@@ -443,6 +559,29 @@ async function main(): Promise<void> {
           `${tag}: answer names both lengths`,
           replay.answer.includes("273") && replay.answer.includes("30"),
           replay.answer.slice(0, 200),
+        );
+      }
+      // Every turn summary tells the truth about landmarks and casing: a
+      // piece is "under/in front of the window" or "against the wall" only
+      // with its back to that wall within 30 cm, and every clause after a
+      // semicolon starts in lower case.
+      const summary = summarizeAssistantTurn(scene, replay.draft, room, replayCatalog);
+      const landmarks = summaryLandmarksBacked(room, replay.draft, replayCatalog, summary);
+      check(
+        `${tag}: summary landmarks backed (back to wall within 30 cm)`,
+        landmarks.ok,
+        landmarks.detail ?? summary.slice(0, 200),
+      );
+      check(
+        `${tag}: summary clauses after ";" start lower-case`,
+        !/; [A-Z]/.test(summary),
+        summary.slice(0, 200),
+      );
+      if (i === 4) {
+        check(
+          `${tag}: summary no longer says "under the window"`,
+          !summary.toLowerCase().includes("under the window"),
+          summary.slice(0, 200),
         );
       }
     }

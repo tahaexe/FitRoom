@@ -116,7 +116,10 @@ export function buildRoom(room: RoomLayout, floorMaterial: THREE.Material): Room
   const backdrop = new THREE.Mesh(backdropGeo, backdropMat);
   backdrop.rotation.x = -Math.PI / 2;
   backdrop.position.set(cxM, -0.02, czM);
-  backdrop.receiveShadow = true;
+  // The backdrop never receives shadows: every shadow lands on the room's
+  // own floor (or the floor-sized contact catcher), so in plan view no sofa
+  // or armchair shadow can spill past a wall onto the background.
+  backdrop.receiveShadow = false;
   backdrop.name = "fitroom-backdrop";
   group.add(backdrop);
 

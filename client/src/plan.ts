@@ -21,6 +21,7 @@ export class PlanOverlay {
   readonly svg: SVGSVGElement;
   private wallTexts: SVGTextElement[] = [];
   private openingTexts: SVGTextElement[] = [];
+  private openingChips: SVGRectElement[] = [];
 
   constructor(parent: HTMLElement, room: RoomLayout) {
     const NS = "http://www.w3.org/2000/svg";
@@ -35,6 +36,10 @@ export class PlanOverlay {
       this.wallTexts.push(t);
     }
     for (const o of room.openings) {
+      const chip = document.createElementNS(NS, "rect");
+      chip.setAttribute("class", "plan-opening-chip");
+      this.svg.appendChild(chip);
+      this.openingChips.push(chip);
       const t = document.createElementNS(NS, "text");
       t.setAttribute("class", "plan-opening-label");
       t.textContent = openingLabel(o.type, o.width);
@@ -114,6 +119,24 @@ export class PlanOverlay {
     // Keep every label inside the visible view: a label pushed past the
     // edge (or under an open side panel) is clamped back so it stays readable.
     this.clampIntoView(spots, width, height);
+    // Light chips behind the opening labels: dark text on the chip reads at
+    // well over 4.5:1 whatever floor lies under it (no outline halo).
+    const chipBoxes = new Map<SVGTextElement, { w: number; h: number }>();
+    room.openings.forEach((_unused, i) => {
+      const el = this.openingTexts[i];
+      const chip = this.openingChips[i];
+      if (el === undefined || chip === undefined) return;
+      const spot = spots.find((s) => s.el === el);
+      if (spot === undefined) return;
+      const box = this.labelBox(spot, chipBoxes);
+      const padX = 6;
+      const padY = 3;
+      chip.setAttribute("x", (box.x0 - padX).toFixed(1));
+      chip.setAttribute("y", (box.y0 - padY).toFixed(1));
+      chip.setAttribute("width", (box.x1 - box.x0 + padX * 2).toFixed(1));
+      chip.setAttribute("height", (box.y1 - box.y0 + padY * 2).toFixed(1));
+      chip.setAttribute("rx", "7");
+    });
     for (const s of spots) {
       // Never write NaN coordinates: a failed projection keeps its last good
       // spot instead of logging an SVG attribute error.

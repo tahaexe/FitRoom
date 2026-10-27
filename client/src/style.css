@@ -394,12 +394,19 @@ button.danger {
   top: calc(var(--top-bar-height) + var(--gap));
   bottom: var(--gap);
   left: calc(var(--catalog-width) + var(--gap) * 2);
-  right: calc(var(--inspector-width) + var(--gap) * 2);
+  right: var(--gap);
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   overflow: hidden;
   background: #ffffff;
+}
+
+/* The right-hand column only reserves stage width while a panel is open. */
+body:has(#inspector:not([hidden])) #scene-container,
+body:has(#recommend-panel:not([hidden])) #scene-container,
+body:has(#assistant-panel:not([hidden])) #scene-container {
+  right: calc(var(--inspector-width) + var(--gap) * 2);
 }
 
 #scene-container canvas {
@@ -436,8 +443,15 @@ button.danger {
   fill: var(--ink);
 }
 
+.plan-opening-chip {
+  fill: #ffffff;
+  stroke: #e4e2e0;
+  stroke-width: 1;
+}
+
 .plan-opening-label {
-  fill: var(--muted);
+  fill: #1f2126;
+  paint-order: normal;
 }
 
 /* ---- fit promise badge: floats top-right of the room view ---- */

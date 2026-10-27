@@ -107,9 +107,12 @@ function pointSegmentDistance(
 
 /**
  * Shopper-words place for one item: under a window, against a wall, beside
- * the nearest piece, or in the middle of the room. Never coordinates. An
- * opening or a wall always wins over another piece; two pieces of one
- * product are told apart ("the first one", "the new one", "the other one").
+ * the nearest piece, or in the middle of the room. Never coordinates. A wall
+ * or window landmark only reads when the piece's back faces that wall (its
+ * front points into the room) and the gap is at most 30 cm; otherwise the
+ * next landmark rule applies (neighbouring piece, else the middle of the
+ * room). Two pieces of one product are told apart ("the first one", "the new
+ * one", "the other one").
  */
 function describePlace(
   room: RoomLayout,
@@ -156,27 +159,57 @@ function describePlace(
       };
     }
   }
-  // A window still reads when the piece stands a little off its wall; a
-  // wall still reads when the piece sits close to it. Both beat the
-  // neighbouring piece below.
-  if (near !== null && nearDist <= 80) {
+  // A wall or window landmark only reads when the piece's back faces that
+  // wall (its front points into the room, within 60 degrees) with at most
+  // 30 cm of gap; otherwise the neighbouring piece below wins.
+  if (near !== null && nearDist <= 30) {
     const wallId: string = near.wallId;
     const offset: number = near.offset;
-    const name = wallDisplayName(room, wallId);
-    const opening = room.openings.find(
-      (candidate) =>
-        candidate.wallId === wallId &&
-        candidate.type === "window" &&
-        offset >= candidate.offset &&
-        offset <= candidate.offset + candidate.width,
-    );
-    if (opening !== undefined && opening.type === "window") {
-      if (entry !== undefined && entry.size.h < opening.sillHeight) {
-        return name.includes("window") ? "under the window" : `under the window on the ${name}`;
+    const wall = room.walls.find((w) => w.id === wallId);
+    if (wall !== undefined) {
+      const len = Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z) || 1;
+      const ux = (wall.end.x - wall.start.x) / len;
+      const uz = (wall.end.z - wall.start.z) / len;
+      const mx = (wall.start.x + wall.end.x) / 2;
+      const mz = (wall.start.z + wall.end.z) / 2;
+      let cx = 0;
+      let cz = 0;
+      for (const w of room.walls) {
+        cx += (w.start.x + w.end.x) / 2;
+        cz += (w.start.z + w.end.z) / 2;
       }
-      return `in front of the window on the ${name}`;
+      cx /= Math.max(1, room.walls.length);
+      cz /= Math.max(1, room.walls.length);
+      // One of the two wall perpendiculars points into the room (towards
+      // the centroid); the piece's back faces the wall when its front
+      // points that way.
+      const towardX = cx - mx;
+      const towardZ = cz - mz;
+      const s = towardX * -uz + towardZ * ux >= 0 ? 1 : -1;
+      const inwardX = -uz * s;
+      const inwardZ = ux * s;
+      const rad = (item.rotationY * Math.PI) / 180;
+      const facingX = Math.sin(rad);
+      const facingZ = Math.cos(rad);
+      const backToWall = facingX * inwardX + facingZ * inwardZ >= 0.5;
+      if (backToWall) {
+        const name = wallDisplayName(room, wallId);
+        const opening = room.openings.find(
+          (candidate) =>
+            candidate.wallId === wallId &&
+            candidate.type === "window" &&
+            offset >= candidate.offset &&
+            offset <= candidate.offset + candidate.width,
+        );
+        if (opening !== undefined && opening.type === "window") {
+          if (entry !== undefined && entry.size.h < opening.sillHeight) {
+            return name.includes("window") ? "under the window" : `under the window on the ${name}`;
+          }
+          return `in front of the window on the ${name}`;
+        }
+        return `against the ${name}`;
+      }
     }
-    if (nearDist <= 8) return `against the ${name}`;
   }
   let nearest: SceneItem | null = null;
   let nearestDist = 170;
@@ -271,7 +304,11 @@ export function summarizeAssistantTurn(
   }
   if (parts.length === 0)
     return `No changes. ${assistantFitVerdict(turnErrors(room, end, catalog))}`;
-  return `${parts.join("; ")}. ${assistantFitVerdict(turnErrors(room, end, catalog))}`;
+  // Every clause after a semicolon starts in lower case.
+  const sentence = parts
+    .map((part, index) => (index === 0 ? part : part.charAt(0).toLowerCase() + part.slice(1)))
+    .join("; ");
+  return `${sentence}. ${assistantFitVerdict(turnErrors(room, end, catalog))}`;
 }
 
 function displayValue(room: RoomLayout, value: unknown): string {
