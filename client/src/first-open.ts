@@ -98,6 +98,7 @@ export class FirstOpen {
   private buildBtn!: HTMLButtonElement;
   private buildReason!: HTMLElement;
   private planSvg!: SVGSVGElement;
+  private planRect!: SVGRectElement;
   private planW!: SVGTextElement;
   private planL!: SVGTextElement;
   private unitCmBtn!: HTMLButtonElement;
@@ -292,21 +293,14 @@ export class FirstOpen {
     this.planSvg.setAttribute("role", "img");
     this.planSvg.setAttribute("aria-label", "Top view of the typed rectangle");
     const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-    rect.setAttribute("x", "40");
-    rect.setAttribute("y", "30");
-    rect.setAttribute("width", "240");
-    rect.setAttribute("height", "160");
     rect.setAttribute("rx", "8");
     rect.setAttribute("class", "size-plan-rect");
+    this.planRect = rect;
     this.planW = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    this.planW.setAttribute("x", "160");
-    this.planW.setAttribute("y", "18");
     this.planW.setAttribute("text-anchor", "middle");
     this.planW.setAttribute("class", "size-plan-label");
     this.planL = document.createElementNS("http://www.w3.org/2000/svg", "text");
-    this.planL.setAttribute("x", "296");
-    this.planL.setAttribute("y", "110");
-    this.planL.setAttribute("text-anchor", "middle");
+    this.planL.setAttribute("text-anchor", "start");
     this.planL.setAttribute("class", "size-plan-label");
     this.planSvg.append(rect, this.planW, this.planL);
     planWrap.appendChild(this.planSvg);
@@ -417,10 +411,34 @@ export class FirstOpen {
     // Live top view with both sizes; falls back to the sample 420 x 360.
     const showW = w ?? 420;
     const showL = l ?? 360;
-    const unitSuffix = this.unit === "cm" ? "cm" : "";
     this.planW.textContent = this.unit === "cm" ? `${String(showW)} cm` : formatCmAsFtIn(showW);
     this.planL.textContent = this.unit === "cm" ? `${String(showL)} cm` : formatCmAsFtIn(showL);
-    void unitSuffix;
+    this.paintPlan(showW, showL);
+  }
+
+  /**
+   * The top view draws the rectangle to scale (both sides in proportion),
+   * centred in the frame with both labels outside the shape.
+   */
+  private paintPlan(showW: number, showL: number): void {
+    const left = 24;
+    const top = 30;
+    const areaW = 216;
+    const areaH = 160;
+    const scale = Math.min(areaW / Math.max(1, showW), areaH / Math.max(1, showL));
+    const rectW = Math.max(1, showW * scale);
+    const rectH = Math.max(1, showL * scale);
+    const x = left + (areaW - rectW) / 2;
+    const y = top + (areaH - rectH) / 2;
+    const round1 = (value: number): string => String(Math.round(value * 10) / 10);
+    this.planRect.setAttribute("x", round1(x));
+    this.planRect.setAttribute("y", round1(y));
+    this.planRect.setAttribute("width", round1(rectW));
+    this.planRect.setAttribute("height", round1(rectH));
+    this.planW.setAttribute("x", round1(x + rectW / 2));
+    this.planW.setAttribute("y", round1(y - 8));
+    this.planL.setAttribute("x", round1(x + rectW + 8));
+    this.planL.setAttribute("y", round1(y + rectH / 2 + 5));
   }
 
   private submit(): void {

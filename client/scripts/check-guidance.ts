@@ -702,6 +702,12 @@ check(
   firstOpenSource.includes("sideError(") && firstOpenSource.includes("echoForRaw("),
   "limits and the other-unit echo update live",
 );
+check(
+  "firstopen:plan-scales",
+  firstOpenSource.includes("paintPlan(showW, showL)") &&
+    !firstOpenSource.includes('setAttribute("width", "240")'),
+  "the top view draws to scale, never a fixed rectangle",
+);
 check("firstopen:photos-live", firstOpenSource.includes("Uses Live AI"));
 check("firstopen:sample-size", firstOpenSource.includes("420 × 360 cm"));
 check("firstopen:measure-hint", firstOpenSource.includes("Measure wall to wall at floor level."));
