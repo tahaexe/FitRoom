@@ -33,3 +33,5 @@ export * from "./recommend/index.js";
 export * from "./render/index.js";
 export * from "./room-label.js";
 export * from "./rectangle.js";
+export * from "./sam.js";
+export * from "./photo-room/index.js";

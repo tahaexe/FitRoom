@@ -17,7 +17,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { decodeMaskToRaster, parseImageStream, recordsOfKind } from "@meta-sam/parser";
-import { segmentInstances } from "../client/src/capture/sam.js";
+import { segmentInstances } from "../shared/src/sam.js";
 import { extractSamOutputText } from "../server/src/meta/client.js";
 
 const here = dirname(fileURLToPath(import.meta.url));

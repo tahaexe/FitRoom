@@ -1,0 +1,100 @@
+{
+ "room": {
+  "id": "living-420x360",
+  "walls": [
+   [
+    "wall-1",
+    [
+     0,
+     0
+    ],
+    [
+     420,
+     0
+    ],
+    260
+   ],
+   [
+    "wall-2",
+    [
+     420,
+     0
+    ],
+    [
+     420,
+     360
+    ],
+    260
+   ],
+   [
+    "wall-3",
+    [
+     420,
+     360
+    ],
+    [
+     0,
+     360
+    ],
+    260
+   ],
+   [
+    "wall-4",
+    [
+     0,
+     360
+    ],
+    [
+     0,
+     0
+    ],
+    260
+   ]
+  ],
+  "openings": [
+   [
+    "door-1",
+    "door",
+    "wall-1",
+    30,
+    90,
+    210,
+    0
+   ],
+   [
+    "window-1",
+    "window",
+    "wall-3",
+    80,
+    160,
+    140,
+    90
+   ],
+   [
+    "window-2",
+    "window",
+    "wall-2",
+    120,
+    120,
+    140,
+    90
+   ]
+  ]
+ },
+ "url": "?dev=1&camx=360&camz=180&cameye=150&camyaw=270&campitch=0&camfov=60&camitems=0",
+ "note": "the hook's 1264 x 948 frame from a screenshot downscaled by the browser tool to 1600 x 799; intrinsics scaled to this image",
+ "width": 1066,
+ "height": 799,
+ "fx": 692.39,
+ "fy": 691.95,
+ "cx": 533.0,
+ "cy": 399.5,
+ "position_m": {
+  "x": 3.6,
+  "y": 1.5,
+  "z": 1.8
+ },
+ "yawDeg": 270,
+ "pitchDeg": 0,
+ "vfovDeg": 60
+}
