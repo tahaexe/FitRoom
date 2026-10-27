@@ -58,6 +58,7 @@ import {
   echoFor,
   parseLengthToCm,
   resolveFirstOpen,
+  sidesLimitLine,
   validateCeiling,
   validateSide,
 } from "../src/room-units.js";
@@ -604,6 +605,52 @@ check(
 check("units:ceiling-ok", validateCeiling(250, "cm") === null);
 check("units:echo-cm", echoFor(419, "ftin") === "= 419 cm", echoFor(419, "ftin"));
 check("units:echo-ft", echoFor(419, "cm") === `= 13'9"`, echoFor(419, "cm"));
+// A slip asks for an explicit "cm" reading or a bare number in cm mode.
+check(
+  "units:slip-cm-suffix",
+  detectSlip("4.2 cm", 4, "side")?.message === "4.2 cm? Did you mean 4.2 m (420 cm)?",
+  detectSlip("4.2 cm", 4, "side")?.message,
+);
+check("units:slip-cm-action", detectSlip("4.2 cm", 4, "side")?.action === "Use 420 cm");
+check(
+  "units:slip-bare-cm-mode",
+  detectSlip("4.2", 4, "side", "cm")?.suggestedCm === 420,
+  detectSlip("4.2", 4, "side", "cm")?.message,
+);
+check("units:no-slip-bare-ftin", detectSlip("4.2", 4, "side", "ftin") === null);
+// An ft/in reading that happens to be small is never a slip.
+check("units:no-slip-imperial", detectSlip(`3"`, 8, "side", "cm") === null);
+check("units:no-slip-pair", detectSlip("3 9", 114, "side", "cm") === null);
+// Limits read in the visitor's unit, the other unit in brackets.
+check(
+  "units:length-limit-cm",
+  validateSide("length", 4, "cm") === `Length must be 1-15 m (3'3"-49'2")`,
+  validateSide("length", 4, "cm") ?? "",
+);
+check(
+  "units:length-limit-ft",
+  validateSide("length", 4, "ftin") === `Length must be 3'3"-49'2" (1-15 m)`,
+  validateSide("length", 4, "ftin") ?? "",
+);
+check(
+  "units:over-limit-cm",
+  validateSide("width", 1600, "cm") === `Width must be 1-15 m (3'3"-49'2")`,
+);
+check(
+  "units:ceiling-limit-ft",
+  validateCeiling(150, "ftin") === `Ceiling height must be 6'7"-13'1" (2-4 m)`,
+  validateCeiling(150, "ftin") ?? "",
+);
+check(
+  "units:sides-line-cm",
+  sidesLimitLine("cm") === `Width and length must be 1-15 m (3'3"-49'2")`,
+  sidesLimitLine("cm"),
+);
+check(
+  "units:sides-line-ft",
+  sidesLimitLine("ftin") === `Width and length must be 3'3"-49'2" (1-15 m)`,
+  sidesLimitLine("ftin"),
+);
 check("units:default-en-us", detectDefaultUnit("en-US") === "ftin");
 check("units:default-de", detectDefaultUnit("de-DE") === "cm");
 check("units:default-en-gb", detectDefaultUnit("en-GB") === "cm");
@@ -627,6 +674,18 @@ const firstOpenSource = readFileSync(
 );
 check("firstopen:title", firstOpenSource.includes("Set up your room"));
 check("firstopen:main-card", firstOpenSource.includes("Enter my room size"));
+check(
+  "firstopen:build-gate",
+  firstOpenSource.includes("size-build-reason") &&
+    firstOpenSource.includes("to build your room.") &&
+    firstOpenSource.includes("toggleAttribute(\"disabled\""),
+  "Build stays disabled until both sides are valid, with a one-line reason",
+);
+check(
+  "firstopen:live-limits",
+  firstOpenSource.includes("sideError("),
+  "limits update live under each field",
+);
 check("firstopen:photos-live", firstOpenSource.includes("Uses Live AI"));
 check("firstopen:sample-size", firstOpenSource.includes("420 × 360 cm"));
 check("firstopen:measure-hint", firstOpenSource.includes("Measure wall to wall at floor level."));

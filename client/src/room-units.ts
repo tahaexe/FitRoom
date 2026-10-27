@@ -159,6 +159,12 @@ export interface SlipSuggestion {
   action: string;
 }
 
+/** One-line build-gate reason: both sides must read 1-15 m. */
+export function sidesLimitLine(unit: SizeUnit): string {
+  if (unit === "cm") return `Width and length must be 1-15 m (3'3"-49'2")`;
+  return `Width and length must be 3'3"-49'2" (1-15 m)`;
+}
+
 function trimNum(value: number): string {
   return String(Math.round(value * 100) / 100);
 }
@@ -166,8 +172,15 @@ function trimNum(value: number): string {
 /**
  * A likely slip is asked, never applied by itself: a tiny side value that
  * reads exactly like metres (1-15 with a decimal point or not) offers ×100.
+ * Only for a bare number in cm mode or an explicit "cm" reading — never for
+ * an ft/in reading that happens to be small.
  */
-export function detectSlip(raw: string, cm: number, kind: MeasureKind): SlipSuggestion | null {
+export function detectSlip(
+  raw: string,
+  cm: number,
+  kind: MeasureKind,
+  unit: SizeUnit = "cm",
+): SlipSuggestion | null {
   if (kind !== "side") return null;
   if (!Number.isFinite(cm) || cm >= SIDE_MIN_CM) return null;
   const text = normalize(raw);
@@ -177,10 +190,11 @@ export function detectSlip(raw: string, cm: number, kind: MeasureKind): SlipSugg
   if (!Number.isFinite(value) || value < 1 || value > 15) return null;
   const suggested = Math.round(value * 100);
   if (suggested < SIDE_MIN_CM || suggested > SIDE_MAX_CM) return null;
-  // Only suggest when the parsed value really is the raw number (a bare or
-  // cm reading), not an ft/in reading that happens to be small.
-  if (Math.round(value) !== cm && !/cm\s*$/.test(text.toLowerCase()) && /['" ]/.test(text)) {
-    return null;
+  const explicitCm = /cm\s*$/.test(text.toLowerCase());
+  if (!explicitCm) {
+    // A bare number slips only in cm mode; metres, ft/in and pairs never do.
+    if (unit !== "cm") return null;
+    if (!/^\d+(?:\.\d+)?$/.test(text)) return null;
   }
   const shown = trimNum(value);
   return {

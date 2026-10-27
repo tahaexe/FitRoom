@@ -15,9 +15,11 @@ import {
   formatCmAsFtIn,
   parseLengthToCm,
   sideLimitMessage,
+  sidesLimitLine,
   validateCeiling,
   validateSide,
   type SizeUnit,
+  type SlipSuggestion,
 } from "./room-units";
 
 export interface RoomSize {
@@ -94,6 +96,8 @@ export class FirstOpen {
   private lengthError!: HTMLElement;
   private ceilingError!: HTMLElement;
   private slipRow!: HTMLElement;
+  private buildBtn!: HTMLButtonElement;
+  private buildReason!: HTMLElement;
   private planSvg!: SVGSVGElement;
   private planW!: SVGTextElement;
   private planL!: SVGTextElement;
@@ -311,7 +315,11 @@ export class FirstOpen {
 
     const build = el("button", "setup-go setup-sticky", "Build my room");
     build.type = "submit";
+    this.buildBtn = build;
     form.appendChild(build);
+    this.buildReason = el("p", "size-build-reason");
+    this.buildReason.setAttribute("aria-live", "polite");
+    form.appendChild(this.buildReason);
 
     const shape = el("button", "setup-link", "Not a rectangle? Shape it in the plan editor");
     shape.type = "button";
@@ -329,6 +337,7 @@ export class FirstOpen {
     });
     this.sizeView.appendChild(form);
     this.paintUnit();
+    this.refreshEchoes();
   }
 
   private parsed(input: HTMLInputElement): number | null {
@@ -350,7 +359,17 @@ export class FirstOpen {
     return { widthCm: w, lengthCm: l, ceilingCm: c };
   }
 
+  /** Live limit message under a side field: empty while typing, else at once. */
+  private sideError(field: "width" | "length", raw: string, cm: number | null): string {
+    if (raw.trim() === "") return "";
+    if (cm === null) return sideLimitMessage(field, this.unit);
+    return validateSide(field, cm, this.unit) ?? "";
+  }
+
   private refreshEchoes(): void {
+    const wRaw = this.widthInput.value;
+    const lRaw = this.lengthInput.value;
+    const cRaw = this.ceilingInput.value;
     const w = this.parsed(this.widthInput);
     const l = this.parsed(this.lengthInput);
     const c = this.parsed(this.ceilingInput);
@@ -360,6 +379,39 @@ export class FirstOpen {
       this.ceilingEcho.textContent = ceilingPrefillEcho(this.unit);
     } else {
       this.ceilingEcho.textContent = c === null ? "" : echoFor(c, this.unit);
+    }
+    // Limits show under the field at once, in the visitor's unit.
+    this.widthError.textContent = this.sideError("width", wRaw, w);
+    this.lengthError.textContent = this.sideError("length", lRaw, l);
+    if (cRaw.trim() === "") {
+      this.ceilingError.textContent = "";
+    } else if (c === null) {
+      this.ceilingError.textContent = ceilingLimitMessage(this.unit);
+    } else {
+      this.ceilingError.textContent = validateCeiling(c, this.unit) ?? "";
+    }
+    // A likely slip asks with a "Use …" button, never changing the value.
+    const wSlip = w === null ? null : detectSlip(wRaw, w, "side", this.unit);
+    const lSlip = l === null ? null : detectSlip(lRaw, l, "side", this.unit);
+    if (wSlip !== null) {
+      this.showSlip(this.widthInput, wSlip);
+    } else if (lSlip !== null) {
+      this.showSlip(this.lengthInput, lSlip);
+    } else {
+      this.slipRow.setAttribute("hidden", "");
+      this.slipRow.innerHTML = "";
+    }
+    // "Build my room" stays disabled until both sides are valid, saying why.
+    const wOk = w !== null && validateSide("width", w, this.unit) === null;
+    const lOk = l !== null && validateSide("length", l, this.unit) === null;
+    const ready = wOk && lOk;
+    this.buildBtn.toggleAttribute("disabled", !ready);
+    if (ready) {
+      this.buildReason.textContent = "";
+    } else if (wRaw.trim() === "" && lRaw.trim() === "") {
+      this.buildReason.textContent = "Enter your width and length to build your room.";
+    } else {
+      this.buildReason.textContent = `${sidesLimitLine(this.unit)} to build your room.`;
     }
     // Live top view with both sizes; falls back to the sample 420 x 360.
     const showW = w ?? 420;
@@ -392,9 +444,9 @@ export class FirstOpen {
       this.widthError.textContent = sideLimitMessage("width", this.unit);
       failed = true;
     } else {
-      const slip = detectSlip(wRaw, w, "side");
+      const slip = detectSlip(wRaw, w, "side", this.unit);
       if (slip !== null) {
-        this.showSlip(this.widthInput, slip.suggestedCm, slip.message, slip.action);
+        this.showSlip(this.widthInput, slip);
         failed = true;
       } else {
         const err = validateSide("width", w, this.unit);
@@ -411,9 +463,9 @@ export class FirstOpen {
       this.lengthError.textContent = sideLimitMessage("length", this.unit);
       failed = true;
     } else {
-      const slip = detectSlip(lRaw, l, "side");
+      const slip = detectSlip(lRaw, l, "side", this.unit);
       if (slip !== null && this.slipRow.hasAttribute("hidden")) {
-        this.showSlip(this.lengthInput, slip.suggestedCm, slip.message, slip.action);
+        this.showSlip(this.lengthInput, slip);
         failed = true;
       } else if (slip === null) {
         const err = validateSide("length", l, this.unit);
@@ -441,12 +493,10 @@ export class FirstOpen {
     this.callbacks.onBuildRoom({ widthCm: w, lengthCm: l, ceilingCm: c });
   }
 
-  private showSlip(
-    input: HTMLInputElement,
-    suggestedCm: number,
-    message: string,
-    action: string,
-  ): void {
+  private showSlip(input: HTMLInputElement, slip: SlipSuggestion): void {
+    const suggestedCm = slip.suggestedCm;
+    const message = slip.message;
+    const action = slip.action;
     this.slipRow.innerHTML = "";
     this.slipRow.removeAttribute("hidden");
     const text = el("span", "size-slip-text", message);

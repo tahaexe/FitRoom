@@ -1915,6 +1915,24 @@ button.danger {
   background: var(--coral-pressed);
 }
 
+.setup-go[disabled] {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.size-build-reason {
+  margin: 0;
+  min-height: 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+
+.size-build-reason:not(:empty) {
+  margin-bottom: 8px;
+}
+
 .setup-secondary {
   background: #ffffff;
   color: var(--ink);
