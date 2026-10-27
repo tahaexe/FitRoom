@@ -88,6 +88,7 @@ Add any of these URL parameters to frame an eye-level view:
   wall and 180 faces the south wall (default 0)
 - `campitch` — pitch in degrees, positive looks up (default 0, level)
 - `camfov` — vertical field of view in degrees (default 60)
+- `camitems` — `0` hides every piece, leaving the empty room shell
 
 Example — stand in the doorway at eye height and face the back wall:
 
@@ -99,12 +100,14 @@ http://localhost:5173/?dev=1&camx=75&camz=45&cameye=160&camyaw=0&campitch=0&camf
 The hook renders a 4:3 frame, hides the interface panels and publishes
 the calibrated camera on `window.__fitroomCamera` for reading from the
 browser console: `width`, `height`, `fx`, `fy`, `cx`, `cy` in pixels,
-`position` in metres, plus `yawDeg`, `pitchDeg` and `fovDeg`.
+`position` in metres, plus `yawDeg`, `pitchDeg`, `fovDeg` and the `room`
+layout (walls, openings) the view was rendered from.
 
 ```js
 window.__fitroomCamera;
 // { width: 800, height: 600, fx: ..., fy: ..., cx: 400, cy: 300,
-//   position: { x: 0.75, y: 1.6, z: 0.45 }, yawDeg: 0, pitchDeg: 0, fovDeg: 60 }
+//   position: { x: 0.75, y: 1.6, z: 0.45 }, yawDeg: 0, pitchDeg: 0, fovDeg: 60,
+//   room: { ... } }
 ```
 
 ## How it's built
