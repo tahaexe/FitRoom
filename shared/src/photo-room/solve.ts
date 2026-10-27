@@ -92,7 +92,10 @@ function findOccluder(
   // Full height means full wall height (the wall need not fill the frame).
   const wallTop = Math.min(...pieces.map((p) => p.box[1]));
   const wallBot = Math.max(...pieces.map((p) => p.box[3]));
-  const wallH = Math.max(1, (Number.isFinite(wallBot) ? wallBot : 0) - (Number.isFinite(wallTop) ? wallTop : 0) + 1);
+  const wallH = Math.max(
+    1,
+    (Number.isFinite(wallBot) ? wallBot : 0) - (Number.isFinite(wallTop) ? wallTop : 0) + 1,
+  );
   for (const inst of photo.instances) {
     if (inst.concept === "wall" || inst.concept === "floor" || inst.concept === "ceiling") {
       continue;
@@ -421,8 +424,7 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
   // A glazed wall proxies its plane on the window pieces.
   const proxy = hasWall ? wallPieces : pick.pieces;
   // An occluder's outer face anchors the side edge on its side.
-  const proxySide =
-    pick.occluder === null ? proxy : [...proxy, pick.occluder.inst];
+  const proxySide = pick.occluder === null ? proxy : [...proxy, pick.occluder.inst];
 
   // Floor-wall: only columns where the wall mask meets the floor mask
   // vote. Sofa backs, headboards, radiators and wardrobes draw straight
@@ -590,7 +592,14 @@ function fitBoundaries(photo: PhotoInput, pick: WallPick): Boundaries {
   // (the side edges) and with the other boundary's slope, then refit
   // without its inliers: a sofa back or cabinet edge can still win a
   // consensus when most contact columns are hidden.
-  const checked = checkBoundaries(floorFit, ceilFit, leftFit, rightFit, floorPtsFinal, ceilPtsFinal);
+  const checked = checkBoundaries(
+    floorFit,
+    ceilFit,
+    leftFit,
+    rightFit,
+    floorPtsFinal,
+    ceilPtsFinal,
+  );
   const floor = toFitted(checked.floor, floorPtsFinal.length, floorHidden);
   const ceiling = toFitted(checked.ceiling, ceilPtsFinal.length, ceilHidden);
   let left = toFitted(checked.left, leftPts.length, 0);
@@ -676,11 +685,7 @@ function checkBoundaries(
   sx /= sn;
   sy /= sn;
   const across: [number, number] = [-sy, sx];
-  const refit = (
-    fit: LineFit,
-    other: LineFit,
-    pts: Array<[number, number]>,
-  ): LineFit => {
+  const refit = (fit: LineFit, other: LineFit, pts: Array<[number, number]>): LineFit => {
     const dir = dirOfHoriz(toFitted(fit, 0, 0));
     const otherDir = dirOfHoriz(toFitted(other, 0, 0));
     if (angDiff(dir, across) <= SLOPE_TOL_RAD && angDiff(dir, otherDir) <= SLOPE_TOL_RAD) {
@@ -689,12 +694,18 @@ function checkBoundaries(
     const rest = pts.filter((p) => horizResid(fit, p) > 3);
     if (rest.length < 12) return fit;
     const xs = rest.map((p) => p[0]);
-    if (Math.max(...xs) - Math.min(...xs) < 0.3 * (Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0]))) + 1) {
+    if (
+      Math.max(...xs) - Math.min(...xs) <
+      0.3 * (Math.max(...pts.map((p) => p[0])) - Math.min(...pts.map((p) => p[0]))) + 1
+    ) {
       return fit;
     }
     const again = fitLineRansac(rest, "horizontal");
     const againDir = dirOfHoriz(toFitted(again, 0, 0));
-    if (angDiff(againDir, across) <= SLOPE_TOL_RAD && angDiff(againDir, otherDir) <= SLOPE_TOL_RAD) {
+    if (
+      angDiff(againDir, across) <= SLOPE_TOL_RAD &&
+      angDiff(againDir, otherDir) <= SLOPE_TOL_RAD
+    ) {
       return again;
     }
     return fit;
@@ -1084,13 +1095,7 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     const occluded =
       pick.occluder?.side ??
       edgeOccluder(photo, pick) ??
-      cornerOcclusion(
-        structuralPieces,
-        bounds.floor,
-        bounds.ceiling,
-        pick.colMin,
-        pick.colMax,
-      );
+      cornerOcclusion(structuralPieces, bounds.floor, bounds.ceiling, pick.colMin, pick.colMax);
     if (
       occluded !== null &&
       !flags.some((f) => f.code === "corner-occluded" && f.wall === photo.wall)
@@ -1209,10 +1214,8 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     );
     // The gap search skips the occluder span: its face is wall-free over
     // the full height and would read as a doorway.
-    const gapLo =
-      pick.occluder?.side === "left" ? pick.occluder.inst.box[2] + 1 : pick.colMin;
-    const gapHi =
-      pick.occluder?.side === "right" ? pick.occluder.inst.box[0] - 1 : pick.colMax;
+    const gapLo = pick.occluder?.side === "left" ? pick.occluder.inst.box[2] + 1 : pick.colMin;
+    const gapHi = pick.occluder?.side === "right" ? pick.occluder.inst.box[0] - 1 : pick.colMax;
     const gap = findDoorGap(structural, sol.lines.floor, sol.lines.ceiling, gapLo, gapHi);
     const touchesGapOrLeaf = (p: SamInstance): boolean => {
       const nearGap = gap !== null && p.box[0] <= gap.x1 + 4 && p.box[2] >= gap.x0 - 4;
@@ -1306,8 +1309,7 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
           const glo = imgLo as number;
           const ghi = imgHi as number;
           const covers = leaf.box[0] <= glo + 6 && leaf.box[2] >= ghi - 6;
-          const toRoom = (hingeEast: boolean): "left" | "right" =>
-            hingeEast ? "left" : "right";
+          const toRoom = (hingeEast: boolean): "left" | "right" => (hingeEast ? "left" : "right");
           if (!covers) {
             // The door concept is either the leaf beside the gap (small
             // overlap) or the open void itself (large overlap): opposite
@@ -1333,8 +1335,7 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
           }
         }
         doorN += 1;
-        const wUnc =
-          Math.max(3, (sol.lines.floor.rmse + 2) * (wallLen / photo.width) * 2) * uncMul;
+        const wUnc = Math.max(3, (sol.lines.floor.rmse + 2) * (wallLen / photo.width) * 2) * uncMul;
         openings.push({
           id: `door-${String(doorN)}`,
           wall: photo.wall,
@@ -1401,8 +1402,7 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
       const height = Math.max(10, top - bot);
       const sill = Math.max(0, bot);
       winN += 1;
-      const wUnc =
-        Math.max(3, (sol.lines.floor.rmse + 2) * (wallLen / photo.width) * 2) * uncMul;
+      const wUnc = Math.max(3, (sol.lines.floor.rmse + 2) * (wallLen / photo.width) * 2) * uncMul;
       openings.push({
         id: `window-${String(winN)}`,
         wall: photo.wall,

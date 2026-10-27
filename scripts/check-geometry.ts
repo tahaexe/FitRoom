@@ -371,7 +371,15 @@ function tierSynthetic(): void {
     tapeA: 420,
     tapeB: 1400,
     openings: [
-      { type: "door", wall: "A", offset: 300, width: 90, height: 210, sillHeight: 0, hinge: "right" },
+      {
+        type: "door",
+        wall: "A",
+        offset: 300,
+        width: 90,
+        height: 210,
+        sillHeight: 0,
+        hinge: "right",
+      },
     ],
   };
   const dYaw = solveRoomFromPhotos({
@@ -391,9 +399,7 @@ function tierSynthetic(): void {
     height: 260,
     tapeA: 420,
     tapeB: 360,
-    openings: [
-      { type: "window", wall: "C", offset: 80, width: 160, height: 140, sillHeight: 90 },
-    ],
+    openings: [{ type: "window", wall: "C", offset: 80, width: 160, height: 140, sillHeight: 90 }],
   };
   const dSofa = solveRoomFromPhotos({
     photos: [
@@ -434,9 +440,7 @@ function tierSynthetic(): void {
     height: 250,
     tapeA: 380,
     tapeB: 300,
-    openings: [
-      { type: "window", wall: "B", offset: 40, width: 150, height: 120, sillHeight: 85 },
-    ],
+    openings: [{ type: "window", wall: "B", offset: 40, width: 150, height: 120, sillHeight: 85 }],
   };
   const dWard = solveRoomFromPhotos({
     photos: [
@@ -469,7 +473,13 @@ function tierSynthetic(): void {
   };
   const dMerge = solveRoomFromPhotos({
     photos: [
-      photo(mergeRoom, "A", { yawDeg: 1.5, pitchDeg: -3, rollDeg: 1, seed: 105, mergedWall: "right" }),
+      photo(mergeRoom, "A", {
+        yawDeg: 1.5,
+        pitchDeg: -3,
+        rollDeg: 1,
+        seed: 105,
+        mergedWall: "right",
+      }),
     ],
     tapeA: 420,
     tapeB: 360,
@@ -511,9 +521,7 @@ function tierSynthetic(): void {
     height: 260,
     tapeA: 420,
     tapeB: 360,
-    openings: [
-      { type: "window", wall: "D", offset: 120, width: 120, height: 140, sillHeight: 90 },
-    ],
+    openings: [{ type: "window", wall: "D", offset: 120, width: 120, height: 140, sillHeight: 90 }],
   };
   const dPanes = solveRoomFromPhotos({
     photos: [
@@ -529,10 +537,34 @@ function tierSynthetic(): void {
   const focalPosed = (
     reportedFocal35mm: number | null,
   ): [PhotoInput, PhotoInput, PhotoInput, PhotoInput] => [
-    photo(SAMPLE_SYNTH_ROOM, "A", { yawDeg: 1.5, pitchDeg: -3, rollDeg: 1, seed: 11, reportedFocal35mm }),
-    photo(SAMPLE_SYNTH_ROOM, "B", { yawDeg: -1.5, pitchDeg: -4, rollDeg: -1, seed: 12, reportedFocal35mm }),
-    photo(SAMPLE_SYNTH_ROOM, "C", { yawDeg: 1, pitchDeg: -5, rollDeg: 0.5, seed: 13, reportedFocal35mm }),
-    photo(SAMPLE_SYNTH_ROOM, "D", { yawDeg: -1, pitchDeg: -3, rollDeg: -0.5, seed: 14, reportedFocal35mm }),
+    photo(SAMPLE_SYNTH_ROOM, "A", {
+      yawDeg: 1.5,
+      pitchDeg: -3,
+      rollDeg: 1,
+      seed: 11,
+      reportedFocal35mm,
+    }),
+    photo(SAMPLE_SYNTH_ROOM, "B", {
+      yawDeg: -1.5,
+      pitchDeg: -4,
+      rollDeg: -1,
+      seed: 12,
+      reportedFocal35mm,
+    }),
+    photo(SAMPLE_SYNTH_ROOM, "C", {
+      yawDeg: 1,
+      pitchDeg: -5,
+      rollDeg: 0.5,
+      seed: 13,
+      reportedFocal35mm,
+    }),
+    photo(SAMPLE_SYNTH_ROOM, "D", {
+      yawDeg: -1,
+      pitchDeg: -3,
+      rollDeg: -0.5,
+      seed: 14,
+      reportedFocal35mm,
+    }),
   ];
   const dFocalHigh = solveRoomFromPhotos({ photos: focalPosed(28.8), tapeA: 420, tapeB: 360 });
   printRoomTable("synthetic focal+20", SAMPLE_SYNTH_ROOM, dFocalHigh);
@@ -743,7 +775,11 @@ function smokeExpectations(photoId: string, draft: RoomDraft): void {
   if (photoId === "market-house-reading-room") {
     // 7 window panes merge into at most 3 window openings.
     const windows = draft.openings.filter((o) => o.type === "window").length;
-    check(`smoke ${photoId}: at most 3 window openings`, windows <= 3, `${String(windows)} windows`);
+    check(
+      `smoke ${photoId}: at most 3 window openings`,
+      windows <= 3,
+      `${String(windows)} windows`,
+    );
   }
   if (photoId === "hostel-twin-room-wardrobe") {
     // The full-height wardrobe at the right edge is flagged.

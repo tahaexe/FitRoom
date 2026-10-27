@@ -277,8 +277,7 @@ export function synthPhoto(
   };
   // Sofa back: straight false edge above the wall base with its own tilt.
   const sofaF = opts.sofaEdge ?? 0;
-  const inSofaBand = (x: number): boolean =>
-    sofaF > 0 && Math.abs(x / W - 0.5) < sofaF / 2;
+  const inSofaBand = (x: number): boolean => sofaF > 0 && Math.abs(x / W - 0.5) < sofaF / 2;
   let sofaM = 0;
   let sofaB = 0;
   if (sofaF > 0) {
@@ -296,8 +295,7 @@ export function synthPhoto(
   // below, once the wall corners are projected.
   let wardLo = 0;
   let wardHi = -1;
-  const inWardrobe = (x: number): boolean =>
-    ward !== undefined && x > wardLo && x <= wardHi;
+  const inWardrobe = (x: number): boolean => ward !== undefined && x > wardLo && x <= wardHi;
   // Merged wall: the neighbour's plane joins the facing polygon in the
   // single wall instance (image left is the wall start on every wall).
   const neighborOf = (w: WallLetter, side: "left" | "right"): WallLetter => {
@@ -474,10 +472,7 @@ export function synthPhoto(
     const ct = proj(wallPoint(room, wall, sC, room.height));
     const cb = proj(wallPoint(room, wall, sC, 0));
     const wx0 = Math.max(0, Math.floor(ward === "right" ? wardLo : Math.min(ct[0], cb[0]) - 2));
-    const wx1 = Math.min(
-      W - 1,
-      Math.ceil(ward === "right" ? Math.max(ct[0], cb[0]) + 2 : wardHi),
-    );
+    const wx1 = Math.min(W - 1, Math.ceil(ward === "right" ? Math.max(ct[0], cb[0]) + 2 : wardHi));
     const wy0 = Math.max(0, Math.floor(Math.min(ct[1], cb[1])));
     const wy1 = Math.min(H - 1, Math.ceil(Math.max(ct[1], cb[1])));
     if (wx1 > wx0 && wy1 > wy0) {
