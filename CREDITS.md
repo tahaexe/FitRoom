@@ -1,15 +1,8 @@
-# Asset credits
+# Credits
 
-All assets below are CC0-1.0. Credits are a courtesy.
+## CC0 assets (models, textures, HDRIs, test photos)
 
-## Code: @meta-sam/parser
-
-- Package: `@meta-sam/parser` (used by `client/src/capture/sam.ts` to turn
-  SAM 3.1 segmentation text into mask instances)
-- Source: npm (`https://www.npmjs.com/package/@meta-sam/parser`)
-- License: SAM License (Meta's own, royalty-free; a copy ships with the app)
-- Files:
-  - client/public/licenses/SAM-LICENSE.txt
+All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 
 ## sofa_02
 
@@ -389,8 +382,133 @@ All assets below are CC0-1.0. Credits are a courtesy.
 
 ## lebombo
 
-- Credit: lebombo, Poly Haven (CC0)
+- Credit: lebombo by Greg Zaal, Poly Haven (CC0)
 - Source: Poly Haven (https://polyhaven.com/a/lebombo)
 - License: CC0-1.0
 - Files:
   - assets/hdri/polyhaven/lebombo_1k.hdr
+
+## Test photos (CC0-1.0, Wikimedia Commons)
+
+The eight test photos behind the fixtures in `shared/fixtures/` and
+`server/data/sam-streams/`. All are CC0-1.0.
+
+## living-room-unsplash-ceborski
+
+- Credit: Jarosław Ceborski (CC0-1.0)
+- Source: Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Living_room_(Unsplash).jpg)
+- License: CC0-1.0
+- Files:
+  - shared/fixtures/photo-room-smoke/living-room-unsplash-ceborski-*.txt
+
+## living-room-carlos-zgz
+
+- Credit: Carlos ZGZ (CC0-1.0)
+- Source: Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Living_room_(15246771173).jpg)
+- License: CC0-1.0
+- Files:
+  - shared/fixtures/photo-room-smoke/living-room-carlos-zgz-*.txt
+
+## apartment-granada-artchapiz
+
+- Credit: Artchapiz (CC0-1.0)
+- Source: Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Artchapiz1_artchapiz.es_apartment_rental_granada_01.jpg)
+- License: CC0-1.0
+- Files:
+  - shared/fixtures/photo-room-smoke/apartment-granada-artchapiz-*.txt
+
+## hostel-twin-room-wardrobe
+
+- Credit: Profpcde (CC0-1.0)
+- Source: Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Twin_room_in_a_German_youth_hostel_with_single_beds_and_wardrobe_A.jpg)
+- License: CC0-1.0
+- Files:
+  - shared/fixtures/photo-room-smoke/hostel-twin-room-wardrobe-*.txt
+
+## apartment-hotel-nice
+
+- Credit: Paikan06 (CC0-1.0)
+- Source: Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Apartment_hotel_Nice.jpg)
+- License: CC0-1.0
+- Files:
+  - shared/fixtures/photo-room-smoke/apartment-hotel-nice-*.txt
+  - server/data/sam-streams/apartment-hotel-nice-1280-*.sse
+
+## living-room-houseplants
+
+- Credit: Lo (CC0-1.0)
+- Source: Wikimedia Commons (https://commons.wikimedia.org/wiki/File:The_living_room_that_needs_houseplants.jpg)
+- License: CC0-1.0
+- Files:
+  - shared/fixtures/photo-room-smoke/living-room-houseplants-*.txt
+
+## living-room-zaher-rio
+
+- Credit: Wilfredor (CC0-1.0)
+- Source: Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Living_room_in_apartment_of_Condom%C3%ADnio_do_Edif%C3%ADcio_Zaher,_Le_Blond,_Rio_de_Janeiro,_Brazil.jpg)
+- License: CC0-1.0
+- Files:
+  - shared/fixtures/photo-room-smoke/living-room-zaher-rio-*.txt
+
+## market-house-reading-room
+
+- Credit: Andy Li (CC0-1.0)
+- Source: Wikimedia Commons (https://commons.wikimedia.org/wiki/File:Interior_of_a_room_of_The_Market_House,_Reading_2025-05-03.jpg)
+- License: CC0-1.0
+- Files:
+  - shared/fixtures/photo-room-smoke/market-house-reading-room-*.txt
+
+## Code dependencies (their own licences)
+
+Each package below is bundled with the build under its own licence.
+
+## Code: @meta-sam/parser
+
+- Package: `@meta-sam/parser` (used by `client/src/capture/sam.ts` and
+  `shared/src/sam.ts` to turn SAM 3.1 segmentation text into mask instances)
+- Source: npm (`https://www.npmjs.com/package/@meta-sam/parser`)
+- License: SAM License (Meta's own, royalty-free; a copy ships with the app)
+- Files:
+  - client/public/licenses/SAM-LICENSE.txt
+
+## Code: three
+
+- Package: `three` (3D rendering, bundled with the client build)
+- Source: npm (`https://www.npmjs.com/package/three`)
+- License: MIT
+
+## Code: exifr
+
+- Package: `exifr` (photo metadata, bundled with the client build)
+- Source: npm (`https://www.npmjs.com/package/exifr`)
+- License: MIT
+
+## Code: @fontsource/nunito
+
+- Package: `@fontsource/nunito` (the bundled Nunito font)
+- Source: npm (`https://www.npmjs.com/package/@fontsource/nunito`)
+- License: SIL Open Font License 1.1
+
+## Code: hono
+
+- Package: `hono` (API routes on the Node server and the Worker)
+- Source: npm (`https://www.npmjs.com/package/hono`)
+- License: MIT
+
+## Code: @hono/node-server
+
+- Package: `@hono/node-server` (Node server runtime)
+- Source: npm (`https://www.npmjs.com/package/@hono/node-server`)
+- License: MIT
+
+## Code: dotenv
+
+- Package: `dotenv` (environment loading on the Node server)
+- Source: npm (`https://www.npmjs.com/package/dotenv`)
+- License: BSD-2-Clause
+
+## Code: ajv
+
+- Package: `ajv` (schema validation via `@fitroom/shared`, bundled in both builds)
+- Source: npm (`https://www.npmjs.com/package/ajv`)
+- License: MIT
