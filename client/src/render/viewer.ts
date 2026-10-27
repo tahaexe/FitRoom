@@ -285,9 +285,6 @@ export class RenderViewer {
     after.src = resultUrl;
     after.alt = "Photoreal visualisation after";
     after.className = "render-after";
-    slider.append(before, after);
-    wrap.appendChild(slider);
-
     const range = document.createElement("input");
     range.type = "range";
     range.min = "0";
@@ -301,7 +298,9 @@ export class RenderViewer {
     };
     range.addEventListener("input", apply);
     apply();
-    wrap.appendChild(range);
+    // The handle sits on the image itself (bottom overlay), never under it.
+    slider.append(before, after, range);
+    wrap.appendChild(slider);
 
     const row = document.createElement("div");
     row.className = "render-row";

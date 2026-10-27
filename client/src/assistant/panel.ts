@@ -103,7 +103,8 @@ export class AssistantPanel {
     const input = document.createElement("input");
     input.type = "text";
     input.name = "arrange-request";
-    input.placeholder = "Arrange the room in plain language…";
+    input.placeholder = "Arrange the room…";
+    input.title = "Ask the layout assistant in plain language";
     input.setAttribute("aria-label", "Ask the layout assistant");
     input.addEventListener("keydown", (event) => {
       if (event.key === "Enter") void this.send(input.value);
@@ -174,15 +175,17 @@ export class AssistantPanel {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.className = "assistant-chip";
-      chip.textContent = text.length > 42 ? `${text.slice(0, 42)}…` : text;
+      // Full text, wrapping onto several lines: never cut with "…".
+      chip.textContent = text;
       const stored = recorded === null || recorded.includes(text);
       if (stored) {
         chip.title = text;
         chip.addEventListener("click", () => void this.sendDemo(text));
       } else {
         // In demo mode a chip with no stored answer is disabled: Live AI only.
-        chip.title = `${text} — Live AI`;
+        chip.title = `${text} — needs Live AI (no stored demo answer)`;
         chip.toggleAttribute("disabled", true);
+        chip.setAttribute("aria-disabled", "true");
       }
       host.appendChild(chip);
     }
