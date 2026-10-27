@@ -167,7 +167,7 @@ class FitRoomApp {
   private analysis: FitAnalysis | null = null;
   private issues: FitIssue[] = [];
   private mode: "orbit" | "plan" = "orbit";
-  /** Developer camera hook: exact frozen pose over the full container. */
+  /** Developer camera hook: exact frozen pose, 4:3 frame, known scene. */
   private devCam = false;
   /** Reframe + republish intrinsics together (hook window resizes). */
   private devRefresh: (() => void) | null = null;
@@ -191,8 +191,31 @@ class FitRoomApp {
     // the chips reset to — while returning visits restore the autosave.
     const firstVisit = !hasAutosave(ROOM.id);
     this.store = new SceneStore(ROOM.id, validScene as unknown as SceneState);
-    // The hook scene swap happens in the DEV-only block below, after the
-    // dev module loads, so no hook parsing lives on the production path.
+    // Developer camera hook: a known scene, never the saved shopper state.
+    // The scene menu still works on top; `camitems=0` hides every piece.
+    // Assigned directly (no replace event) so the shopper autosave survives.
+    // Detection and the scene choice run synchronously in this DEV-only
+    // block, so the first frame already sees the hook state (frozen pose,
+    // every wall visible, no cutaway); the whole block is erased from the
+    // production build.
+    if (import.meta.env.DEV) {
+      const hookParam = (key: string): string | null => {
+        try {
+          return new URLSearchParams(window.location.search).get(key);
+        } catch {
+          return null;
+        }
+      };
+      const wantsHook = ["camx", "camz", "cameye", "camyaw", "campitch", "camfov", "camitems"].some(
+        (key) => hookParam(key) !== null,
+      );
+      this.devCam = wantsHook;
+      if (wantsHook) {
+        const hideAll = hookParam("camitems") === "0";
+        const base = JSON.parse(JSON.stringify(validScene)) as SceneState;
+        this.store.state = hideAll ? { ...base, items: [] } : base;
+      }
+    }
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     // The app uses only built-in materials, so there are no custom shaders
@@ -372,33 +395,11 @@ class FitRoomApp {
     // selection changes, or when a texture finishes loading. No idle loop.
     this.requestRender();
     // Developer camera hook: dev server only, erased from the prod build.
-    // Detection, scene choice and the dev module import all sit behind
-    // import.meta.env.DEV so the production bundle keeps none of them.
+    // The dev module import sits behind import.meta.env.DEV so the
+    // production bundle keeps none of it; the module self-guards on the
+    // cam* parameters (the host already chose the known scene above).
     if (import.meta.env.DEV) {
       void import("./dev-camera").then((mod) => {
-        const hook = (() => {
-          try {
-            return mod.wantsDevCamera(window.location.search);
-          } catch {
-            return false;
-          }
-        })();
-        if (!hook) return;
-        this.devCam = true;
-        // A known scene, never the saved shopper state. Assigned directly
-        // (no replace event) so the shopper autosave survives.
-        const hideAll = (() => {
-          try {
-            return mod.wantsEmptyScene(window.location.search);
-          } catch {
-            return false;
-          }
-        })();
-        if (hideAll) {
-          const base = JSON.parse(JSON.stringify(validScene)) as SceneState;
-          this.store.state = { ...base, items: [] };
-          void this.syncInstances();
-        }
         const bounds = roomBounds(ROOM);
         mod.initDevCamera({
           renderer: this.renderer,
