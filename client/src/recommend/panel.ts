@@ -41,10 +41,17 @@ import { isLive, postRecommend, setLive, type ApiResult } from "../api";
 const CATEGORIES: Array<Exclude<RecommendCategory, "any">> = [
   "sofa",
   "armchair",
-  "ottoman",
+  "dining-table",
+  "dining-chair",
   "coffee-table",
   "side-table",
+  "bed",
+  "wardrobe",
+  "cabinet",
+  "bookcase",
+  "storage",
   "tv-unit",
+  "ottoman",
   "shelf",
   "decor",
 ];
@@ -59,6 +66,13 @@ const CATEGORY_LABELS: Record<Exclude<RecommendCategory, "any">, string> = {
   "tv-unit": "TV units",
   shelf: "Shelves",
   decor: "Decor",
+  "dining-table": "Dining tables",
+  "dining-chair": "Dining chairs",
+  bed: "Beds",
+  wardrobe: "Wardrobes",
+  cabinet: "Cabinets",
+  bookcase: "Bookcases",
+  storage: "Storage",
 };
 
 export interface RecommendDeps {

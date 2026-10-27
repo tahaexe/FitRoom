@@ -25,13 +25,15 @@ export const MODEL_YAW_FIX_DEG: Record<string, number> = {
 };
 
 export const MODEL_NOTES: Record<string, string> = {
-  painted_wooden_sofa: "Oversized source scaled 0.7857 to a 44cm seat; front +Z, centred, grounded.",
+  painted_wooden_sofa:
+    "Oversized source scaled 0.7857 to a 44cm seat; front +Z, centred, grounded.",
   vintage_day_bed: "Oversized source scaled 0.8462 to a 44cm seat; front +Z, centred, grounded.",
   Rockingchair_01: "Oversized source scaled 0.8036 to a 45cm seat; front +Z, centred, grounded.",
   round_wooden_table_01: "Oversized source scaled 0.7463 to a 75cm top; centred, grounded.",
   painted_wooden_table: "Oversized source scaled 0.7821 to a 75cm top; centred, grounded.",
   painted_wooden_chair_01: "Front +Z already; centred, grounded.",
-  painted_wooden_chair_02: "Oversized source scaled 0.7895 to a 45cm seat; front +Z, centred, grounded.",
+  painted_wooden_chair_02:
+    "Oversized source scaled 0.7895 to a 45cm seat; front +Z, centred, grounded.",
   modern_coffee_table_02: "Front +Z already; centred, grounded.",
   industrial_coffee_table: "Front +Z already; centred, grounded.",
   CoffeeTable_01: "Oversized source scaled 0.956 to a 50cm top; centred, grounded.",

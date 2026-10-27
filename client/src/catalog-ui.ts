@@ -54,9 +54,7 @@ const SYNONYMS: Array<{ words: string[]; match: (item: CatalogItem) => boolean }
   {
     words: ["cabinet", "cabinets", "stand", "stands", "console", "consoles"],
     match: (item) =>
-      item.category === "tv-unit" ||
-      item.category === "cabinet" ||
-      item.category === "storage",
+      item.category === "tv-unit" || item.category === "cabinet" || item.category === "storage",
   },
   {
     words: ["bookcase", "bookcases", "bookshelf", "bookshelves"],
