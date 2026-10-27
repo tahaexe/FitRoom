@@ -190,6 +190,8 @@ export class PhotoConfirmView {
   private readonly stageEl: HTMLElement;
   private readonly planEl: HTMLElement;
   private readonly thumbs = new Map<WallLetter, string>();
+  private thumbsKey: string | null = null;
+  private thumbsLoading = false;
   private photo: ActivePhoto | null = null;
   private raf = 0;
   private pending: Record<CornerId, [number, number]> | null = null;
@@ -228,7 +230,6 @@ export class PhotoConfirmView {
     right.appendChild(this.planEl);
     this.element.append(left, centre, right);
     this.unsubscribe = this.store.subscribe(() => this.render());
-    void this.loadThumbs().then(() => this.render());
     this.render();
   }
 
@@ -236,6 +237,27 @@ export class PhotoConfirmView {
     this.unsubscribe?.();
     if (this.raf !== 0) cancelAnimationFrame(this.raf);
     this.element.remove();
+  }
+
+  private thumbKeyFor(session: PhotoSession): string {
+    return session.draft.photos.map((p) => p.wall).join(",");
+  }
+
+  /**
+   * Thumbnails come from the photo store, which only holds photos once the
+   * shopper has taken them — long after this view is built. Reload them
+   * for each new photo session; a wall without a stored photo keeps its
+   * letter placeholder.
+   */
+  private refreshThumbs(session: PhotoSession): void {
+    const key = this.thumbKeyFor(session);
+    if (key === this.thumbsKey || this.thumbsLoading) return;
+    this.thumbsLoading = true;
+    void this.loadThumbs().then(() => {
+      this.thumbsKey = key;
+      this.thumbsLoading = false;
+      this.render();
+    });
   }
 
   private async loadThumbs(): Promise<void> {
@@ -267,7 +289,13 @@ export class PhotoConfirmView {
 
   private render(): void {
     const session = this.session();
-    if (session === null) return;
+    if (session === null) {
+      // Between photo rooms the stored photos change with the walls, so
+      // the next session reloads its thumbnails from the photo store.
+      this.thumbsKey = null;
+      return;
+    }
+    this.refreshThumbs(session);
     this.renderWalls(session);
     // Rebuilding the photo stage mid-drag would drop pointer capture, so the
     // handles follow the pointer directly while the plan and pills update.
