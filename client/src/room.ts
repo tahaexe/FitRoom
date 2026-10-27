@@ -287,10 +287,10 @@ export function wallLengthLabels(room: RoomLayout): Array<{ wallId: string; leng
   }));
 }
 
-/** Opening labels straight from JSON (id + width cm). */
+/** Opening labels in shopper words ("Door · 90 cm", "Window · 120 cm"). */
 export function openingLabels(room: RoomLayout): Array<{ id: string; text: string }> {
   return room.openings.map((o) => ({
     id: o.id,
-    text: `${o.id} · ${Math.round(o.width)}cm`,
+    text: `${o.type === "door" ? "Door" : "Window"} · ${Math.round(o.width)} cm`,
   }));
 }

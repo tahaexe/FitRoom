@@ -3,11 +3,19 @@ import type { RoomLayout } from "@fitroom/shared";
 import { cmToMeters, planWallLabel } from "@fitroom/shared";
 import { pointAlongWall } from "./room";
 
+/** Shopper-words opening label, e.g. "Door · 90 cm" or "Window · 120 cm". */
+export function openingLabel(type: string, widthCm: number): string {
+  const kind = type === "door" ? "Door" : "Window";
+  return `${kind} · ${Math.round(widthCm)} cm`;
+}
+
 /**
- * Top plan overlay: SVG labels drawn from JSON values (±1cm rounding).
- * Wall lengths in cm sit OUTSIDE their wall; opening labels (id + width) sit
- * INSIDE the room beside their opening. A screen-space declutter pass then
- * pushes any overlapping labels apart, so no label overlaps another.
+ * Top plan overlay: SVG labels in shopper words (±1cm rounding). Wall
+ * lengths in cm sit OUTSIDE their wall ("Door wall · 420 cm"); opening
+ * labels ("Door · 90 cm", "Window · 120 cm") sit INSIDE the room beside
+ * their opening — never ids like `door-1`. A screen-space declutter pass
+ * pushes overlapping labels apart, then every label is clamped inside the
+ * visible view so none hides under an open side panel or past the edge.
  */
 export class PlanOverlay {
   readonly svg: SVGSVGElement;
@@ -29,7 +37,7 @@ export class PlanOverlay {
     for (const o of room.openings) {
       const t = document.createElementNS(NS, "text");
       t.setAttribute("class", "plan-opening-label");
-      t.textContent = `${o.id} · ${Math.round(o.width)}cm`;
+      t.textContent = openingLabel(o.type, o.width);
       this.svg.appendChild(t);
       this.openingTexts.push(t);
     }
@@ -103,6 +111,9 @@ export class PlanOverlay {
 
     // Screen-space declutter: no label box may overlap another.
     this.separate(spots);
+    // Keep every label inside the visible view: a label pushed past the
+    // edge (or under an open side panel) is clamped back so it stays readable.
+    this.clampIntoView(spots, width, height);
     for (const s of spots) {
       // Never write NaN coordinates: a failed projection keeps its last good
       // spot instead of logging an SVG attribute error.
@@ -124,8 +135,8 @@ export class PlanOverlay {
       } catch {
         w = Number.NaN;
       }
-      if (!(w > 0)) w = (s.el.textContent?.length ?? 8) * 7;
-      size = { w, h: 13 };
+      if (!(w > 0)) w = (s.el.textContent?.length ?? 8) * 8;
+      size = { w, h: 16 };
       boxes.set(s.el, size);
     }
     // Respect the per-label text anchor (east/west walls anchor an edge).
@@ -142,6 +153,34 @@ export class PlanOverlay {
     ox /= len;
     oz /= len;
     return { x: ox, z: oz };
+  }
+
+  /** Clamp every label box inside the view (with a small margin). */
+  private clampIntoView(
+    spots: Array<{ el: SVGTextElement; x: number; y: number }>,
+    width: number,
+    height: number,
+  ): void {
+    const MARGIN = 6;
+    for (const s of spots) {
+      let w: number;
+      try {
+        w = s.el.getComputedTextLength();
+      } catch {
+        w = Number.NaN;
+      }
+      if (!(w > 0)) w = (s.el.textContent?.length ?? 8) * 8;
+      const anchor = s.el.getAttribute("text-anchor") ?? "middle";
+      // The anchor edge stays fixed; only the free extent is clamped.
+      if (anchor === "start") {
+        s.x = Math.min(Math.max(s.x, MARGIN), Math.max(MARGIN, width - w - MARGIN));
+      } else if (anchor === "end") {
+        s.x = Math.min(Math.max(s.x, w + MARGIN), Math.max(w + MARGIN, width - MARGIN));
+      } else {
+        s.x = Math.min(Math.max(s.x, w / 2 + MARGIN), Math.max(w / 2 + MARGIN, width - w / 2 - MARGIN));
+      }
+      s.y = Math.min(Math.max(s.y, 14 + MARGIN), Math.max(14 + MARGIN, height - MARGIN));
+    }
   }
 
   /** Iterative repulsion until no two label boxes overlap (or it converges). */

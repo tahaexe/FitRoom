@@ -1068,6 +1068,10 @@ class FitRoomApp {
       this.controls.target.set(cmToMeters(210), 0, cmToMeters(180));
     }
     this.controls.update();
+    // Walls hide in plan view, so the shadow map must render again without
+    // them: otherwise the orbit view's wall shadows spill outside the room.
+    requestContactRefresh(this.rig);
+    this.shadowNeedsUpdate = true;
     this.requestRender();
   }
 

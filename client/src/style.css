@@ -425,12 +425,9 @@ button.danger {
 
 .plan-wall-label,
 .plan-opening-label {
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 600;
   fill: var(--ink);
-  paint-order: stroke;
-  stroke: #fff;
-  stroke-width: 3px;
 }
 
 .plan-opening-label {
