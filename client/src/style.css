@@ -563,6 +563,47 @@ body:has(#assistant-panel:not([hidden])) #scene-container {
   border: 1.5px solid var(--amber);
 }
 
+/* Dimension number pinned to a conflict dimension line. */
+.fit-dim-label {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  background: #ffffff;
+  border-radius: 999px;
+  padding: 0 8px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+}
+
+.fit-dim-label[data-severity="error"] {
+  color: var(--red);
+  border: 1px solid var(--red);
+}
+
+.fit-dim-label[data-severity="warning"] {
+  color: var(--amber);
+  border: 1px solid var(--amber);
+}
+
+/* Brief green confirmation when a released piece fits. */
+.fit-fits-label {
+  position: absolute;
+  transform: translate(-50%, -130%);
+  background: #ffffff;
+  color: var(--green);
+  border: 1.5px solid var(--green);
+  border-radius: 999px;
+  padding: 2px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  box-shadow: var(--shadow);
+  pointer-events: none;
+  z-index: 1;
+}
+
 /* ---- dev scene menu in the bottom toolbar (hidden unless ?dev=1) ---- */
 
 .dev-scenes[hidden],

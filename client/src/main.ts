@@ -20,6 +20,7 @@ import {
   describeRun,
   dollhouseWallView,
   isHealthResponse,
+  orientedFootprint,
   type RenderWallView,
 } from "@fitroom/shared";
 import roomJson from "../../shared/samples/living-420x360.json";
@@ -150,7 +151,8 @@ class FitRoomApp {
   private raycaster = new THREE.Raycaster();
   private floorMesh: THREE.Mesh | null = null;
   private selectedId: string | null = null;
-  private outline: THREE.BoxHelper | null = null;
+  /** Neutral selection outline: the footprint on the floor, turns with the piece. */
+  private outline: THREE.LineLoop | null = null;
   private rotateHandle: THREE.Mesh;
   private sizeTag: HTMLElement;
   private measureEl: HTMLElement;
@@ -167,8 +169,8 @@ class FitRoomApp {
   private mode: "orbit" | "plan" = "orbit";
   private drag: { id: string; offsetX: number; offsetZ: number } | null = null;
   private rotating = false;
-  /** Trailing debounce for live fit feedback while dragging (ms). */
-  private liveTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Throttled live fit feedback while dragging (moved id, consumed once per frame). */
+  private liveDirty: string | null = null;
   private container: HTMLElement;
   /** Render-on-demand: a queued rAF id (0 = none) plus a shadow refresh flag. */
   private rafId = 0;
@@ -271,7 +273,6 @@ class FitRoomApp {
     // item's neighbourhood) before the two grid floods.
     this.fitEngine = new FitEngine(ROOM, catalogProducts(CATALOG_MAP));
     this.fitOverlay = new FitOverlay(this.scene, container);
-    this.fitOverlay.setGroupResolver((id) => this.instances.get(id)?.group);
 
     const inspectorHost = document.getElementById("inspector");
     const host = inspectorHost ?? document.createElement("div");
@@ -364,6 +365,23 @@ class FitRoomApp {
     // Render on demand: frames only while the camera moves, after scene or
     // selection changes, or when a texture finishes loading. No idle loop.
     this.requestRender();
+    // Developer camera hook: dev server only, erased from the prod build.
+    if (import.meta.env.DEV) {
+      const bounds = roomBounds(ROOM);
+      void import("./dev-camera").then((mod) => {
+        mod.initDevCamera({
+          renderer: this.renderer,
+          camera: this.orbitCam,
+          controls: this.controls,
+          container: this.container,
+          roomCentre: {
+            x: (bounds.minX + bounds.maxX) / 2,
+            z: (bounds.minZ + bounds.maxZ) / 2,
+          },
+          requestRender: () => this.requestRender(),
+        });
+      });
+    }
   }
 
   /** Queue a single frame unless one is already queued. */
@@ -550,19 +568,49 @@ class FitRoomApp {
     if (this.selectedId === id) this.select(null);
   }
 
-  private select(id: string | null): void {
-    this.selectedId = id;
+  /** Follow the selected piece every frame so the outline turns with it. */
+  private updateOutline(): void {
+    if (this.outline === null || this.selectedId === null) return;
+    const item = this.store.state.items.find((i) => i.instanceId === this.selectedId);
+    const entry = item === undefined ? undefined : CATALOG_MAP.get(item.productId);
+    if (item === undefined || entry === undefined) return;
+    const rect = orientedFootprint(entry.size, item.position, item.rotationY);
+    const pos = this.outline.geometry.getAttribute("position") as THREE.BufferAttribute;
+    rect.corners.forEach((c, i) => {
+      pos.setXYZ(i, cmToMeters(c.x), 0.03, cmToMeters(c.z));
+    });
+    pos.needsUpdate = true;
+  }
+
+  /** Rebuild the neutral selection outline from the current scene item. */
+  private rebuildOutline(): void {
     if (this.outline !== null) {
       this.scene.remove(this.outline);
       this.outline.geometry.dispose();
+      (this.outline.material as THREE.Material).dispose();
       this.outline = null;
     }
+    const id = this.selectedId;
+    const item = id === null ? undefined : this.store.state.items.find((i) => i.instanceId === id);
+    const entry = id === null ? undefined : CATALOG_MAP.get(item?.productId ?? "");
+    if (item === undefined || entry === undefined) return;
+    const rect = orientedFootprint(entry.size, item.position, item.rotationY);
+    const geo = new THREE.BufferGeometry().setFromPoints(
+      rect.corners.map((c) => new THREE.Vector3(cmToMeters(c.x), 0.03, cmToMeters(c.z))),
+    );
+    this.outline = new THREE.LineLoop(
+      geo,
+      new THREE.LineBasicMaterial({ color: 0x2b2c30, depthWrite: false }),
+    );
+    this.outline.renderOrder = 5;
+    this.scene.add(this.outline);
+  }
+
+  private select(id: string | null): void {
+    this.selectedId = id;
+    this.rebuildOutline();
     const entry = id === null ? undefined : this.instances.get(id);
     if (entry !== undefined) {
-      const inError =
-        id !== null && this.issues.some((f) => f.severity === "error" && f.itemIds.includes(id));
-      this.outline = new THREE.BoxHelper(entry.group, inError ? 0xb3261e : 0xe59500);
-      this.scene.add(this.outline);
       this.rotateHandle.visible = true;
       this.positionHandle(entry);
     } else {
@@ -693,7 +741,12 @@ class FitRoomApp {
     if (badge instanceof HTMLButtonElement) {
       const errors = this.issues.filter((i) => i.severity === "error").length;
       const warns = this.issues.length - errors;
-      if (errors > 0) {
+      if (errors > 0 && warns > 0) {
+        badge.dataset["state"] = "bad";
+        badge.textContent =
+          `✕ ${errors} problem${errors === 1 ? "" : "s"} · ` +
+          `${warns} warning${warns === 1 ? "" : "s"}`;
+      } else if (errors > 0) {
         badge.dataset["state"] = "bad";
         badge.textContent = `✕ ${errors} problem${errors === 1 ? "" : "s"}`;
       } else if (warns > 0) {
@@ -709,13 +762,18 @@ class FitRoomApp {
     this.updateTopBar();
   }
 
-  /** Live fit feedback while dragging, trailing-debounced to stay smooth. */
+  /** Live fit feedback while dragging, re-checked at most once per frame. */
   private scheduleLiveIssues(movedId: string): void {
-    if (this.liveTimer !== null) clearTimeout(this.liveTimer);
-    this.liveTimer = setTimeout(() => {
-      this.liveTimer = null;
-      this.refreshIssues([movedId]);
-    }, 120);
+    this.liveDirty = movedId;
+    this.requestRender();
+  }
+
+  /** Green "Fits" confirmation on release when the piece has no issue. */
+  private maybeShowFits(id: string): void {
+    if (this.issues.some((issue) => issue.itemIds.includes(id))) return;
+    const item = this.store.state.items.find((i) => i.instanceId === id);
+    if (item === undefined) return;
+    this.fitOverlay.showFits({ ...item.position }, id);
   }
 
   /** Problem list opened from the fit badge; picking one focuses the camera. */
@@ -737,7 +795,10 @@ class FitRoomApp {
           ? undefined
           : this.store.state.items.find((i) => i.instanceId === first);
       const entry = item === undefined ? undefined : CATALOG_MAP.get(item.productId);
-      b.textContent = `${issue.severity === "error" ? "✕" : "!"} ${issue.message}${entry === undefined ? "" : ` — ${entry.name}`}`;
+      const suffix =
+        entry === undefined || issue.message.includes(entry.name) ? "" : ` — ${entry.name}`;
+      b.textContent = `${issue.severity === "error" ? "✕" : "!"} ${issue.message}${suffix}`;
+      b.title = issue.message;
       b.addEventListener("click", () => {
         if (first !== undefined) this.select(first);
         this.focusCameraOn(issue.location);
@@ -912,7 +973,8 @@ class FitRoomApp {
             entry.group.rotation.y = (item.rotationY * Math.PI) / 180;
             this.positionHandle(entry);
             this.updateMeasure();
-            this.requestRender();
+            // Live fit feedback without stutter: re-checked once per frame.
+            this.scheduleLiveIssues(item.instanceId);
           }
         }
         return;
@@ -939,9 +1001,13 @@ class FitRoomApp {
     });
 
     el.addEventListener("pointerup", () => {
-      if (this.liveTimer !== null) {
-        clearTimeout(this.liveTimer);
-        this.liveTimer = null;
+      const releasedId = this.drag?.id ?? (this.rotating ? this.selectedId : null);
+      // Flush one last live check before the commit so the release verdict
+      // matches the final pose.
+      if (this.liveDirty !== null) {
+        const movedId = this.liveDirty;
+        this.liveDirty = null;
+        this.refreshIssues([movedId]);
       }
       if (this.drag !== null || this.rotating) {
         // Commit: the store emits, which runs the full (non-incremental)
@@ -950,6 +1016,7 @@ class FitRoomApp {
       }
       this.drag = null;
       this.rotating = false;
+      if (releasedId !== null) this.maybeShowFits(releasedId);
     });
   }
 
@@ -1211,7 +1278,13 @@ class FitRoomApp {
       this.setOrbitScale(ORBIT_START_SCALE);
     }
     this.updateDollhouse();
-    if (this.outline !== null) this.outline.update();
+    if (this.liveDirty !== null) {
+      // Live fit feedback while dragging: at most one re-check per frame.
+      const movedId = this.liveDirty;
+      this.liveDirty = null;
+      this.refreshIssues([movedId]);
+    }
+    this.updateOutline();
     this.fitOverlay.update(
       this.activeCamera(),
       this.container.clientWidth,
