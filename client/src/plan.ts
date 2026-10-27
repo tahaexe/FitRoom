@@ -75,7 +75,7 @@ export class PlanOverlay {
     cx /= Math.max(1, room.walls.length);
     cz /= Math.max(1, room.walls.length);
 
-    const WALL_OUT_CM = 15;
+    const WALL_OUT_CM = 30;
     const OPENING_IN_CM = 15;
     const spots: Array<{ el: SVGTextElement; x: number; y: number }> = [];
 

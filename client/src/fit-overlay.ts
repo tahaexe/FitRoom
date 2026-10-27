@@ -474,7 +474,7 @@ export class FitOverlay {
       if (!(w > 0)) w = (el.textContent?.length ?? 8) * 8;
       const anchor = el.getAttribute("text-anchor") ?? "middle";
       const x0 = anchor === "start" ? x : anchor === "end" ? x - w : x - w / 2;
-      boxes.push({ x0: x0 - 4, y0: y - 28, x1: x0 + w + 4, y1: y + 4 });
+      boxes.push({ x0: x0 - 8, y0: y - 32, x1: x0 + w + 8, y1: y + 8 });
     }
     return boxes;
   }
@@ -512,8 +512,8 @@ export class FitOverlay {
         y1: p.y - size.h * 0.3,
       };
     };
-    const GAP = 4;
-    for (let round = 0; round < 10; round += 1) {
+    const GAP = 6;
+    for (let round = 0; round < 60; round += 1) {
       let moved = false;
       for (let i = 0; i < placed.length; i += 1) {
         for (let j = i + 1; j < placed.length; j += 1) {
