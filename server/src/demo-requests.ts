@@ -1,7 +1,7 @@
 /**
  * Demo request lists, one per route. `npm run demo:record -- <route>` sends
  * the route's list through the live pipeline with recording on (the
- * assistant list holds the six scripted turns' first rounds plus the two
+ * assistant list holds the six scripted turns' first rounds plus the three
  * brief turns; recording runs the whole multi-round turn per request;
  * `--only furnish` records just the brief turns).
  *

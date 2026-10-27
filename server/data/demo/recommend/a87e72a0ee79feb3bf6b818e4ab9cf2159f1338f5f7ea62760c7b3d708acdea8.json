@@ -1,0 +1,354 @@
+{
+  "route": "recommend",
+  "model": "muse-spark-1.3",
+  "input": {
+    "room": {
+      "name": "Living room 420 × 360",
+      "size_cm": [420, 360],
+      "style": {
+        "tags": ["modern", "neutral"],
+        "colors": ["#E8E2D9", "#A8A29E"]
+      }
+    },
+    "placed": [
+      {
+        "productId": "modern_arm_chair_01",
+        "name": "Nord Leather Armchair",
+        "colors": ["black leather", "oak"]
+      },
+      {
+        "productId": "modern_coffee_table_01",
+        "name": "Slate Coffee Table",
+        "colors": ["warm wood frame", "stone top"]
+      },
+      {
+        "productId": "modern_wooden_cabinet",
+        "name": "Rhythm TV Unit",
+        "colors": ["walnut slats", "black legs"]
+      },
+      {
+        "productId": "sofa_02",
+        "name": "Chester Leather Sofa",
+        "colors": ["black leather", "dark wood"]
+      }
+    ],
+    "request": {
+      "category": "any",
+      "spot": {
+        "wall": "Door wall",
+        "start_cm": 230,
+        "end_cm": 415
+      }
+    },
+    "freeSpace": {
+      "runs": [
+        {
+          "wall": "Door wall",
+          "start_cm": 230,
+          "end_cm": 415,
+          "length_cm": 185,
+          "depth_cm": 78
+        },
+        {
+          "wall": "Right wall (window)",
+          "start_cm": 5,
+          "end_cm": 75,
+          "length_cm": 70,
+          "depth_cm": 150
+        },
+        {
+          "wall": "Back wall (window)",
+          "start_cm": 10,
+          "end_cm": 85,
+          "length_cm": 75,
+          "depth_cm": 38
+        },
+        {
+          "wall": "Back wall (window)",
+          "start_cm": 240,
+          "end_cm": 415,
+          "length_cm": 175,
+          "depth_cm": 70
+        },
+        {
+          "wall": "Left wall",
+          "start_cm": 10,
+          "end_cm": 65,
+          "length_cm": 55,
+          "depth_cm": 150
+        }
+      ],
+      "openAreas": [
+        {
+          "id": "area-1",
+          "x0": 220,
+          "z0": 80,
+          "x1": 330,
+          "z1": 280,
+          "w_cm": 110,
+          "d_cm": 200
+        }
+      ]
+    },
+    "candidates": [
+      {
+        "productId": "Ottoman_01",
+        "name": "Chester Ottoman",
+        "size_cm": [88.5, 62.1, 62.4],
+        "price_usd": 290,
+        "styleTags": ["classic"],
+        "colors": ["black leather"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 96.5,
+          "centre_cm": [322.5, 35.1],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "modern_coffee_table_01",
+        "name": "Slate Coffee Table",
+        "size_cm": [120.2, 60, 39],
+        "price_usd": 340,
+        "styleTags": ["modern"],
+        "colors": ["warm wood frame", "stone top"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 64.8,
+          "centre_cm": [322.5, 34],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "side_table_01",
+        "name": "Pine Side Table",
+        "size_cm": [55, 45, 55.1],
+        "price_usd": 120,
+        "styleTags": ["simple", "Scandinavian"],
+        "colors": ["light wood"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 130,
+          "centre_cm": [322.5, 26.5],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "wooden_display_shelves_01",
+        "name": "Cube Shelf 3×3",
+        "size_cm": [107.8, 37.2, 155.6],
+        "price_usd": 210,
+        "styleTags": ["Scandinavian"],
+        "colors": ["light wood", "grey fabric boxes"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 77.2,
+          "centre_cm": [322.5, 22.6],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "potted_plant_02",
+        "name": "Alocasia in Terracotta",
+        "size_cm": [70.1, 65.7, 84.1],
+        "price_usd": 65,
+        "styleTags": ["any"],
+        "colors": ["green leaves", "terracotta"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 114.9,
+          "centre_cm": [322.5, 36.9],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "painted_wooden_chair_01",
+        "name": "Country Painted Dining Chair",
+        "size_cm": [43.2, 54, 95.6],
+        "price_usd": 160,
+        "styleTags": ["country", "rustic"],
+        "colors": ["painted wood"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 141.8,
+          "centre_cm": [322.5, 31],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "painted_wooden_chair_02",
+        "name": "High-Back Painted Dining Chair",
+        "size_cm": [50.5, 52.3, 99.8],
+        "price_usd": 190,
+        "styleTags": ["country", "classic"],
+        "colors": ["painted wood", "woven rush seat"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 134.5,
+          "centre_cm": [322.5, 30.2],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "Shelf_01",
+        "name": "Compact Oak Bookcase",
+        "size_cm": [100.3, 25.7, 208],
+        "price_usd": 320,
+        "styleTags": ["Scandinavian", "simple"],
+        "colors": ["light oak"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 84.7,
+          "centre_cm": [322.5, 16.9],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "steel_frame_shelves_01",
+        "name": "Steel Frame Double Bookcase",
+        "size_cm": [109.7, 50.2, 214.1],
+        "price_usd": 380,
+        "styleTags": ["industrial", "modern"],
+        "colors": ["black steel", "wood shelves"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 75.3,
+          "centre_cm": [322.5, 29.1],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "steel_frame_shelves_02",
+        "name": "Steel Frame Single Bookcase",
+        "size_cm": [59.3, 50.2, 214.2],
+        "price_usd": 290,
+        "styleTags": ["industrial", "modern"],
+        "colors": ["black steel", "wood shelves"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 125.7,
+          "centre_cm": [322.5, 29.1],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "drawer_cabinet",
+        "name": "Tall Drawer Chest",
+        "size_cm": [114.1, 48.8, 188.1],
+        "price_usd": 640,
+        "styleTags": ["classic", "country"],
+        "colors": ["painted drawers", "wood top"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 70.9,
+          "centre_cm": [322.5, 28.4],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "WoodenTable_03",
+        "name": "Oak Console TV Stand",
+        "size_cm": [132.7, 57.5, 83],
+        "price_usd": 520,
+        "styleTags": ["rustic", "simple"],
+        "colors": ["solid oak"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 52.3,
+          "centre_cm": [322.5, 32.8],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "fitroom_floor_lamp",
+        "name": "Aria Floor Lamp",
+        "size_cm": [40, 40, 160],
+        "price_usd": 189,
+        "styleTags": ["modern", "minimalist"],
+        "colors": ["black metal", "oatmeal fabric shade"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 145,
+          "centre_cm": [322.5, 24],
+          "rotationY": 0
+        }
+      },
+      {
+        "productId": "fitroom_wardrobe",
+        "name": "Oslo Two-Door Wardrobe",
+        "size_cm": [100, 60, 200],
+        "price_usd": 899,
+        "styleTags": ["modern", "Scandinavian"],
+        "colors": ["oak", "black handles"],
+        "spot": {
+          "kind": "run",
+          "wall": "Door wall",
+          "run_cm": [230, 415],
+          "runLength_cm": 185,
+          "spare_cm": 85,
+          "centre_cm": [322.5, 34],
+          "rotationY": 0
+        }
+      }
+    ]
+  },
+  "response": {
+    "recommendations": [
+      {
+        "productId": "fitroom_floor_lamp",
+        "reason": "Fits 185 cm run on Door wall with 145 cm to spare; modern black matches room.",
+        "styleMatch": 0.95
+      },
+      {
+        "productId": "Ottoman_01",
+        "reason": "Fits 185 cm run on Door wall with 96.5 cm to spare; black leather matches sofa.",
+        "styleMatch": 0.85
+      },
+      {
+        "productId": "steel_frame_shelves_02",
+        "reason": "Fits 185 cm run on Door wall with 125.7 cm to spare; modern black steel matches cabinet.",
+        "styleMatch": 0.8
+      }
+    ]
+  },
+  "time": "2026-10-27T19:37:49.798Z"
+}

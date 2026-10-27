@@ -73,6 +73,7 @@ const CATEGORY_LABELS: Record<Exclude<RecommendCategory, "any">, string> = {
   cabinet: "Cabinets",
   bookcase: "Bookcases",
   storage: "Storage",
+  rug: "Rugs",
 };
 
 export interface RecommendDeps {

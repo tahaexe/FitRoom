@@ -1,9 +1,9 @@
 /**
  * Demo assistant requests: the six scripted turns for the demo room (the
  * sample room with `shared/samples/fit-tests/valid.json`) — five
- * arrangements plus the impossible one — and two furnishing briefs on the
- * same demo room (seats 4 classic $2,500; seats 2 modern $1,500), both with
- * `keepExisting` false.
+ * arrangements plus the impossible one — and three furnishing briefs on the
+ * same demo room (seats 4 classic $2,500; seats 2 modern $1,500; seats 4
+ * scandinavian $2,000), all with `keepExisting` false.
  *
  * Each entry is the turn's first round: the customer text, the conversation
  * so far (just that text), the room and the start scene. Later rounds append
@@ -32,13 +32,14 @@ export const ASSISTANT_DEMO_REQUESTS: string[] = [
   "Put the Heritage Grand Sofa on the wall between the door and the corner.",
 ];
 
-/** The two demo furnishing briefs (seats, style, budget, empty room). */
+/** The three demo furnishing briefs (seats, style, budget, empty room). */
 export const ASSISTANT_DEMO_BRIEFS: AssistantBrief[] = [
   { seats: 4, style: "classic", budget: 2500, keepExisting: false },
   { seats: 2, style: "modern", budget: 1500, keepExisting: false },
+  { seats: 4, style: "scandinavian", budget: 2000, keepExisting: false },
 ];
 
-/** Request texts of the two demo briefs, built like the panel builds them. */
+/** Request texts of the three demo briefs, built like the panel builds them. */
 export function assistantDemoBriefRequests(): string[] {
   return ASSISTANT_DEMO_BRIEFS.map((brief) => buildBriefRequest(brief));
 }
@@ -51,7 +52,7 @@ function readJson(file: string): unknown {
   return JSON.parse(readFileSync(file, "utf8")) as unknown;
 }
 
-/** The demo turns, rebuilt deterministically (six arrangements + two briefs). */
+/** The demo turns, rebuilt deterministically (six arrangements + three briefs). */
 export function buildAssistantDemoRequests(): AssistantRequest[] {
   const sharedDir = resolve(serverRoot(), "..", "shared");
   const room = readJson(resolve(sharedDir, "samples", "living-420x360.json")) as RoomLayout;

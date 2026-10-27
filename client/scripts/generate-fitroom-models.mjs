@@ -11,6 +11,8 @@
  * authored POSITION min/max against the catalog within ±1 cm.
  */
 
+/* global Buffer, console, process */
+
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -129,14 +131,67 @@ function boxPart(parts, w, h, d, cx, cy, cz, material) {
   const uvs = [];
   const indices = [];
   const faces = [
-    { n: [1, 0, 0], corners: [[1, -1, -1], [1, -1, 1], [1, 1, 1], [1, 1, -1]] },
-    { n: [-1, 0, 0], corners: [[-1, -1, 1], [-1, -1, -1], [-1, 1, -1], [-1, 1, 1]] },
-    { n: [0, 1, 0], corners: [[-1, 1, -1], [1, 1, -1], [1, 1, 1], [-1, 1, 1]] },
-    { n: [0, -1, 0], corners: [[-1, -1, 1], [1, -1, 1], [1, -1, -1], [-1, -1, -1]] },
-    { n: [0, 0, 1], corners: [[-1, -1, 1], [-1, 1, 1], [1, 1, 1], [1, -1, 1]] },
-    { n: [0, 0, -1], corners: [[1, -1, -1], [1, 1, -1], [-1, 1, -1], [-1, -1, -1]] },
+    {
+      n: [1, 0, 0],
+      corners: [
+        [1, -1, -1],
+        [1, -1, 1],
+        [1, 1, 1],
+        [1, 1, -1],
+      ],
+    },
+    {
+      n: [-1, 0, 0],
+      corners: [
+        [-1, -1, 1],
+        [-1, -1, -1],
+        [-1, 1, -1],
+        [-1, 1, 1],
+      ],
+    },
+    {
+      n: [0, 1, 0],
+      corners: [
+        [-1, 1, -1],
+        [1, 1, -1],
+        [1, 1, 1],
+        [-1, 1, 1],
+      ],
+    },
+    {
+      n: [0, -1, 0],
+      corners: [
+        [-1, -1, 1],
+        [1, -1, 1],
+        [1, -1, -1],
+        [-1, -1, -1],
+      ],
+    },
+    {
+      n: [0, 0, 1],
+      corners: [
+        [-1, -1, 1],
+        [-1, 1, 1],
+        [1, 1, 1],
+        [1, -1, 1],
+      ],
+    },
+    {
+      n: [0, 0, -1],
+      corners: [
+        [1, -1, -1],
+        [1, 1, -1],
+        [-1, 1, -1],
+        [-1, -1, -1],
+      ],
+    },
   ];
-  const faceUv = [[0, 0], [1, 0], [1, 1], [0, 1]];
+  const faceUv = [
+    [0, 0],
+    [1, 0],
+    [1, 1],
+    [0, 1],
+  ];
   for (const face of faces) {
     const base = positions.length / 3;
     for (let i = 0; i < 4; i += 1) {
@@ -179,7 +234,10 @@ function cylinderPart(parts, rTop, rBottom, h, seg, cx, y0, cz, material, capped
     indices.push(a, b, c, b, d, c);
   }
   if (capped) {
-    for (const [ry, ny, flip] of [[y0, -1, true], [y0 + h, 1, false]]) {
+    for (const [ry, ny, flip] of [
+      [y0, -1, true],
+      [y0 + h, 1, false],
+    ]) {
       const base = positions.length / 3;
       pushFloat(positions, [cx, ry, cz]);
       pushFloat(normals, [0, ny, 0]);
@@ -235,11 +293,7 @@ function roundedBoxPart(parts, w, h, d, r, seg, cx, cy, cz, material) {
         p[face.fixed] = face.sign * [hx, hy, hz][face.fixed];
         p[face.u] = (i / seg) * 2 * face.hu - face.hu;
         p[face.v] = (j / seg) * 2 * face.hv - face.hv;
-        const inner = [
-          clamp(p[0], -ix, ix),
-          clamp(p[1], -iy, iy),
-          clamp(p[2], -iz, iz),
-        ];
+        const inner = [clamp(p[0], -ix, ix), clamp(p[1], -iy, iy), clamp(p[2], -iz, iz)];
         const delta = [p[0] - inner[0], p[1] - inner[1], p[2] - inner[2]];
         const len = Math.hypot(delta[0], delta[1], delta[2]) || 1;
         const n = [delta[0] / len, delta[1] / len, delta[2] / len];
@@ -517,13 +571,69 @@ function authoredBox(parts) {
 /* ---------------------------------------------------------------- main -- */
 
 const MODELS = [
-  { id: "rug_160x230", sizeCm: [160, 1, 230], thumb: [[214, 200, 182], [172, 158, 140]], build: () => rugModel(160, 230, "Carpet012") },
-  { id: "rug_200x300", sizeCm: [200, 1, 300], thumb: [[198, 196, 190], [150, 148, 142]], build: () => rugModel(200, 300, "Carpet015") },
-  { id: "rug_240x340", sizeCm: [240, 1, 340], thumb: [[188, 182, 176], [140, 134, 128]], build: () => rugModel(240, 340, "Carpet016") },
-  { id: "fitroom_floor_lamp", sizeCm: [40, 160, 40], thumb: [[90, 88, 86], [40, 38, 36]], build: floorLampModel },
-  { id: "fitroom_wardrobe", sizeCm: [100, 200, 60], thumb: [[172, 140, 108], [120, 92, 64]], build: wardrobeModel },
-  { id: "fitroom_platform_bed", sizeCm: [160, 100, 200], thumb: [[170, 138, 106], [118, 90, 62]], build: bedModel },
-  { id: "fitroom_sofa_3seat", sizeCm: [220, 80, 90], thumb: [[120, 116, 150], [70, 66, 100]], build: sofaModel },
+  {
+    id: "rug_160x230",
+    sizeCm: [160, 1, 230],
+    thumb: [
+      [214, 200, 182],
+      [172, 158, 140],
+    ],
+    build: () => rugModel(160, 230, "Carpet012"),
+  },
+  {
+    id: "rug_200x300",
+    sizeCm: [200, 1, 300],
+    thumb: [
+      [198, 196, 190],
+      [150, 148, 142],
+    ],
+    build: () => rugModel(200, 300, "Carpet015"),
+  },
+  {
+    id: "rug_240x340",
+    sizeCm: [240, 1, 340],
+    thumb: [
+      [188, 182, 176],
+      [140, 134, 128],
+    ],
+    build: () => rugModel(240, 340, "Carpet016"),
+  },
+  {
+    id: "fitroom_floor_lamp",
+    sizeCm: [40, 160, 40],
+    thumb: [
+      [90, 88, 86],
+      [40, 38, 36],
+    ],
+    build: floorLampModel,
+  },
+  {
+    id: "fitroom_wardrobe",
+    sizeCm: [100, 200, 60],
+    thumb: [
+      [172, 140, 108],
+      [120, 92, 64],
+    ],
+    build: wardrobeModel,
+  },
+  {
+    id: "fitroom_platform_bed",
+    sizeCm: [160, 100, 200],
+    thumb: [
+      [170, 138, 106],
+      [118, 90, 62],
+    ],
+    build: bedModel,
+  },
+  {
+    id: "fitroom_sofa_3seat",
+    sizeCm: [220, 80, 90],
+    thumb: [
+      [120, 116, 150],
+      [70, 66, 100],
+    ],
+    build: sofaModel,
+  },
 ];
 
 let failed = 0;
@@ -535,8 +645,7 @@ for (const spec of MODELS) {
   const sy = (box.maxY - box.minY) * 100;
   const sz = (box.maxZ - box.minZ) * 100;
   const [w, h, d] = spec.sizeCm;
-  const ok =
-    Math.abs(sx - w) <= 0.01 && Math.abs(sy - h) <= 0.01 && Math.abs(sz - d) <= 0.01;
+  const ok = Math.abs(sx - w) <= 0.01 && Math.abs(sy - h) <= 0.01 && Math.abs(sz - d) <= 0.01;
   console.log(
     `${spec.id}: authored ${sx.toFixed(2)}x${sy.toFixed(2)}x${sz.toFixed(2)}cm` +
       ` vs catalog ${w}x${h}x${d}cm  ${ok ? "OK" : "MISMATCH"}`,

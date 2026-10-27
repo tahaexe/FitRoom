@@ -66,8 +66,7 @@ export const MODEL_NOTES: Record<string, string> = {
   rug_240x340: "FitRoom Studio original, built in code: flat 240x340cm rug in Carpet016.",
   fitroom_floor_lamp:
     "FitRoom Studio original, built in code: disc base, pole and Fabric040 shade.",
-  fitroom_wardrobe:
-    "FitRoom Studio original, built in code: two-door wardrobe in WoodFloor051.",
+  fitroom_wardrobe: "FitRoom Studio original, built in code: two-door wardrobe in WoodFloor051.",
   fitroom_platform_bed:
     "FitRoom Studio original, built in code: platform bed with headboard in WoodFloor070.",
   fitroom_sofa_3seat:

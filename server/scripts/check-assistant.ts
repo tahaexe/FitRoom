@@ -1,8 +1,8 @@
 /**
  * `npm run check:assistant` — headless assistant check for the demo room.
  *
- * For the demo room and the eight scripted assistant turns (six
- * arrangements plus two furnishing briefs) it replays each
+ * For the demo room and the nine scripted assistant turns (six
+ * arrangements plus three furnishing briefs) it replays each
  * turn from the demo store through the gateway pipeline in demo mode: every
  * round goes to `POST /api/assistant` (served from the store, zero upstream
  * calls), its tool calls run through the shared executor on a draft copy of
@@ -385,7 +385,7 @@ async function main(): Promise<void> {
 
   const rebuilt = buildAssistantDemoRequests();
   const listed = DEMO_REQUESTS["assistant"];
-  check("demo list holds the eight assistant requests", listed.length === 8);
+  check("demo list holds the nine assistant requests", listed.length === 9);
   check(
     "demo list holds the scripted request texts",
     ASSISTANT_DEMO_REQUESTS.length === 6 &&
@@ -396,9 +396,9 @@ async function main(): Promise<void> {
   );
   const briefTexts = assistantDemoBriefRequests();
   check(
-    "demo list holds the two brief requests",
-    ASSISTANT_DEMO_BRIEFS.length === 2 &&
-      briefTexts.length === 2 &&
+    "demo list holds the three brief requests",
+    ASSISTANT_DEMO_BRIEFS.length === 3 &&
+      briefTexts.length === 3 &&
       ASSISTANT_DEMO_BRIEFS.every(
         (brief, index) =>
           isRecord(listed[6 + index]) &&
@@ -868,7 +868,7 @@ async function main(): Promise<void> {
       }
     }
 
-    // Every stored assistant answer is reached by the eight demo turns;
+    // Every stored assistant answer is reached by the nine demo turns;
     // anything else is a leftover of an earlier recording (like the old
     // turn-6 rounds) and must be removed from the committed store.
     const stored = readdirSync(join(dataDir, "demo", "assistant"))
