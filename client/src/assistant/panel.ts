@@ -538,6 +538,7 @@ export class AssistantPanel {
   private addFurnishNotice(text: string): void {
     const log = this.furnishLogEl();
     if (log === null) return;
+    this.clearFurnishProgress();
     const p = document.createElement("p");
     p.className = "assistant-empty";
     p.textContent = text;
@@ -545,15 +546,30 @@ export class AssistantPanel {
     log.scrollTop = log.scrollHeight;
   }
 
+  /** One progress line per turn: each round updates it in place. */
   private addFurnishProgress(text: string): void {
     const log = this.furnishLogEl();
     if (log === null) return;
-    const p = document.createElement("p");
-    p.className = "furnish-progress";
-    p.setAttribute("role", "status");
-    p.textContent = text;
-    log.appendChild(p);
+    const existing = log.querySelector(":scope > .furnish-progress");
+    if (existing !== null) {
+      existing.textContent = text;
+    } else {
+      const p = document.createElement("p");
+      p.className = "furnish-progress";
+      p.setAttribute("role", "status");
+      p.textContent = text;
+      log.appendChild(p);
+    }
     log.scrollTop = log.scrollHeight;
+  }
+
+  /** Drop the progress line when the turn ends (a card or notice replaces it). */
+  private clearFurnishProgress(): void {
+    const log = this.furnishLogEl();
+    if (log === null) return;
+    for (const line of log.querySelectorAll(":scope > .furnish-progress")) {
+      line.remove();
+    }
   }
 
   /**
@@ -569,6 +585,7 @@ export class AssistantPanel {
   ): void {
     const log = this.furnishLogEl();
     if (log === null) return;
+    this.clearFurnishProgress();
     const card = briefResultCard(start, end, this.deps.room, this.deps.catalog, brief);
     const box = document.createElement("div");
     box.className = "assistant-card furnish-card";
@@ -625,6 +642,7 @@ export class AssistantPanel {
     text.textContent = answer;
     box.appendChild(text);
     log.appendChild(box);
+    box.scrollIntoView({ block: "nearest" });
     log.scrollTop = log.scrollHeight;
   }
 
@@ -749,6 +767,7 @@ export class AssistantPanel {
   private addFurnishDemoMiss(message: string): void {
     const log = this.furnishLogEl();
     if (log === null) return;
+    this.clearFurnishProgress();
     const card = document.createElement("div");
     card.className = "assistant-card";
     const note = document.createElement("p");
