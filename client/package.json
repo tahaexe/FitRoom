@@ -10,6 +10,7 @@
     "check:photo-intake": "tsx scripts/check-photo-intake.ts",
     "check:example-room": "tsx scripts/check-example-room.ts",
     "check:orbit-resolution": "tsx scripts/check-orbit-resolution.ts",
+    "check:photo-cards": "tsx scripts/check-photo-cards.ts",
     "check:pointer-ownership": "tsx scripts/check-pointer-ownership.ts",
     "check:guidance": "tsx scripts/check-guidance.ts",
     "check:scene-sync": "tsx scripts/check-scene-sync.ts",

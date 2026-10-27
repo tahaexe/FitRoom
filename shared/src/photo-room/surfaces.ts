@@ -11,15 +11,23 @@
  * - full-frame union masks from SAM instances (`conceptMask`);
  * - wall/floor albedo from the ceiling white reference (albedo 0.9):
  *   `albedo = surface median / ceiling median x 0.9` per channel,
- *   clamped to 0-1; without a ceiling mask the 90th luminance percentile
- *   pixel of the surface's own mask is the albedo reference;
+ *   clamped to 0-1; without a ceiling mask the lit-area median (median
+ *   over the mask pixels at or above the mask's median luminance, so
+ *   bright clutter cannot latch the estimate) is scaled by one number —
+ *   `0.9 x 255 / reference luminance`, where the reference is the 90th
+ *   luminance percentile pixel of the surface's own mask — so the wall
+ *   keeps its hue (a per-channel division by that pixel would cancel it);
  * - floor finish by label family, wood/tile/carpet closest by measured mean
  *   albedo (means computed from the texture files by
  *   `scripts/measure-texture-means.mjs` into `texture-means.json`);
  * - wall finish by label family (`wallpaper` -> wallpaper, else paint);
  * - blending per-photo albedos into one room tint;
  * - wall display colour for a texture normalised to a mean of 1, so the
- *   texture weave shows without darkening the albedo again.
+ *   texture weave shows without darkening the albedo again:
+ *   `wallDisplayLinear` divides in linear light with no clamp (three.js
+ *   colours may exceed 1), so a wall lighter than the texture keeps its
+ *   hue and renders light. `wallDisplayHex` is the legacy clamped sRGB
+ *   form (kept for its long-standing bar, not for the material).
  */
 
 import type { SamInstance } from "../sam.js";
@@ -153,6 +161,44 @@ function maskLuminance(r: number, g: number, b: number): number {
   return 0.2126 * r + 0.7152 * g + 0.0722 * b;
 }
 
+interface RankedPixel {
+  lum: number;
+  r: number;
+  g: number;
+  b: number;
+}
+
+/** Mask pixels (exclusions apply) ranked dimmest first. Empty when none qualify. */
+function rankedMaskPixels(
+  image: RgbaImage,
+  include: ArrayLike<number>,
+  exclude?: ArrayLike<number> | null,
+): RankedPixel[] {
+  const n = image.width * image.height;
+  const order: RankedPixel[] = [];
+  if (n <= 0) return order;
+  for (let i = 0; i < n; i += 1) {
+    if ((include[i] ?? 0) === 0) continue;
+    if (exclude !== undefined && exclude !== null && (exclude[i] ?? 0) !== 0) continue;
+    const o = i * 4;
+    const r = image.data[o] ?? 0;
+    const g = image.data[o + 1] ?? 0;
+    const b = image.data[o + 2] ?? 0;
+    order.push({ lum: maskLuminance(r, g, b), r, g, b });
+  }
+  order.sort((a, b) => a.lum - b.lum);
+  return order;
+}
+
+function percentilePick<T>(ranked: T[], percentile: number): T | null {
+  if (ranked.length === 0) return null;
+  const idx = percentileOfSorted(
+    ranked.map((_, i) => i),
+    percentile,
+  );
+  return ranked[idx] ?? null;
+}
+
 /**
  * Colour of the pixel at the `percentile` luminance rank inside the mask
  * (window/door exclusions apply when given). The bright end of a shaded
@@ -164,31 +210,66 @@ export function percentileMaskColor(
   exclude?: ArrayLike<number> | null,
   percentile = 0.9,
 ): string | null {
-  const n = image.width * image.height;
-  if (n <= 0) return null;
-  const order: Array<{ lum: number; r: number; g: number; b: number }> = [];
-  for (let i = 0; i < n; i += 1) {
-    if ((include[i] ?? 0) === 0) continue;
-    if (exclude !== undefined && exclude !== null && (exclude[i] ?? 0) !== 0) continue;
-    const o = i * 4;
-    const r = image.data[o] ?? 0;
-    const g = image.data[o + 1] ?? 0;
-    const b = image.data[o + 2] ?? 0;
-    order.push({ lum: maskLuminance(r, g, b), r, g, b });
-  }
-  if (order.length === 0) return null;
-  order.sort((a, b) => a.lum - b.lum);
-  const pick = order[
-    percentileOfSorted(
-      order.map((_, i) => i),
-      percentile,
-    )
-  ] as {
-    r: number;
-    g: number;
-    b: number;
-  };
+  const pick = percentilePick(rankedMaskPixels(image, include, exclude), percentile);
+  if (pick === null) return null;
   return rgbToHex(pick.r, pick.g, pick.b);
+}
+
+/** Luminance of the pixel at the `percentile` luminance rank inside the mask. */
+export function percentileMaskLuminance(
+  image: RgbaImage,
+  include: ArrayLike<number>,
+  exclude?: ArrayLike<number> | null,
+  percentile = 0.9,
+): number | null {
+  const pick = percentilePick(rankedMaskPixels(image, include, exclude), percentile);
+  return pick === null ? null : pick.lum;
+}
+
+/**
+ * Per-channel median colour of the lit area: the mask pixels at or above
+ * the mask's median luminance. Shade and dark furniture pull the plain
+ * median down; the lit half holds the surface's own hue.
+ */
+export function litMedianMaskColor(
+  image: RgbaImage,
+  include: ArrayLike<number>,
+  exclude?: ArrayLike<number> | null,
+): string | null {
+  const ranked = rankedMaskPixels(image, include, exclude);
+  if (ranked.length === 0) return null;
+  const gate = ranked[Math.floor(ranked.length / 2)]?.lum ?? 0;
+  const rs: number[] = [];
+  const gs: number[] = [];
+  const bs: number[] = [];
+  for (const p of ranked) {
+    if (p.lum < gate) continue;
+    rs.push(p.r);
+    gs.push(p.g);
+    bs.push(p.b);
+  }
+  if (rs.length === 0) return null;
+  return rgbToHex(medianOf(rs), medianOf(gs), medianOf(bs));
+}
+
+/**
+ * Albedo from a surface median and a reference luminance: the median
+ * scaled by the single number `0.9 x 255 / reference`, never channel by
+ * channel, so the surface keeps its hue. A uniform fit keeps a bright
+ * median inside `#RRGGBB` without clipping one channel first.
+ */
+export function albedoFromLuminance(
+  surfaceHex: string | null,
+  referenceLuminance: number | null,
+): string | null {
+  if (surfaceHex === null || referenceLuminance === null) return null;
+  if (!HEX_RE.test(surfaceHex)) return null;
+  if (!(referenceLuminance > 0)) return null;
+  const [sr, sg, sb] = hexToRgb(surfaceHex);
+  const k = (CEILING_REFERENCE_ALBEDO * 255) / referenceLuminance;
+  const fit = Math.max(sr * k, sg * k, sb * k);
+  const s = fit > 255 ? 255 / fit : 1;
+  return rgbToHex(sr * k * s, sg * k * s, sb * k * s);
 }
 
 /** Albedo from a surface median and a ceiling/reference median. */
@@ -308,8 +389,10 @@ export function ceilingMedianColor(
 
 /**
  * Wall albedo of one photo: the wall median divided by the ceiling median
- * (albedo 0.9) per channel. Without a ceiling mask the 90th luminance
- * percentile pixel of the wall's own mask is the albedo reference.
+ * (albedo 0.9) per channel. Without a ceiling mask the lit-area median is
+ * scaled by the single number `0.9 x 255 / reference luminance` (the 90th
+ * luminance percentile pixel of the wall's own mask), so the tint keeps
+ * the wall's hue and lightness.
  */
 export function wallAlbedoColor(
   image: RgbaImage,
@@ -323,7 +406,8 @@ export function wallAlbedoColor(
   if (surface === null) return null;
   const ceiling = ceilingMedianColor(image, instances, width, height);
   if (ceiling !== null) return albedoFromMedianPair(surface, ceiling);
-  return percentileMaskColor(image, include, exclude, 0.9);
+  const lit = litMedianMaskColor(image, include, exclude);
+  return albedoFromLuminance(lit, percentileMaskLuminance(image, include, exclude, 0.9));
 }
 
 /**
@@ -341,7 +425,8 @@ export function floorAlbedoColor(
   if (surface === null) return null;
   const ceiling = ceilingMedianColor(image, instances, width, height);
   if (ceiling !== null) return albedoFromMedianPair(surface, ceiling);
-  return percentileMaskColor(image, include, null, 0.9);
+  const lit = litMedianMaskColor(image, include);
+  return albedoFromLuminance(lit, percentileMaskLuminance(image, include, null, 0.9));
 }
 
 function colorDistance(a: [number, number, number], b: [number, number, number]): number {
@@ -394,11 +479,43 @@ export function pickWallTexture(family: RoomLabelWallFamily | string | null | un
 }
 
 /**
- * Display colour to put on the wall material for one albedo over a wall
- * texture normalised to a mean of 1: `albedo / textureMean` per channel, so
- * the weave shows without darkening the albedo again. Falls back to the
- * albedo itself when the texture mean is unknown.
+ * Legacy clamped sRGB form of the wall display colour: `albedo /
+ * textureMean` per channel, each channel clamped to 255. A wall lighter
+ * than the texture clips to the texture's own grey, so the material uses
+ * `wallDisplayLinear` instead. Kept for its long-standing bar. Falls back
+ * to the albedo itself when the texture mean is unknown.
  */
+function srgbChannelToLinear(c: number): number {
+  const s = c / 255;
+  return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+}
+
+/**
+ * Display colour to put on the wall material for one albedo over a wall
+ * texture: the albedo divided by the texture mean in linear light, with
+ * no clamp. Channels may exceed 1 (three.js colours may): a wall lighter
+ * than the texture keeps the albedo's hue and renders light instead of
+ * clipping to the texture's own grey. Falls back to null when the albedo
+ * or the texture mean is unknown, so the caller can use the albedo itself.
+ */
+export function wallDisplayLinear(
+  albedoHex: string | null | undefined,
+  textureId: string | null | undefined,
+): [number, number, number] | null {
+  if (typeof albedoHex !== "string" || !HEX_RE.test(albedoHex)) return null;
+  const meanHex = (
+    textureId !== null && textureId !== undefined ? TEXTURE_MEAN_COLORS[textureId] : undefined
+  ) as string | undefined;
+  if (meanHex === undefined || !HEX_RE.test(meanHex)) return null;
+  const [ar, ag, ab] = hexToRgb(albedoHex);
+  const [mr, mg, mb] = hexToRgb(meanHex);
+  const lr = srgbChannelToLinear(mr);
+  const lg = srgbChannelToLinear(mg);
+  const lb = srgbChannelToLinear(mb);
+  if (!(lr > 0) || !(lg > 0) || !(lb > 0)) return null;
+  return [srgbChannelToLinear(ar) / lr, srgbChannelToLinear(ag) / lg, srgbChannelToLinear(ab) / lb];
+}
+
 export function wallDisplayHex(
   albedoHex: string | null | undefined,
   textureId: string | null | undefined,

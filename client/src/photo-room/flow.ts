@@ -43,6 +43,7 @@ import {
 } from "./example";
 import { processPhotoFile, type IntakePhoto } from "./intake";
 import { clearPhoto, loadPhoto, savePhoto, type StoredPhoto } from "./photo-store";
+import { errorRecovery, nextIsPrimary } from "./cards";
 import {
   analyseWallPhoto,
   cornersFound,
@@ -761,17 +762,29 @@ export class PhotoFlow {
       const message = document.createElement("p");
       message.className = "photo-sheet-bad";
       message.textContent = state.error;
-      const retry = document.createElement("button");
-      retry.type = "button";
-      retry.className = "photo-primary";
-      retry.textContent = "Try again";
-      retry.addEventListener("click", () => void this.analyse(letter, this.tapFor(letter)));
-      const retake = document.createElement("button");
-      retake.type = "button";
-      retake.className = "photo-quiet";
-      retake.textContent = "Retake";
-      retake.addEventListener("click", () => void this.retake(letter));
-      sheet.append(message, retry, retake);
+      // An empty wall/floor answer says what to retake: no "Try again"
+      // (it would send the same request for the same answer). Time-outs,
+      // network errors and caps keep it.
+      if (errorRecovery(state.error) === "retake") {
+        const retake = document.createElement("button");
+        retake.type = "button";
+        retake.className = "photo-primary";
+        retake.textContent = "Retake";
+        retake.addEventListener("click", () => void this.retake(letter));
+        sheet.append(message, retake);
+      } else {
+        const retry = document.createElement("button");
+        retry.type = "button";
+        retry.className = "photo-primary";
+        retry.textContent = "Try again";
+        retry.addEventListener("click", () => void this.analyse(letter, this.tapFor(letter)));
+        const retake = document.createElement("button");
+        retake.type = "button";
+        retake.className = "photo-quiet";
+        retake.textContent = "Retake";
+        retake.addEventListener("click", () => void this.retake(letter));
+        sheet.append(message, retry, retake);
+      }
       return sheet;
     }
     if (state.demoMiss) {
@@ -862,14 +875,17 @@ export class PhotoFlow {
     }
     const actions = document.createElement("div");
     actions.className = "photo-row";
+    // Any ✕ makes "Retake" the primary button and "Next wall" secondary;
+    // with every check passing "Next wall" stays primary.
+    const failed = !nextIsPrimary({ bothCornersFound: both, floorLineFound: floor });
     const retake = document.createElement("button");
     retake.type = "button";
-    retake.className = "photo-quiet";
+    retake.className = failed ? "photo-primary" : "photo-quiet";
     retake.textContent = "Retake";
     retake.addEventListener("click", () => void this.retake(letter));
     const next = document.createElement("button");
     next.type = "button";
-    next.className = "photo-primary";
+    next.className = failed ? "photo-quiet" : "photo-primary";
     next.textContent = letter === "D" ? "Continue to tape" : "Next wall";
     next.addEventListener("click", () => this.next(letter));
     actions.append(retake, next);

@@ -1,7 +1,9 @@
 /**
  * Segment one wall photo: `postSegment` for `wall`, `floor`, `ceiling`,
  * `door` and `window` in parallel (with progress), decoded with the shared
- * SAM decoder, then solved for the instant check.
+ * SAM decoder, then solved for the instant check. When the `floor` answer
+ * is empty the client asks once more with the concept `carpet` and uses
+ * its instances as the floor, stopping only when both answers are empty.
  *
  * Demo mode answers `demo-miss` for the segment route, which is reported
  * plainly (never a silent failure) with a way to switch Live AI on.
@@ -18,6 +20,13 @@ import {
 } from "@fitroom/shared";
 import { postSegment } from "../api";
 import { segmentInstances } from "../capture/sam";
+import {
+  FALLBACK_DECODE_CONCEPT,
+  FLOOR_FALLBACK_CONCEPT,
+  NO_FLOOR_MESSAGE,
+  NO_WALL_MESSAGE,
+  isEmptyAnswerText,
+} from "./cards";
 import { computeSurfaceColors } from "./surfaces";
 
 export const SEGMENT_CONCEPTS = ["wall", "floor", "ceiling", "door", "window"] as const;
@@ -78,6 +87,41 @@ function textOf(data: unknown): string | null {
 }
 
 /**
+ * The one-shot floor fallback: a single `carpet` request, decoded as floor
+ * instances so they join the floor mask. Resolves null when both answers
+ * are empty. The extra call happens only on an empty floor answer.
+ */
+async function requestFloorFallback(
+  segUrl: string,
+  dims: { width: number; height: number },
+  onProgress: SegmentProgress,
+): Promise<SamInstance[] | { demoMiss: true } | null> {
+  onProgress(SEGMENT_CONCEPTS.length, SEGMENT_CONCEPTS.length + 1);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SEGMENT_TIMEOUT_MS);
+  try {
+    const result = await postSegment(
+      { image: segUrl, concept: FLOOR_FALLBACK_CONCEPT },
+      { signal: controller.signal },
+    );
+    onProgress(SEGMENT_CONCEPTS.length + 1, SEGMENT_CONCEPTS.length + 1);
+    if (result.status === "demo-miss") return { demoMiss: true };
+    if (result.status !== "ok") {
+      throw new Error(
+        result.status === "error" || result.status === "capped"
+          ? result.message
+          : "The AI service is unreachable.",
+      );
+    }
+    const text = textOf(result.data);
+    if (text === null || isEmptyAnswerText(text)) return null;
+    return segmentInstances(FALLBACK_DECODE_CONCEPT, text, dims);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Segment one 1280 px photo and solve it for the instant check.
  * Placeholder tapes only scale the height readout (corners, lines and
  * tilt never depend on them). Throws a plain-English error, except
@@ -122,15 +166,21 @@ export async function analyseWallPhoto(
     const text = textOf(result.data);
     // A wall without windows, doors or a ceiling in view is normal: a
     // missing or empty answer for an optional concept holds zero instances
-    // and the analysis goes on. Only a missing or empty wall or floor
-    // answer stops the instant check, with a plain reason.
-    if (text === null || text.trim().length === 0) {
-      if (concept === "wall" || concept === "floor") {
-        throw new Error(
-          concept === "wall"
-            ? "The room scanner found no wall in that photo."
-            : "The room scanner found no floor in that photo.",
+    // and the analysis goes on. An empty wall answer stops the instant
+    // check with a retake reason; an empty floor answer first tries the
+    // one-shot carpet fallback and stops only when both are empty.
+    if (text === null || isEmptyAnswerText(text)) {
+      if (concept === "wall") throw new Error(NO_WALL_MESSAGE);
+      if (concept === "floor") {
+        const fallback = await requestFloorFallback(
+          segUrl,
+          { width: segWidth, height: segHeight },
+          onProgress,
         );
+        if (fallback === null) throw new Error(NO_FLOOR_MESSAGE);
+        if ("demoMiss" in fallback) return { demoMiss: true };
+        instances.push(...fallback);
+        continue;
       }
       continue;
     }

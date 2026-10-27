@@ -5,6 +5,8 @@
  * - `POST /api/room/segment` answers `{ concept, text }` and
  *   `POST /api/room/label` answers a valid room label, both `mock` first
  *   and `cache` on repeat (a cache hit writes no upstream line);
+ * - the `carpet` floor-fallback concept rides the same segment route,
+ *   cache and metering (`mock` first, `cache` on repeat);
  * - metering lines carry images and USD (segment: `images: 1`, USD 0.0025);
  * - a label demo replay answers from the store, while a segment request in
  *   demo mode gives `demo-miss` (segment answers never enter the store);
@@ -299,6 +301,42 @@ async function main(): Promise<void> {
       JSON.stringify(labMock),
     );
     check("mock mode writes no upstream line", !sources.includes("upstream"), sources.join(","));
+
+    // 3b. Carpet: the floor-fallback concept rides the same segment route,
+    // cache and metering as every other concept.
+    const carpetBody = { concept: "carpet", image: SYNTHETIC_TEST_JPEG };
+    const carpetFirst = await jar.post("room/segment", carpetBody, { live: true, ip });
+    const carpetSecond = await jar.post("room/segment", carpetBody, { live: true, ip });
+    const carpetData = isRecord(carpetFirst.json) ? carpetFirst.json["data"] : null;
+    check(
+      "carpet answers its text in mock mode",
+      carpetFirst.status === 200 &&
+        isRecord(carpetFirst.json) &&
+        carpetFirst.json["status"] === "ok" &&
+        carpetFirst.json["source"] === "mock" &&
+        isRecord(carpetData) &&
+        typeof carpetData["text"] === "string" &&
+        (carpetData["text"] as string).length > 0,
+      JSON.stringify(carpetFirst.json)?.slice(0, 200),
+    );
+    check(
+      "carpet repeats from the cache",
+      carpetSecond.status === 200 &&
+        isRecord(carpetSecond.json) &&
+        carpetSecond.json["source"] === "cache" &&
+        isRecord(carpetSecond.json["data"]) &&
+        (carpetSecond.json["data"] as Record<string, unknown>)["text"] ===
+          (carpetData as Record<string, unknown>)?.["text"],
+      JSON.stringify(carpetSecond.json)?.slice(0, 200),
+    );
+    const carpetLines = costsLines(logsMain)
+      .slice(-2)
+      .map((l) => l[4]);
+    check(
+      "carpet metering holds a mock line then a cache line",
+      carpetLines.join(",") === "mock,cache",
+      carpetLines.join(","),
+    );
 
     // 4. Label demo replay; segment demo-miss.
     const demoJar = new Jar(base);

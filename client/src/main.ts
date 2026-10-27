@@ -23,7 +23,7 @@ import {
   isHealthResponse,
   orientedFootprint,
   setRectangleWallLength,
-  wallDisplayHex,
+  wallDisplayLinear,
   type RenderWallView,
 } from "@fitroom/shared";
 import roomJson from "../../shared/samples/living-420x360.json";
@@ -164,22 +164,36 @@ export function wallTextureIdFor(surfaceId: string | null | undefined): string {
   return "PaintedPlaster017";
 }
 
+/** `#RRGGBB` to linear-light RGB (the working space `Color.setRGB` takes). */
+function hexToLinearTriple(hex: string): [number, number, number] {
+  const v = parseInt(hex.slice(1), 16);
+  const toLin = (c: number): number => {
+    const s = c / 255;
+    return s <= 0.04045 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  };
+  return [toLin((v >> 16) & 255), toLin((v >> 8) & 255), toLin(v & 255)];
+}
+
 /**
- * Display colour over the wall texture: the photo albedo divided by the
- * finish mean (the texture is normalised to a mean of 1), else neutral.
+ * Display colour over the wall texture in linear light: the photo albedo
+ * divided by the finish mean (the texture is normalised to a mean of 1),
+ * else neutral (`#F1ECE2`, the old `setHex` default, converted). Channels
+ * may exceed 1 — `Color.setRGB` takes them as is — so a wall lighter than
+ * the texture keeps its hue and renders light instead of clipping to the
+ * texture's own grey.
  */
-export function wallTintFor(
+export function wallTintLinearFor(
   surfaceId: string | null | undefined,
   textureId?: string | null,
-): number {
-  if (typeof surfaceId === "string" && /^#[0-9a-fA-F]{6}$/.test(surfaceId)) {
-    const display =
-      textureId === undefined || textureId === null
-        ? surfaceId
-        : (wallDisplayHex(surfaceId, textureId) ?? surfaceId);
-    return parseInt(display.slice(1), 16);
+): [number, number, number] {
+  if (typeof surfaceId !== "string" || !/^#[0-9a-fA-F]{6}$/.test(surfaceId)) {
+    return hexToLinearTriple("#F1ECE2");
   }
-  return 0xf1ece2;
+  if (textureId !== undefined && textureId !== null) {
+    const display = wallDisplayLinear(surfaceId, textureId);
+    if (display !== null) return display;
+  }
+  return hexToLinearTriple(surfaceId);
 }
 
 /** ambientCG PBR on the shared wall material, tinted toward the photo. */
@@ -198,7 +212,7 @@ function dressWalls(onLoad: () => void, wallId?: string, wallTint?: string): voi
   normalMap.repeat.set(2, 1);
   WALL_MATERIAL.map = map;
   WALL_MATERIAL.normalMap = normalMap;
-  WALL_MATERIAL.color.setHex(wallTintFor(wallTint, finish));
+  WALL_MATERIAL.color.setRGB(...wallTintLinearFor(wallTint, finish));
   WALL_MATERIAL.needsUpdate = true;
 }
 

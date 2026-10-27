@@ -5,14 +5,17 @@
  * Body: `{ image, concept }` with `image` a JPEG data URL (the client sends
  * at most 1280 px on the long side; the server rejects anything that is not
  * JPEG or decodes to over 1 MB) and `concept` one of `wall`, `floor`,
- * `ceiling`, `door`, `window`. The server makes one SAM request and answers
- * `data: { concept, text }`, where `text` is the segmentation output text.
- * The server never decodes masks (the Worker has 10 ms of CPU per request):
- * the client turns the text into instances with `@meta-sam/parser`.
+ * `ceiling`, `door`, `window`, `carpet`. The server makes one SAM request
+ * and answers `data: { concept, text }`, where `text` is the segmentation
+ * output text. The server never decodes masks (the Worker has 10 ms of CPU
+ * per request): the client turns the text into instances with
+ * `@meta-sam/parser`. `carpet` exists only as the one-shot fallback the
+ * client asks when the `floor` answer is empty; its instances join the
+ * floor mask.
  *
  * Cost and caps: one metering line per SAM request (`images: 1`, USD from
  * the pricing table). A SAM request weighs 0.2 of a call toward the
- * session call cap and the per-IP rate limit (a photo's five concepts make
+ * session call cap and the per-IP rate limit (a photo's concepts make about
  * one call); its USD counts in full toward the session and global USD caps.
  * Cache is per key; a text over 512 KB is returned but not cached. Segment
  * answers are never added to the bundled demo store (size): in demo mode
@@ -37,7 +40,14 @@ export { extractSamOutputText };
 export const SEGMENT_FRIENDLY_ERROR =
   "The room scanner couldn't segment that photo just now. Please try again.";
 
-export const ROOM_SEGMENT_CONCEPTS = ["wall", "floor", "ceiling", "door", "window"] as const;
+export const ROOM_SEGMENT_CONCEPTS = [
+  "wall",
+  "floor",
+  "ceiling",
+  "door",
+  "window",
+  "carpet",
+] as const;
 
 export type RoomSegmentConcept = (typeof ROOM_SEGMENT_CONCEPTS)[number];
 
@@ -65,7 +75,7 @@ function parseRoomSegmentBody(body: unknown): ParsedBody | { error: string } {
     typeof concept !== "string" ||
     !(ROOM_SEGMENT_CONCEPTS as readonly string[]).includes(concept)
   ) {
-    return { error: "The concept is wall, floor, ceiling, door or window." };
+    return { error: "The concept is wall, floor, ceiling, door, window or carpet." };
   }
   const size = jpegDataUrlSize(record["image"]);
   if (size === null) {

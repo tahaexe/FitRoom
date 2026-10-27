@@ -290,7 +290,7 @@ export const SAM_FRIENDLY_ERROR =
   "The room scanner couldn't segment that photo just now. Please try again.";
 
 export interface SamCallOptions {
-  /** One short noun concept: wall, floor, ceiling, door or window. */
+  /** One short noun concept: wall, floor, ceiling, door, window or carpet. */
   concept: string;
   /** The room photo as a JPEG data URL. */
   imageDataUrl: string;

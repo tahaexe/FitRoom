@@ -12,6 +12,15 @@
  * - a floor of a texture's own mean colour picks that texture (measured
  *   means, never hand-typed);
  * - a light grey-beige wall never renders brown.
+ * - without a ceiling the tint scales the lit-area median by one number:
+ *   a warm wall under a shading gradient keeps its hue (tint Lab a* and
+ *   b* each within 4 of the lit median), and the single-scalar helper
+ *   keeps channel ratios;
+ * - the material colour divides in linear light with no per-channel
+ *   clamp: for #D9D4CE, #EEBA75 and the sample room's own wall colour
+ *   (#F1ECE2, the neutral the untinted sample room renders) the material
+ *   colour times the texture mean gives back the albedo within 2 % per
+ *   channel.
  *
  * Prints PASS/FAIL per check, exits non-zero on any FAIL. No Meta calls.
  */
@@ -21,11 +30,14 @@ import { existsSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  albedoFromLuminance,
   albedoFromMedianPair,
   blendWallTints,
   CARPET_FLOORS,
+  conceptMask,
   CONCRETE_FLOORS,
   floorAlbedoColor,
+  litMedianMaskColor,
   medianMaskColor,
   percentileMaskColor,
   pickFloorTexture,
@@ -35,6 +47,7 @@ import {
   TILE_FLOORS,
   wallAlbedoColor,
   wallDisplayHex,
+  wallDisplayLinear,
   WOOD_FLOORS,
   type RgbaImage,
 } from "../shared/src/photo-room/surfaces.js";
@@ -308,6 +321,89 @@ const LIGHT_WALL = "#D8D2C4";
     const p90 = percentileMaskColor(grad, inc, null, 0.9);
     check("p90 is bright end", p90 !== null && hexToRgb(p90 as string)[0] >= 200, p90 ?? "null");
   }
+}
+
+// ---- wall tint keeps its hue and lightness without a ceiling ----
+const WARM_WALL = "#E3CFA5";
+{
+  const synth = shadedRoomImage(WARM_WALL);
+  const wall = fullMaskInstance("wall", "B-wall", 0, 6, 59, 11, 60, 12);
+  const tint = wallAlbedoColor(synth, [wall], 60, 12);
+  const lit = litMedianMaskColor(synth, conceptMask([wall], "wall", 60, 12));
+  if (tint !== null && lit !== null) {
+    const [, ta, tb] = hexToLab(tint);
+    const [, la, lb] = hexToLab(lit);
+    check(
+      "warm tint keeps a* without ceiling",
+      Math.abs(ta - la) <= 4,
+      `${tint} a*=${ta.toFixed(2)} vs ${lit} a*=${la.toFixed(2)}`,
+    );
+    check(
+      "warm tint keeps b* without ceiling",
+      Math.abs(tb - lb) <= 4,
+      `${tint} b*=${tb.toFixed(2)} vs ${lit} b*=${lb.toFixed(2)}`,
+    );
+  } else {
+    check("warm tint keeps a* without ceiling", false, tint ?? "null tint");
+    check("warm tint keeps b* without ceiling", false, tint ?? "null tint");
+  }
+  // The single-scalar helper keeps channel ratios (never divides per channel).
+  const scaled = albedoFromLuminance("#CEC2A2", 200);
+  check(
+    "luminance albedo keeps channel ratios",
+    scaled !== null &&
+      (() => {
+        const [sr, sg, sb] = hexToRgb("#CEC2A2");
+        const [tr, tg, tb] = hexToRgb(scaled as string);
+        return Math.abs(tr / tg - sr / sg) <= 0.03 && Math.abs(tb / tg - sb / sg) <= 0.03;
+      })(),
+    scaled ?? "null",
+  );
+  check(
+    "luminance albedo rejects nulls",
+    albedoFromLuminance(null, 200) === null &&
+      albedoFromLuminance("#CEC2A2", null) === null &&
+      albedoFromLuminance("#CEC2A2", 0) === null &&
+      albedoFromLuminance("nope", 200) === null,
+  );
+}
+
+// ---- material colour round-trips the albedo in linear light ----
+{
+  const mean = TEXTURE_MEAN_COLORS["PaintedPlaster017"] as string;
+  const [mr, mg, mb] = hexToRgb(mean);
+  const meanLin = [mr, mg, mb].map(srgbToLinear);
+  // #F1ECE2 is the sample room's own wall colour: the neutral the
+  // untinted sample room renders (`wallTintLinearFor` falls back to it).
+  for (const albedo of ["#D9D4CE", "#EEBA75", "#F1ECE2"]) {
+    const display = wallDisplayLinear(albedo, "PaintedPlaster017");
+    const ok =
+      display !== null &&
+      (() => {
+        const [ar, ag, ab] = hexToRgb(albedo);
+        const want = [ar, ag, ab].map(srgbToLinear);
+        return (display as [number, number, number]).every((c, i) => {
+          const rendered = c * (meanLin[i] as number);
+          const target = want[i] as number;
+          return Math.abs(rendered - target) / Math.max(target, 1e-6) <= 0.02;
+        });
+      })();
+    check(`linear wall renders albedo ${albedo}`, ok, JSON.stringify(display));
+  }
+  // No per-channel clamp: a wall lighter than the texture exceeds 1
+  // instead of clipping to the texture's own grey.
+  const light = wallDisplayLinear("#D9D4CE", "PaintedPlaster017");
+  check(
+    "light wall exceeds 1 instead of clipping",
+    light !== null && (light as [number, number, number]).some((c) => c > 1),
+    JSON.stringify(light),
+  );
+  check(
+    "linear wall falls back to null",
+    wallDisplayLinear(null, "PaintedPlaster017") === null &&
+      wallDisplayLinear("#D9D4CE", "NoSuchTexture") === null &&
+      wallDisplayLinear("nope", "PaintedPlaster017") === null,
+  );
 }
 
 if (failures > 0) {
