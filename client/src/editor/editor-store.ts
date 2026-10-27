@@ -10,8 +10,29 @@
  * length and its new "measured" mark undo together.
  */
 
-import type { RoomLayout } from "@fitroom/shared";
+import type { RoomDraft, RoomLayout, WallLetter } from "@fitroom/shared";
 import type { PhotoDraftMeta } from "../photo-room/flow";
+
+export type PhotoCornerPoint = [number, number];
+
+export interface PhotoCornerSet {
+  m1: PhotoCornerPoint;
+  m2: PhotoCornerPoint;
+  m3: PhotoCornerPoint;
+  m4: PhotoCornerPoint;
+}
+
+/** Photo session the undo store carries with the layout: one undo restores both. */
+export interface PhotoSession {
+  /** Latest solver output (photos carry the current corners). */
+  draft: RoomDraft;
+  /** Photo frame per wall (the solver keeps no size). */
+  sizes: Record<WallLetter, { width: number; height: number }>;
+  /** Which wall the confirm view shows large. */
+  activeWall: WallLetter;
+  /** Walls the shopper has already looked at. */
+  seen: WallLetter[];
+}
 
 export type EditorSelection =
   | { kind: "wall"; id: string }
@@ -28,11 +49,21 @@ function cloneDraft(draft: PhotoDraftMeta | null): PhotoDraftMeta | null {
   return JSON.parse(JSON.stringify(draft)) as PhotoDraftMeta;
 }
 
+function cloneSession(session: PhotoSession | null): PhotoSession | null {
+  if (session === null) return null;
+  return JSON.parse(JSON.stringify(session)) as PhotoSession;
+}
+
 export class EditorStore {
   room: RoomLayout;
   draft: PhotoDraftMeta | null = null;
+  photo: PhotoSession | null = null;
   selection: EditorSelection = null;
-  private past: Array<{ room: RoomLayout; draft: PhotoDraftMeta | null }> = [];
+  private past: Array<{
+    room: RoomLayout;
+    draft: PhotoDraftMeta | null;
+    photo: PhotoSession | null;
+  }> = [];
   private listeners = new Set<() => void>();
   private committedListeners = new Set<(room: RoomLayout) => void>();
 
@@ -76,19 +107,38 @@ export class EditorStore {
     this.draft = cloneDraft(draft);
   }
 
+  /** Photo session (solver corners + active wall); undo carries it with the layout. */
+  setPhoto(session: PhotoSession | null): void {
+    this.photo = cloneSession(session);
+    this.emit();
+  }
+
   /** One undo step around a pure room transform (plus its draft marks). */
-  commit(next: RoomLayout, nextDraft?: PhotoDraftMeta | null): void {
-    this.past.push({ room: cloneRoom(this.room), draft: cloneDraft(this.draft) });
+  commit(
+    next: RoomLayout,
+    nextDraft?: PhotoDraftMeta | null,
+    nextPhoto?: PhotoSession | null,
+  ): void {
+    this.past.push({
+      room: cloneRoom(this.room),
+      draft: cloneDraft(this.draft),
+      photo: cloneSession(this.photo),
+    });
     if (this.past.length > 60) this.past.shift();
     this.room = next;
     if (nextDraft !== undefined) this.draft = cloneDraft(nextDraft);
+    if (nextPhoto !== undefined) this.photo = cloneSession(nextPhoto);
     this.emit();
     this.emitCommitted();
   }
 
   /** Push the pre-drag state so the whole drag undoes as one edit. */
   checkpoint(): void {
-    this.past.push({ room: cloneRoom(this.room), draft: cloneDraft(this.draft) });
+    this.past.push({
+      room: cloneRoom(this.room),
+      draft: cloneDraft(this.draft),
+      photo: cloneSession(this.photo),
+    });
     if (this.past.length > 60) this.past.shift();
   }
 
@@ -96,6 +146,19 @@ export class EditorStore {
   preview(next: RoomLayout): void {
     this.room = next;
     this.emit();
+  }
+
+  /** Settle a photo-confirm drag: pre-drag state already checkpointed, so no new step. */
+  settleDrag(
+    next: RoomLayout,
+    nextDraft?: PhotoDraftMeta | null,
+    nextPhoto?: PhotoSession | null,
+  ): void {
+    this.room = next;
+    if (nextDraft !== undefined) this.draft = cloneDraft(nextDraft);
+    if (nextPhoto !== undefined) this.photo = cloneSession(nextPhoto);
+    this.emit();
+    this.emitCommitted();
   }
 
   /** Settle a drag: the 3D room follows, undo still reverts the whole drag. */
@@ -108,6 +171,7 @@ export class EditorStore {
     if (prev === undefined) return false;
     this.room = prev.room;
     this.draft = prev.draft;
+    this.photo = prev.photo;
     if (this.selection !== null && !hasId(this.room, this.selection)) {
       this.selection = null;
     }

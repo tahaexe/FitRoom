@@ -17,8 +17,11 @@ import {
 } from "@fitroom/shared";
 import { EditorPlanView } from "./plan-view";
 import { photoBandText, sourceMark, tapeWallLabel } from "./source-mark";
-import { EditorStore } from "./editor-store";
-import type { PhotoDraftMeta, WallSourceMark } from "../photo-room/flow";
+import { EditorStore, type PhotoSession } from "./editor-store";
+import { draftMeta, type PhotoDraftMeta, type WallSourceMark } from "../photo-room/flow";
+import { PhotoConfirmView, type WallLetter as ConfirmWallLetter } from "./photo-confirm";
+import { loadPhoto } from "../photo-room/photo-store";
+import { resolveRoomFromCorners } from "@fitroom/shared";
 
 export interface RoomEditorCallbacks {
   onBuild: () => void;
@@ -72,6 +75,10 @@ export class RoomEditor {
   private readonly noteEl: HTMLElement;
   private readonly summaryEl: HTMLElement;
   private readonly bandEl: HTMLElement;
+  private readonly gridEl: HTMLElement;
+  private readonly confirmHost: HTMLElement;
+  private confirmView: PhotoConfirmView | null = null;
+  private confirmCheckpointed = false;
   private draft: PhotoDraftMeta | null = null;
   private plan: EditorPlanView | null = null;
   private planHost: HTMLElement;
@@ -102,6 +109,7 @@ export class RoomEditor {
 
     const grid = document.createElement("div");
     grid.className = "editor-grid";
+    this.gridEl = grid;
 
     const wallsCard = document.createElement("aside");
     wallsCard.className = "editor-walls";
@@ -127,6 +135,50 @@ export class RoomEditor {
     grid.appendChild(fieldsCard);
 
     this.element.appendChild(grid);
+
+    this.confirmHost = document.createElement("div");
+    this.confirmHost.className = "photo-confirm-host";
+    this.confirmHost.setAttribute("hidden", "");
+    this.element.appendChild(this.confirmHost);
+    this.confirmView = new PhotoConfirmView(
+      this.store,
+      {
+        onSelectWall: (wall) => this.selectPhotoWall(wall),
+        onCornersDrag: (wall, corners, phase) => this.dragPhotoCorners(wall, corners, phase),
+        onOpeningMove: (openingId, offsetCm, phase) =>
+          this.dragPhotoOpening(openingId, { offset: offsetCm }, phase),
+        onOpeningResize: (openingId, offsetCm, widthCm, phase) =>
+          this.dragPhotoOpening(openingId, { offset: offsetCm, width: widthCm }, phase),
+        onOpeningVertical: (openingId, sillCm, heightCm, phase) =>
+          this.dragPhotoOpening(openingId, { sillHeight: sillCm, height: heightCm }, phase),
+        onSelectOpening: (openingId) => this.store.select({ kind: "opening", id: openingId }),
+        onCancelDrag: () => this.cancelPhotoDrag(),
+      },
+      async (wall) => {
+        try {
+          const stored = await loadPhoto(wall as "A" | "B" | "C" | "D");
+          const rec = stored as unknown as {
+            labelUrl?: string;
+            url?: string;
+            segWidth?: number;
+            segHeight?: number;
+            width?: number;
+            height?: number;
+          } | null;
+          if (rec === null || rec === undefined) return null;
+          const url = rec.labelUrl ?? rec.url ?? "";
+          if (url === "") return null;
+          return {
+            url,
+            width: rec.segWidth ?? rec.width ?? 1280,
+            height: rec.segHeight ?? rec.height ?? 960,
+          };
+        } catch {
+          return null;
+        }
+      },
+    );
+    this.confirmHost.appendChild(this.confirmView.element);
 
     const foot = document.createElement("div");
     foot.className = "editor-foot";
@@ -185,6 +237,7 @@ export class RoomEditor {
   destroy(): void {
     this.unsubscribe?.();
     this.plan?.destroy();
+    this.confirmView?.destroy();
     this.element.remove();
   }
 
@@ -193,6 +246,206 @@ export class RoomEditor {
     this.draft = draft;
     this.store.setDraft(draft);
     this.renderPanels();
+  }
+
+  /** Active wall switching marks the wall seen; view state only, no undo step. */
+  private selectPhotoWall(wall: ConfirmWallLetter): void {
+    const session = this.store.photo;
+    if (session === null) return;
+    const next: PhotoSession = JSON.parse(JSON.stringify(session)) as PhotoSession;
+    next.activeWall = wall as PhotoSession["activeWall"];
+    if (!next.seen.includes(next.activeWall)) next.seen = [...next.seen, next.activeWall];
+    this.store.setPhoto(next);
+  }
+
+  private estimatedFromMeta(meta: PhotoDraftMeta | null): Partial<Record<string, number>> {
+    const estimated: Partial<Record<string, number>> = {};
+    if (meta === null) return estimated;
+    for (const [wallId, mark] of Object.entries(meta.walls)) {
+      if (mark.source === "estimated") {
+        const letter = WALL_ID_TO_LETTER[wallId] as string | undefined;
+        if (letter !== undefined) estimated[letter] = mark.plusMinus ?? 8;
+      }
+    }
+    return estimated as Partial<Record<string, number>>;
+  }
+
+  private tapesOf(session: PhotoSession): { tapeA: number; tapeB: number } {
+    const draft = session.draft as unknown as {
+      wallLengths: Record<string, { value: number }>;
+    };
+    return {
+      tapeA: Math.round(draft.wallLengths["A"]?.value ?? 400),
+      tapeB: Math.round(draft.wallLengths["B"]?.value ?? 350),
+    };
+  }
+
+  /**
+   * A cancelled photo drag (pointercancel, lost capture, Esc) restores the
+   * pre-drag state: the lazy checkpoint is popped, so the drag adds no undo
+   * step. A no-op without a checkpointed drag.
+   */
+  private cancelPhotoDrag(): void {
+    if (!this.confirmCheckpointed) return;
+    this.confirmCheckpointed = false;
+    this.store.undo();
+  }
+
+  /** Corner/edge drags re-solve live; one drag is one undo step. */
+  private dragPhotoCorners(
+    wall: ConfirmWallLetter,
+    corners: Record<string, [number, number]>,
+    phase: "preview" | "commit",
+  ): void {
+    const session = this.store.photo;
+    if (session === null) return;
+    const letter = wall as PhotoSession["activeWall"];
+    const { tapeA, tapeB } = this.tapesOf(session);
+    let result: PhotoSession["draft"];
+    try {
+      result = resolveRoomFromCorners({
+        base: session.draft,
+        corners: {
+          [letter]: corners as unknown as import("@fitroom/shared").PhotoCorners,
+        },
+        sizes: session.sizes,
+        tapeA,
+        tapeB,
+      }) as unknown as PhotoSession["draft"];
+    } catch {
+      return;
+    }
+    const estimated = this.estimatedFromMeta(this.draft);
+    const nextMeta = draftMeta(
+      result as unknown as Parameters<typeof draftMeta>[0],
+      estimated as unknown as Parameters<typeof draftMeta>[1],
+    );
+    const nextSession: PhotoSession = {
+      ...(JSON.parse(JSON.stringify(session)) as PhotoSession),
+      draft: result,
+    };
+    if (phase === "preview") {
+      if (!this.confirmCheckpointed) {
+        this.store.checkpoint();
+        this.confirmCheckpointed = true;
+      }
+      this.store.preview(result.layout as unknown as RoomLayout);
+      return;
+    }
+    if (this.confirmCheckpointed) {
+      this.confirmCheckpointed = false;
+      this.store.settleDrag(result.layout as unknown as RoomLayout, nextMeta, nextSession);
+      this.draft = nextMeta;
+    } else {
+      this.store.commit(result.layout as unknown as RoomLayout, nextMeta, nextSession);
+      this.draft = nextMeta;
+    }
+    this.renderPanels();
+  }
+
+  /** Opening drags move the plan opening and the photo box together. */
+  private dragPhotoOpening(
+    openingId: string,
+    patch: { offset?: number; width?: number; sillHeight?: number; height?: number },
+    phase: "preview" | "commit",
+  ): void {
+    const session = this.store.photo;
+    const next = cloneRoom(this.store.room);
+    const opening = next.openings.find((o) => o.id === openingId);
+    if (opening === undefined) return;
+    const wallLen = Math.round(wallLengthOf(next, opening.wallId));
+    if (patch.offset !== undefined) {
+      opening.offset = clampOffset(patch.offset, opening.width, wallLen);
+    }
+    if (patch.width !== undefined) {
+      const w = Math.min(Math.max(30, Math.round(patch.width)), Math.max(30, wallLen));
+      opening.width = w;
+      opening.offset = clampOffset(opening.offset, w, wallLen);
+    }
+    if (patch.sillHeight !== undefined || patch.height !== undefined) {
+      const wall = next.walls.find((w) => w.id === opening.wallId);
+      const wallHeight = wall?.height ?? 250;
+      const sill =
+        patch.sillHeight === undefined
+          ? opening.sillHeight
+          : Math.max(0, Math.round(patch.sillHeight));
+      const h = patch.height === undefined ? opening.height : Math.max(1, Math.round(patch.height));
+      if (sill + h > wallHeight) {
+        if (patch.height !== undefined) {
+          opening.height = Math.max(1, Math.round(wallHeight - sill));
+          opening.sillHeight = sill;
+        } else {
+          opening.sillHeight = Math.max(0, Math.round(wallHeight - h));
+          opening.height = h;
+        }
+      } else {
+        opening.sillHeight = sill;
+        opening.height = h;
+      }
+    }
+    if (phase === "preview") {
+      if (!this.confirmCheckpointed) {
+        this.store.checkpoint();
+        this.confirmCheckpointed = true;
+      }
+      this.store.preview(next);
+      return;
+    }
+    const nextDraft = session === null ? undefined : this.measuredOpeningDraft(openingId);
+    if (session !== null) {
+      const draftClone = JSON.parse(JSON.stringify(session.draft)) as unknown as {
+        openings: Array<{
+          id: string;
+          offset: { value: number };
+          width: { value: number };
+          sillHeight: { value: number };
+          height: { value: number };
+        }>;
+      };
+      const draftOpening = draftClone.openings.find((o) => o.id === openingId);
+      if (draftOpening !== undefined) {
+        draftOpening.offset.value = Math.round(opening.offset);
+        draftOpening.width.value = Math.round(opening.width);
+        draftOpening.sillHeight.value = Math.round(opening.sillHeight);
+        draftOpening.height.value = Math.round(opening.height);
+      }
+      const nextSession: PhotoSession = {
+        ...(JSON.parse(JSON.stringify(session)) as PhotoSession),
+        draft: {
+          ...session.draft,
+          openings: draftClone.openings as unknown as PhotoSession["draft"]["openings"],
+        },
+      };
+      if (this.confirmCheckpointed) {
+        this.confirmCheckpointed = false;
+        this.store.settleDrag(next, nextDraft ?? this.draft, nextSession);
+        if (nextDraft !== undefined && nextDraft !== null) this.draft = nextDraft;
+      } else {
+        this.store.commit(next, nextDraft ?? this.draft, nextSession);
+        if (nextDraft !== undefined && nextDraft !== null) this.draft = nextDraft;
+      }
+    } else if (this.confirmCheckpointed) {
+      this.confirmCheckpointed = false;
+      this.store.settleDrag(next, nextDraft ?? this.draft, undefined);
+      if (nextDraft !== undefined && nextDraft !== null) this.draft = nextDraft;
+    } else {
+      this.store.commit(next, nextDraft ?? this.draft);
+      if (nextDraft !== undefined && nextDraft !== null) this.draft = nextDraft;
+    }
+    this.renderPanels();
+  }
+
+  /** A dragged opening reads measured afterwards, like a typed value. */
+  private measuredOpeningDraft(openingId: string): PhotoDraftMeta | null | undefined {
+    if (this.draft === null) return undefined;
+    const next: PhotoDraftMeta = JSON.parse(JSON.stringify(this.draft)) as PhotoDraftMeta;
+    const marks = next.openings[openingId];
+    if (marks === undefined) return next;
+    marks.offset = { source: "measured" };
+    marks.width = { source: "measured" };
+    marks.height = { source: "measured" };
+    marks.sill = { source: "measured" };
+    return next;
   }
 
   private markFor(mark: WallSourceMark | undefined): HTMLElement {
@@ -259,9 +512,37 @@ export class RoomEditor {
   private setWallLength(wallId: string, lengthCm: number): void {
     if (!Number.isFinite(lengthCm)) return;
     const nextDraft = this.measuredDraftFor(wallId);
+    const session = this.store.photo;
+    if (session === null) {
+      this.store.commit(
+        setRectangleWallLength(this.store.room, wallId, lengthCm),
+        ...(nextDraft === undefined ? [] : [nextDraft]),
+      );
+      if (nextDraft !== undefined && nextDraft !== null) this.draft = nextDraft;
+      return;
+    }
+    const letter = WALL_ID_TO_LETTER[wallId] as ConfirmWallLetter | undefined;
+    const nextSession: PhotoSession = JSON.parse(JSON.stringify(session)) as PhotoSession;
+    if (letter !== undefined) {
+      const opposite: ConfirmWallLetter =
+        letter === "A" ? "C" : letter === "C" ? "A" : letter === "B" ? "D" : "B";
+      const draftRec = nextSession.draft as unknown as {
+        wallLengths: Record<string, { value: number; plusMinus: number; source: string }>;
+      };
+      for (const l of [letter, opposite]) {
+        if (draftRec.wallLengths[l] !== undefined) {
+          draftRec.wallLengths[l] = {
+            value: Math.round(lengthCm),
+            plusMinus: 0,
+            source: "taped",
+          };
+        }
+      }
+    }
     this.store.commit(
       setRectangleWallLength(this.store.room, wallId, lengthCm),
       ...(nextDraft === undefined ? [] : [nextDraft]),
+      nextSession,
     );
     if (nextDraft !== undefined && nextDraft !== null) this.draft = nextDraft;
   }
@@ -363,6 +644,10 @@ export class RoomEditor {
 
   private renderPanels(): void {
     const room = this.store.room;
+    const photo = this.store.photo !== null;
+    this.gridEl.style.display = photo ? "none" : "";
+    if (photo) this.confirmHost.removeAttribute("hidden");
+    else this.confirmHost.setAttribute("hidden", "");
     const active = document.activeElement;
     const focusKey = active instanceof HTMLInputElement ? active.dataset["key"] : undefined;
     const focusValue = active instanceof HTMLInputElement ? active.value : undefined;
@@ -499,6 +784,9 @@ export class RoomEditor {
       );
       const wallLen = wallLengthOf(room, opening.wallId);
       const marks = this.draft?.openings[opening.id];
+      this.toggleRow("Type", ["door", "window"], opening.type, (type) =>
+        this.commitOpeningType(opening.id, type as "door" | "window"),
+      );
       this.numberField(
         this.fieldsEl,
         `offset-${opening.id}`,
@@ -634,6 +922,71 @@ export class RoomEditor {
     return { width: w, offset: clampOffset(offset, w, wallLen) };
   }
 
+  private commitOpeningType(openingId: string, type: "door" | "window"): void {
+    const next = cloneRoom(this.store.room);
+    const index = next.openings.findIndex((o) => o.id === openingId);
+    const current = next.openings[index];
+    if (current === undefined) return;
+    const wall = next.walls.find((w) => w.id === current.wallId);
+    const wallHeight = wall?.height ?? 250;
+    if (current.type === type) return;
+    if (type === "door") {
+      const height = Math.min(210, wallHeight);
+      next.openings[index] = {
+        id: current.id,
+        wallId: current.wallId,
+        type: "door",
+        offset: current.offset,
+        width: Math.min(Math.max(30, Math.round(current.width)), 120),
+        height,
+        sillHeight: 0,
+        hinge: "left",
+        swing: "in",
+      } as Opening;
+    } else {
+      const height = Math.min(140, Math.max(1, wallHeight - 90));
+      next.openings[index] = {
+        id: current.id,
+        wallId: current.wallId,
+        type: "window",
+        offset: current.offset,
+        width: Math.min(Math.max(30, Math.round(current.width)), 200),
+        height,
+        sillHeight: Math.min(90, Math.max(0, wallHeight - height)),
+      } as Opening;
+    }
+    const session = this.store.photo;
+    if (session === null) {
+      this.store.commit(next);
+      return;
+    }
+    const nextDraft = this.measuredOpeningDraft(openingId) ?? this.draft;
+    const nextSession: PhotoSession = JSON.parse(JSON.stringify(session)) as PhotoSession;
+    const draftClone = nextSession.draft as unknown as {
+      openings: Array<{
+        id: string;
+        type: string;
+        offset: { value: number };
+        width: { value: number };
+        sillHeight: { value: number };
+        height: { value: number };
+      }>;
+    };
+    const updated = next.openings[index];
+    if (updated !== undefined) {
+      const draftOpening = draftClone.openings.find((o) => o.id === openingId);
+      if (draftOpening !== undefined) {
+        draftOpening.type = updated.type;
+        draftOpening.offset.value = Math.round(updated.offset);
+        draftOpening.width.value = Math.round(updated.width);
+        draftOpening.sillHeight.value = Math.round(updated.sillHeight);
+        draftOpening.height.value = Math.round(updated.height);
+      }
+    }
+    this.store.commit(next, nextDraft ?? this.draft, nextSession);
+    if (nextDraft !== undefined && nextDraft !== null) this.draft = nextDraft;
+  }
+
   private commitOpening(openingId: string, patch: Partial<Opening>): void {
     const next = cloneRoom(this.store.room);
     const opening = next.openings.find((o) => o.id === openingId);
@@ -644,7 +997,29 @@ export class RoomEditor {
     if (opening.sillHeight + opening.height > wallHeight) {
       opening.height = Math.max(1, Math.round(wallHeight - opening.sillHeight));
     }
-    this.store.commit(next);
+    const session = this.store.photo;
+    if (session === null) {
+      this.store.commit(next);
+      return;
+    }
+    const nextDraft = this.measuredOpeningDraft(openingId) ?? this.draft;
+    const draftClone = JSON.parse(JSON.stringify(session.draft)) as unknown as {
+      openings: Array<{ id: string; offset: { value: number }; width: { value: number } }>;
+    };
+    const draftOpening = draftClone.openings.find((o) => o.id === openingId);
+    if (draftOpening !== undefined) {
+      draftOpening.offset.value = Math.round(opening.offset);
+      draftOpening.width.value = Math.round(opening.width);
+    }
+    const nextSession: PhotoSession = {
+      ...(JSON.parse(JSON.stringify(session)) as PhotoSession),
+      draft: {
+        ...session.draft,
+        openings: draftClone.openings as unknown as PhotoSession["draft"]["openings"],
+      },
+    };
+    this.store.commit(next, nextDraft ?? this.draft, nextSession);
+    if (nextDraft !== undefined && nextDraft !== null) this.draft = nextDraft;
   }
 
   private commitOpeningHeight(openingId: string, height?: number, sill?: number): void {
@@ -666,7 +1041,29 @@ export class RoomEditor {
       opening.height = nextHeight;
       opening.sillHeight = nextSill;
     }
-    this.store.commit(next);
+    const session = this.store.photo;
+    if (session === null) {
+      this.store.commit(next);
+      return;
+    }
+    const nextDraft = this.measuredOpeningDraft(openingId) ?? this.draft;
+    const draftClone = JSON.parse(JSON.stringify(session.draft)) as unknown as {
+      openings: Array<{ id: string; sillHeight: { value: number }; height: { value: number } }>;
+    };
+    const draftOpening = draftClone.openings.find((o) => o.id === openingId);
+    if (draftOpening !== undefined) {
+      draftOpening.sillHeight.value = Math.round(opening.sillHeight);
+      draftOpening.height.value = Math.round(opening.height);
+    }
+    const nextSession: PhotoSession = {
+      ...(JSON.parse(JSON.stringify(session)) as PhotoSession),
+      draft: {
+        ...session.draft,
+        openings: draftClone.openings as unknown as PhotoSession["draft"]["openings"],
+      },
+    };
+    this.store.commit(next, nextDraft ?? this.draft, nextSession);
+    if (nextDraft !== undefined && nextDraft !== null) this.draft = nextDraft;
   }
 
   private commitPiece(pieceId: string, patch: Partial<ExistingPiece>): void {
