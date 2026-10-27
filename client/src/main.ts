@@ -324,7 +324,12 @@ class FitRoomApp {
         getScene: () => this.store.state,
         getCapture: () => {
           const shot = captureView(this.renderer, this.scene, this.activeCamera(), this.container);
-          return { dataUrl: shot.dataUrl, base64: shot.base64 };
+          return {
+            dataUrl: shot.dataUrl,
+            base64: shot.base64,
+            width: shot.width,
+            height: shot.height,
+          };
         },
         cameraPreset: () => this.renderPreset(),
         wallView: () => this.renderWallView(),

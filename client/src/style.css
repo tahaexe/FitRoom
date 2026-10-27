@@ -1103,7 +1103,6 @@ body:has(#assistant-panel:not([hidden])) #scene-container {
 .render-compare {
   position: relative;
   width: 100%;
-  aspect-ratio: 16 / 9;
   overflow: hidden;
   border-radius: 8px;
   background: var(--panel-bg);
@@ -1114,7 +1113,8 @@ body:has(#assistant-panel:not([hidden])) #scene-container {
   inset: 0;
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  object-fit: contain;
+  object-position: center;
 }
 
 .render-slider {
@@ -1187,6 +1187,6 @@ body:has(#assistant-panel:not([hidden])) #scene-container {
 .render-progress-thumb {
   width: 100%;
   border-radius: 8px;
-  aspect-ratio: 16 / 9;
-  object-fit: cover;
+  object-fit: contain;
+  background: var(--panel-bg);
 }

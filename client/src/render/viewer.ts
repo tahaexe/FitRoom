@@ -14,7 +14,7 @@ export interface RenderViewerDeps {
   room: RoomLayout;
   catalog: CatalogItem[];
   getScene: () => SceneState;
-  getCapture: () => { dataUrl: string; base64: string };
+  getCapture: () => { dataUrl: string; base64: string; width: number; height: number };
   cameraPreset: () => string;
   wallView: () => RenderWallView | undefined;
 }
@@ -63,7 +63,7 @@ export class RenderViewer {
     if (this.busy) return;
     this.busy = true;
     this.open();
-    let capture: { dataUrl: string; base64: string };
+    let capture: { dataUrl: string; base64: string; width: number; height: number };
     try {
       capture = this.deps.getCapture();
     } catch {
@@ -78,7 +78,7 @@ export class RenderViewer {
       this.deps.catalog,
       this.deps.wallView(),
     );
-    this.showProgress(capture.dataUrl);
+    this.showProgress(capture);
     let result: Awaited<ReturnType<typeof postRender>>;
     try {
       result = await postRender({
@@ -94,7 +94,7 @@ export class RenderViewer {
     this.stopProgress();
     this.busy = false;
     if (result.status === "ok") {
-      this.showAnswer(capture.dataUrl, result.data);
+      this.showAnswer(capture.dataUrl, result.data, capture.width, capture.height);
     } else {
       this.showNotice(messageFor(result));
     }
@@ -111,7 +111,7 @@ export class RenderViewer {
     this.clearTimer();
   }
 
-  private showProgress(captureUrl: string): void {
+  private showProgress(capture: { dataUrl: string; width: number; height: number }): void {
     this.clearTimer();
     this.root.innerHTML = "";
     this.startedAt = Date.now();
@@ -131,8 +131,9 @@ export class RenderViewer {
     wrap.appendChild(head);
     const thumb = document.createElement("img");
     thumb.className = "render-progress-thumb";
-    thumb.src = captureUrl;
+    thumb.src = capture.dataUrl;
     thumb.alt = "Current 3D view";
+    thumb.style.aspectRatio = `${String(capture.width)} / ${String(capture.height)}`;
     wrap.appendChild(thumb);
     const status = document.createElement("p");
     status.className = "render-status";
@@ -190,7 +191,7 @@ export class RenderViewer {
     this.root.appendChild(wrap);
   }
 
-  private showAnswer(captureUrl: string, data: unknown): void {
+  private showAnswer(captureUrl: string, data: unknown, width: number, height: number): void {
     this.clearTimer();
     this.root.innerHTML = "";
     const record =
@@ -218,6 +219,10 @@ export class RenderViewer {
 
     const slider = document.createElement("div");
     slider.className = "render-compare";
+    // Both frames share the capture's box, whole and aligned: neither image
+    // is cropped (see `object-fit: contain`), so the slider wipes across the
+    // same view on both sides.
+    slider.style.aspectRatio = `${String(width)} / ${String(height)}`;
     const before = document.createElement("img");
     before.src = captureUrl;
     before.alt = "3D view before";
