@@ -33,7 +33,10 @@ export function pieceName(piece: ExistingPiece): string {
 }
 
 const NS = "http://www.w3.org/2000/svg";
-const PAD_CM = 70;
+/** Margin around the framed room, as a fraction of its largest side. */
+const FRAME_MARGIN = 0.08;
+/** Outward offset of the wall-length pills, kept inside the frame margin. */
+const PILL_OFFSET_CM = 28;
 const WALL_STROKE_CM = 7;
 const HIT_STROKE_CM = 26;
 
@@ -135,14 +138,26 @@ export class EditorPlanView {
     this.svg.addEventListener("pointercancel", () => this.onPointerCancel());
     this.svg.addEventListener("click", (event) => this.onBackgroundClick(event));
     this.unsubscribe = this.store.subscribe(() => this.render());
+    window.addEventListener("resize", this.onResize);
     this.render();
   }
 
   destroy(): void {
     this.unsubscribe?.();
+    window.removeEventListener("resize", this.onResize);
     this.element.remove();
   }
 
+  /** Card shape changed: re-fit the letterboxed pills to the new shape. */
+  private readonly onResize = (): void => {
+    this.render();
+  };
+
+  /**
+   * Frame the room itself — walls plus door swing arcs — with a margin of
+   * about 8 %. Pills and opening labels sit inside this frame (they never
+   * widen it), so the room fills the card at any card shape.
+   */
   private viewBox(room: RoomLayout): [number, number, number, number] {
     let minX = Infinity;
     let maxX = -Infinity;
@@ -162,7 +177,6 @@ export class EditorPlanView {
       minZ = 0;
       maxZ = 350;
     }
-    const centroid = centroidOf(room);
     const grow = (x: number, z: number): void => {
       if (x < minX) minX = x;
       if (x > maxX) maxX = x;
@@ -170,37 +184,20 @@ export class EditorPlanView {
       if (z > maxZ) maxZ = z;
     };
     // Door swing arcs sweep a full quadrant of radius `width` around the
-    // hinge: include the whole disc so an outward swing is never cut, and
-    // the opening label sitting clear of the leaf and arc.
+    // hinge: include the whole disc so an outward swing is never cut.
     for (const opening of room.openings) {
+      if (opening.type !== "door") continue;
       const wall = room.walls.find((w) => w.id === opening.wallId);
       if (wall === undefined) continue;
-      if (opening.type === "door") {
-        const hingeAt = opening.hinge === "left" ? opening.offset : opening.offset + opening.width;
-        const hinge = along(wall, hingeAt);
-        const r = opening.width;
-        grow(hinge.x - r, hinge.z - r);
-        grow(hinge.x + r, hinge.z + r);
-      }
-      const inward = inwardOf(wall, centroid);
-      const mid = along(wall, opening.offset + opening.width / 2);
-      grow(mid.x + inward.x * 60, mid.z + inward.z * 60);
+      const hingeAt = opening.hinge === "left" ? opening.offset : opening.offset + opening.width;
+      const hinge = along(wall, hingeAt);
+      const r = opening.width;
+      grow(hinge.x - r, hinge.z - r);
+      grow(hinge.x + r, hinge.z + r);
     }
-    // Length pills sit 42 cm outside each wall: include their anchors with
-    // room for the whole pill.
-    for (const wall of room.walls) {
-      const len = wallLen(wall);
-      if (len < 1) continue;
-      const mid = along(wall, len / 2);
-      let ox = mid.x - centroid.x;
-      let oz = mid.z - centroid.z;
-      const outLen = Math.hypot(ox, oz) || 1;
-      ox /= outLen;
-      oz /= outLen;
-      grow(mid.x + ox * 110, mid.z + oz * 110);
-    }
+    const pad = Math.max(16, Math.max(maxX - minX, maxZ - minZ) * FRAME_MARGIN);
     // SVG y runs down: y = -z, so the top is -(maxZ + pad).
-    return [minX - PAD_CM, -(maxZ + PAD_CM), maxX - minX + PAD_CM * 2, maxZ - minZ + PAD_CM * 2];
+    return [minX - pad, -(maxZ + pad), maxX - minX + pad * 2, maxZ - minZ + pad * 2];
   }
 
   private render(): void {
@@ -448,24 +445,34 @@ export class EditorPlanView {
   ): void {
     const [vx, vy, vw, vh] = viewBox;
     const centroid = centroidOf(room);
+    // Letterbox correction: the SVG uses preserveAspectRatio meet, so the
+    // drawing may not fill the card. Map SVG units to card pixels from the
+    // fitted size, so pills sit on their walls at any card shape.
+    const cw = Math.max(1, this.element.clientWidth);
+    const ch = Math.max(1, this.element.clientHeight);
+    const scale = Math.min(cw / vw, ch / vh);
+    const ox = (cw - vw * scale) / 2;
+    const oy = (ch - vh * scale) / 2;
     this.pills.innerHTML = "";
     for (const wall of room.walls) {
       if (wallLen(wall) < 1) continue;
       const mid = along(wall, wallLen(wall) / 2);
-      // Outward side (centre-based), pills sit outside the wall.
-      let ox = mid.x - centroid.x;
-      let oz = mid.z - centroid.z;
-      const len = Math.hypot(ox, oz) || 1;
-      ox /= len;
-      oz /= len;
-      const anchor = { x: mid.x + ox * 42, z: mid.z + oz * 42 };
-      const leftPct = ((anchor.x - vx) / vw) * 100;
-      const topPct = ((-anchor.z - vy) / vh) * 100;
+      // Outward side (centre-based), pills sit just outside the wall but
+      // clamped inside the frame.
+      let dx = mid.x - centroid.x;
+      let dz = mid.z - centroid.z;
+      const len = Math.hypot(dx, dz) || 1;
+      dx /= len;
+      dz /= len;
+      const anchor = { x: mid.x + dx * PILL_OFFSET_CM, z: mid.z + dz * PILL_OFFSET_CM };
+      anchor.x = Math.min(vx + vw - 4, Math.max(vx + 4, anchor.x));
+      const anchorY = -anchor.z;
+      const clampedY = Math.min(vy + vh - 4, Math.max(vy + 4, anchorY));
       const pill = document.createElement("label");
       pill.className =
         selection?.kind === "wall" && selection.id === wall.id ? "plan-pill selected" : "plan-pill";
-      pill.style.left = `${String(leftPct)}%`;
-      pill.style.top = `${String(topPct)}%`;
+      pill.style.left = `${String(ox + (anchor.x - vx) * scale)}px`;
+      pill.style.top = `${String(oy + (clampedY - vy) * scale)}px`;
       pill.title = "Wall length in centimetres";
       const input = document.createElement("input");
       input.type = "number";
