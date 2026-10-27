@@ -7,6 +7,7 @@
  */
 
 import type { ExistingPiece, Opening, RoomLayout, Wall } from "@fitroom/shared";
+import { WALL_ID_TO_LETTER } from "@fitroom/shared";
 import type { EditorSelection, EditorStore } from "./editor-store";
 
 export interface EditorPlanActions {
@@ -22,9 +23,11 @@ export interface EditorPlanActions {
 }
 
 export function openingName(room: RoomLayout, opening: Opening): string {
-  const wallIndex = room.walls.findIndex((w) => w.id === opening.wallId) + 1;
+  const letter =
+    (WALL_ID_TO_LETTER[opening.wallId] as string | undefined) ??
+    `wall ${String(room.walls.findIndex((w) => w.id === opening.wallId) + 1)}`;
   const kind = opening.type === "door" ? "Door" : "Window";
-  return `${kind} on wall ${String(wallIndex)}, ${String(Math.round(opening.width))} cm`;
+  return `${kind} on wall ${letter}, ${String(Math.round(opening.width))} cm`;
 }
 
 export function pieceName(piece: ExistingPiece): string {
@@ -327,18 +330,22 @@ export class EditorPlanView {
       }
     }
 
-    // Labels always sit on the inward side so they never sit under the
-    // outward wall-length pills; the swing arc stays on its own side.
+    // Labels always sit well inside (62 cm) so a wide "Window · 120 cm" tag
+    // never reaches under the outward wall-length pills; a white halo keeps
+    // the text readable over the floor. The swing arc stays on its own side.
     const labelSide = inward;
     const label = document.createElementNS(NS, "text");
-    label.setAttribute("x", fmt(mid.x + labelSide.x * 34));
-    label.setAttribute("y", fmt(-(mid.z + labelSide.z * 34)));
+    label.setAttribute("x", fmt(mid.x + labelSide.x * 62));
+    label.setAttribute("y", fmt(-(mid.z + labelSide.z * 62)));
     label.setAttribute(
       "class",
       selected ? "editor-opening-label selected" : "editor-opening-label",
     );
     label.setAttribute("text-anchor", "middle");
     label.setAttribute("dominant-baseline", "middle");
+    label.setAttribute("paint-order", "stroke");
+    label.setAttribute("stroke", "#ffffff");
+    label.setAttribute("stroke-width", "4");
     label.textContent = `${opening.type === "door" ? "Door" : "Window"} · ${String(Math.round(opening.width))} cm`;
     nodes.push(label);
     return nodes;
@@ -399,6 +406,18 @@ export class EditorPlanView {
       } else if (event.key === "Delete" || event.key === "Backspace") {
         event.preventDefault();
         this.actions.removeOpening(opening.id);
+      } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const step = event.shiftKey ? 10 : 1;
+        const dir = event.key === "ArrowLeft" ? -1 : 1;
+        const len = Math.max(60, Math.round(wallLen(wall)));
+        const next = Math.min(
+          Math.max(0, Math.round(opening.offset) + dir * step),
+          Math.max(0, len - Math.round(opening.width)),
+        );
+        this.actions.beginDrag();
+        this.actions.previewOpeningOffset(opening.id, next);
+        this.actions.endDrag();
       }
     });
     return group;
@@ -465,9 +484,14 @@ export class EditorPlanView {
       dx /= len;
       dz /= len;
       const anchor = { x: mid.x + dx * PILL_OFFSET_CM, z: mid.z + dz * PILL_OFFSET_CM };
-      anchor.x = Math.min(vx + vw - 4, Math.max(vx + 4, anchor.x));
+      // Keep the whole pill (about 160 × 60 px) inside the card: convert the
+      // half size to SVG units at this card's scale, so the top wall's pill
+      // never clips at any card shape.
+      const marginX = 84 / Math.max(0.2, scale);
+      const marginY = 32 / Math.max(0.2, scale);
+      anchor.x = Math.min(vx + vw - marginX, Math.max(vx + marginX, anchor.x));
       const anchorY = -anchor.z;
-      const clampedY = Math.min(vy + vh - 4, Math.max(vy + 4, anchorY));
+      const clampedY = Math.min(vy + vh - marginY, Math.max(vy + marginY, anchorY));
       const pill = document.createElement("label");
       pill.className =
         selection?.kind === "wall" && selection.id === wall.id ? "plan-pill selected" : "plan-pill";
