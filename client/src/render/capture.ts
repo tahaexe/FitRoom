@@ -12,10 +12,12 @@ export interface CaptureResult {
 const CAPTURE_WIDTH = 1024;
 /** About 5% margin on the tighter side of the capture frame. */
 const CAPTURE_MARGIN = 1.05;
-/** NDC half-extent the room's corners must fit inside (1 / margin). */
+/** NDC half-extent the room must fit inside (1 / margin). */
 const FRAME_LIMIT = 1 / CAPTURE_MARGIN;
-/** Wall height used for framing when the room mesh is missing. */
-const FALLBACK_WALL_HEIGHT_M = 2.6;
+/** Capture height when the room's projection is taller than the stage. */
+const TALL_CAPTURE_HEIGHT = 768;
+/** Centering rounds after each fit (fixed view direction, moved target). */
+const CENTER_ROUNDS = 4;
 
 function domToHide(container: HTMLElement): HTMLElement[] {
   const out: HTMLElement[] = [];
@@ -41,53 +43,73 @@ function isOverlayObject(object: THREE.Object3D): boolean {
   return false;
 }
 
-interface RoomFrame {
-  cxM: number;
-  czM: number;
-  wM: number;
-  dM: number;
-}
-
-/** Wall-top height for framing, from the built room shell when present. */
-function wallTopOf(scene: THREE.Scene): number {
+/**
+ * World-space points of the room shell exactly as the capture sees it:
+ * the world bounding-box corners of every visible mesh under
+ * `fitroom-room`, honouring the dollhouse cutaway (`updateDollhouse`
+ * hides two walls by flipping `visible`) and skipping the studio backdrop
+ * disc. Furniture, overlays and the contact catcher live outside the
+ * shell group, so they never drive the frame. Returns an empty list when
+ * the shell is missing, in which case the capture keeps the live camera.
+ */
+export function collectShellPoints(scene: THREE.Scene): THREE.Vector3[] {
+  const points: THREE.Vector3[] = [];
   const shell = scene.getObjectByName("fitroom-room");
-  if (shell !== undefined) {
-    const box = new THREE.Box3().setFromObject(shell);
-    if (Number.isFinite(box.max.y) && box.max.y > 0.5) return box.max.y;
-  }
-  return FALLBACK_WALL_HEIGHT_M;
-}
-
-/** Eight room-shell corners: floor corners and wall tops (metres). */
-function roomCorners(scene: THREE.Scene, frame: RoomFrame): THREE.Vector3[] {
-  const topM = wallTopOf(scene);
-  const corners: THREE.Vector3[] = [];
-  for (const sx of [-1, 1]) {
-    for (const sz of [-1, 1]) {
-      corners.push(
-        new THREE.Vector3(frame.cxM + (sx * frame.wM) / 2, 0, frame.czM + (sz * frame.dM) / 2),
-        new THREE.Vector3(frame.cxM + (sx * frame.wM) / 2, topM, frame.czM + (sz * frame.dM) / 2),
+  if (shell === undefined) return points;
+  shell.updateWorldMatrix(true, true);
+  shell.traverse((object) => {
+    if (object.name === "fitroom-backdrop") return;
+    if (!(object instanceof THREE.Mesh)) return;
+    let ancestor: THREE.Object3D | null = object;
+    while (ancestor !== null) {
+      if (!ancestor.visible) return;
+      ancestor = ancestor.parent;
+    }
+    const box = new THREE.Box3().setFromObject(object);
+    if (box.isEmpty()) return;
+    for (let i = 0; i < 8; i += 1) {
+      points.push(
+        new THREE.Vector3(
+          (i & 1) === 0 ? box.min.x : box.max.x,
+          (i & 2) === 0 ? box.min.y : box.max.y,
+          (i & 4) === 0 ? box.min.z : box.max.z,
+        ),
       );
     }
-  }
-  return corners;
+  });
+  return points;
 }
 
-/** Centre of the room's corners: the capture looks here. */
-function roomCentre(corners: THREE.Vector3[]): THREE.Vector3 {
-  const box = new THREE.Box3();
-  for (const c of corners) box.expandByPoint(c);
-  return box.getCenter(new THREE.Vector3());
+/** NDC bounds of world points through the camera (projection must be current). */
+export function projectBounds(
+  camera: THREE.Camera,
+  points: readonly THREE.Vector3[],
+): { minX: number; maxX: number; minY: number; maxY: number } {
+  camera.updateMatrixWorld();
+  const probe = new THREE.Vector3();
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const point of points) {
+    probe.copy(point).project(camera);
+    if (!Number.isFinite(probe.x) || !Number.isFinite(probe.y)) continue;
+    minX = Math.min(minX, probe.x);
+    maxX = Math.max(maxX, probe.x);
+    minY = Math.min(minY, probe.y);
+    maxY = Math.max(maxY, probe.y);
+  }
+  return { minX, maxX, minY, maxY };
 }
 
 /**
- * Closest distance along `dir` from `target` where every corner projects
+ * Closest distance along `dir` from `target` where every point projects
  * inside the frame with margin. Bisected (48 rounds): nearer fails, farther
- * always fits, so the room fills the frame with a small margin.
+ * always fits.
  */
 function fitDistance(
   camera: THREE.PerspectiveCamera,
-  corners: THREE.Vector3[],
+  points: THREE.Vector3[],
   target: THREE.Vector3,
   dir: THREE.Vector3,
 ): number {
@@ -96,10 +118,10 @@ function fitDistance(
     camera.position.copy(target).addScaledVector(dir, dist);
     camera.lookAt(target);
     camera.updateMatrixWorld();
-    for (const corner of corners) {
-      probe.copy(corner).applyMatrix4(camera.matrixWorldInverse);
+    for (const point of points) {
+      probe.copy(point).applyMatrix4(camera.matrixWorldInverse);
       if (!(probe.z < -0.2)) return false;
-      probe.copy(corner).project(camera);
+      probe.copy(point).project(camera);
       if (!Number.isFinite(probe.x) || !Number.isFinite(probe.y)) return false;
       if (Math.abs(probe.x) > FRAME_LIMIT || Math.abs(probe.y) > FRAME_LIMIT) return false;
     }
@@ -121,16 +143,67 @@ function fitDistance(
   return hi;
 }
 
-/** Room bounds from the built floor mesh (metres, x east, z north). */
-function roomFrameOf(scene: THREE.Scene): RoomFrame | null {
-  const floor = scene.getObjectByName("fitroom-floor");
-  if (!(floor instanceof THREE.Mesh)) return null;
-  const geo = floor.geometry;
-  const params = geo.parameters as { width?: unknown; height?: unknown } | undefined;
-  const wM = typeof params?.width === "number" ? params.width : 0;
-  const dM = typeof params?.height === "number" ? params.height : 0;
-  if (!(wM > 0) || !(dM > 0)) return null;
-  return { cxM: floor.position.x, czM: floor.position.z, wM, dM };
+/**
+ * Frame a perspective camera onto the room shell with a small margin,
+ * keeping the current view direction. The distance fits every visible
+ * shell point; the target then slides (fixed direction) until the
+ * projected room sits centred, so the span — not just one edge — fills
+ * the frame. Leaves the camera framed on the room.
+ */
+export function fitRoomPerspective(
+  camera: THREE.PerspectiveCamera,
+  points: THREE.Vector3[],
+  aspect: number,
+): { target: THREE.Vector3; distance: number } {
+  camera.aspect = aspect;
+  camera.updateProjectionMatrix();
+  const box = new THREE.Box3().setFromPoints(points);
+  const target = box.isEmpty() ? new THREE.Vector3() : box.getCenter(new THREE.Vector3());
+  const dir = camera.position.clone().sub(target);
+  if (dir.lengthSq() < 1e-6) dir.set(0.85, 0.85, 1);
+  dir.normalize();
+  let distance = fitDistance(camera, points, target, dir);
+  const right = new THREE.Vector3();
+  const up = new THREE.Vector3();
+  for (let round = 0; round < CENTER_ROUNDS; round += 1) {
+    camera.position.copy(target).addScaledVector(dir, distance);
+    camera.lookAt(target);
+    camera.updateMatrixWorld();
+    const bounds = projectBounds(camera, points);
+    const cx = (bounds.minX + bounds.maxX) / 2;
+    const cy = (bounds.minY + bounds.maxY) / 2;
+    if (Math.abs(cx) < 0.005 && Math.abs(cy) < 0.005) break;
+    right.setFromMatrixColumn(camera.matrixWorld, 0);
+    up.setFromMatrixColumn(camera.matrixWorld, 1);
+    const halfH = Math.tan(THREE.MathUtils.degToRad(camera.fov) / 2) * distance;
+    const halfW = halfH * camera.aspect;
+    target.addScaledVector(right, cx * halfW).addScaledVector(up, cy * halfH);
+    distance = fitDistance(camera, points, target, dir);
+  }
+  camera.position.copy(target).addScaledVector(dir, distance);
+  camera.lookAt(target);
+  camera.updateMatrixWorld();
+  return { target: target.clone(), distance };
+}
+
+/**
+ * Capture size for a room of projected aspect `roomAspect` (pixels wide /
+ * pixels tall) on a stage of `stageW` × `stageH`: when the room's
+ * projection is taller than the stage, capture at about 4:3 (1024 × 768)
+ * so the room fills the width too; otherwise keep the stage's aspect at
+ * 1024 px wide.
+ */
+export function captureSizeForRoom(
+  stageW: number,
+  stageH: number,
+  roomAspect: number,
+): { width: number; height: number } {
+  const stageAspect = stageW > 0 && stageH > 0 ? stageW / stageH : 16 / 9;
+  if (roomAspect < stageAspect) return { width: CAPTURE_WIDTH, height: TALL_CAPTURE_HEIGHT };
+  return {
+    width: CAPTURE_WIDTH,
+    height: Math.max(1, Math.round(CAPTURE_WIDTH / stageAspect)),
+  };
 }
 
 /**
@@ -141,11 +214,14 @@ function roomFrameOf(scene: THREE.Scene): RoomFrame | null {
  * too so the frame the customer sees matches the capture.
  *
  * The room fills the frame with a small margin whatever the view on
- * screen: the capture reframes onto the room (keeping the current view
- * direction) instead of copying the on-screen camera distance, so a wide
- * first view no longer shrinks the room and the image model stops
- * re-imagining the camera. Everything is restored before returning; the
- * renderer keeps its original size and pixel ratio.
+ * screen: the capture reframes onto the visible room shell (floor plus
+ * the walls the dollhouse cutaway keeps, in world space — never the
+ * hidden pair and never the studio backdrop), centred, keeping the
+ * current view direction, instead of copying the on-screen camera
+ * distance. When the room's projection is taller than the stage the
+ * capture is 1024 × 768 so the room fills the width too. Everything is
+ * restored before returning; the renderer keeps its original size and
+ * pixel ratio.
  */
 export function captureView(
   renderer: THREE.WebGLRenderer,
@@ -168,10 +244,9 @@ export function captureView(
   const prevSize = new THREE.Vector2();
   renderer.getSize(prevSize);
   const prevRatio = renderer.getPixelRatio();
-  const aspect = prevSize.x > 0 && prevSize.y > 0 ? prevSize.x / prevSize.y : 16 / 9;
-  const width = CAPTURE_WIDTH;
-  const height = Math.max(1, Math.round(CAPTURE_WIDTH / aspect));
-  const captureAspect = width / height;
+  const stageAspect = prevSize.x > 0 && prevSize.y > 0 ? prevSize.x / prevSize.y : 16 / 9;
+  let width = CAPTURE_WIDTH;
+  let height = Math.max(1, Math.round(CAPTURE_WIDTH / stageAspect));
   const isPerspective = camera instanceof THREE.PerspectiveCamera;
   const isOrtho = camera instanceof THREE.OrthographicCamera;
   const prevAspect = isPerspective ? camera.aspect : null;
@@ -187,35 +262,41 @@ export function captureView(
   const prevPosition = camera.position.clone();
   const prevQuaternion = camera.quaternion.clone();
 
-  // Frame the room tightly for this capture only: fit the room shell's
-  // corners (floor corners and wall tops) as this camera sees them, with
-  // about 5% margin on the tighter side, keeping the view direction. A
-  // bounding sphere would leave about a fifth of the frame empty.
-  if (isPerspective) {
-    // Project into the capture frame, not the live one.
-    camera.aspect = captureAspect;
-    camera.updateProjectionMatrix();
-  }
-  const frame = roomFrameOf(scene);
-  if (frame !== null) {
+  const points = collectShellPoints(scene);
+  if (points.length > 0) {
     if (isPerspective) {
-      const corners = roomCorners(scene, frame);
-      const target = roomCentre(corners);
-      const dir = camera.position.clone().sub(target);
-      if (dir.lengthSq() < 1e-6) dir.set(0.85, 0.85, 1);
-      dir.normalize();
-      camera.position.copy(target).addScaledVector(dir, fitDistance(camera, corners, target, dir));
-      camera.lookAt(target);
+      // Provisional fit at the stage aspect to learn the room's projected
+      // shape, then capture tall rooms at 4:3 and fit again.
+      fitRoomPerspective(camera, points, stageAspect);
+      const bounds = projectBounds(camera, points);
+      const spanY = Math.max(1e-6, bounds.maxY - bounds.minY);
+      const roomAspect = ((bounds.maxX - bounds.minX) * stageAspect) / spanY;
+      const size = captureSizeForRoom(prevSize.x, prevSize.y, roomAspect);
+      width = size.width;
+      height = size.height;
+      if (Math.abs(width / height - stageAspect) > 1e-6) {
+        fitRoomPerspective(camera, points, width / height);
+      }
     } else if (isOrtho) {
-      const hw = (frame.wM / 2) * CAPTURE_MARGIN;
-      const hd = (frame.dM / 2) * CAPTURE_MARGIN;
-      const halfH = Math.max(hd, hw / captureAspect);
-      camera.left = -halfH * captureAspect;
-      camera.right = halfH * captureAspect;
-      camera.top = halfH;
-      camera.bottom = -halfH;
-      camera.position.set(frame.cxM, camera.position.y, frame.czM);
-      camera.updateProjectionMatrix();
+      const box = new THREE.Box3().setFromPoints(points);
+      if (!box.isEmpty()) {
+        const size3 = box.getSize(new THREE.Vector3());
+        const centre = box.getCenter(new THREE.Vector3());
+        const roomAspect = size3.x > 1e-9 && size3.z > 1e-9 ? size3.x / size3.z : stageAspect;
+        const size = captureSizeForRoom(prevSize.x, prevSize.y, roomAspect);
+        width = size.width;
+        height = size.height;
+        const sizedAspect = width / height;
+        const hw = (size3.x / 2) * CAPTURE_MARGIN;
+        const hd = (size3.z / 2) * CAPTURE_MARGIN;
+        const halfH = Math.max(hd, hw / sizedAspect);
+        camera.left = -halfH * sizedAspect;
+        camera.right = halfH * sizedAspect;
+        camera.top = halfH;
+        camera.bottom = -halfH;
+        camera.position.set(centre.x, camera.position.y, centre.z);
+        camera.updateProjectionMatrix();
+      }
     }
   }
 
