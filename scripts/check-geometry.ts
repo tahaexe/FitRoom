@@ -51,6 +51,7 @@ import {
   SAMPLE_SYNTH_ROOM,
   VARIANT_ROOM_1,
   VARIANT_ROOM_2,
+  resolveRoomFromCorners,
   solveRoomFromPhotos,
   validateRoomDraft,
   type PhotoInput,
@@ -1004,8 +1005,128 @@ async function tierEmptyOptionals(): Promise<void> {
   }
 }
 
+/**
+ * Tier 5 (corner re-solve): the pure `resolveRoomFromCorners` replays the
+ * solver from hand-moved corners. Unmoved corners reproduce the solver's
+ * draft within 1 cm; moving one corner of one wall by 20 px changes that
+ * wall and what depends on it (its openings, the ceiling) and nothing
+ * else; a corner moved outside its photo is refused.
+ */
+function tierResolve(): void {
+  console.log("== tier 5: corner re-solve ==");
+  const clean = [
+    photo(SAMPLE_SYNTH_ROOM, "A", { yawDeg: 1.5, pitchDeg: -3, rollDeg: 1, seed: 11 }),
+    photo(SAMPLE_SYNTH_ROOM, "B", { yawDeg: -1.5, pitchDeg: -4, rollDeg: -1, seed: 12 }),
+    photo(SAMPLE_SYNTH_ROOM, "C", { yawDeg: 1, pitchDeg: -5, rollDeg: 0.5, seed: 13 }),
+    photo(SAMPLE_SYNTH_ROOM, "D", { yawDeg: -1, pitchDeg: -3, rollDeg: -0.5, seed: 14 }),
+  ];
+  const draft = solveRoomFromPhotos({ photos: clean, tapeA: 420, tapeB: 360 });
+  const sizes = {
+    A: { width: 800, height: 600 },
+    B: { width: 800, height: 600 },
+    C: { width: 800, height: 600 },
+    D: { width: 800, height: 600 },
+  } as Record<WallLetter, { width: number; height: number }>;
+  const same = resolveRoomFromCorners({ base: draft, corners: {}, sizes, tapeA: 420, tapeB: 360 });
+  for (const letter of ["A", "B", "C", "D"] as const) {
+    check(
+      `re-solve unmoved: wall ${letter} within 1 cm`,
+      Math.abs(same.wallLengths[letter].value - draft.wallLengths[letter].value) <= 1,
+      `${String(same.wallLengths[letter].value)} vs ${String(draft.wallLengths[letter].value)}`,
+    );
+  }
+  check(
+    "re-solve unmoved: ceiling within 1 cm",
+    Math.abs(same.ceilingHeight.value - draft.ceilingHeight.value) <= 1,
+    `${String(same.ceilingHeight.value)} vs ${String(draft.ceilingHeight.value)}`,
+  );
+  const byId = (d: RoomDraft, id: string): number => d.openings.findIndex((o) => o.id === id);
+  let openingsClose = same.openings.length === draft.openings.length;
+  for (const o of draft.openings) {
+    const n = same.openings[byId(same, o.id)];
+    if (n === undefined) {
+      openingsClose = false;
+      break;
+    }
+    if (
+      Math.abs(n.offset.value - o.offset.value) > 1 ||
+      Math.abs(n.width.value - o.width.value) > 1 ||
+      Math.abs(n.height.value - o.height.value) > 1 ||
+      Math.abs(n.sillHeight.value - o.sillHeight.value) > 1
+    ) {
+      openingsClose = false;
+      break;
+    }
+  }
+  check("re-solve unmoved: openings within 1 cm", openingsClose);
+  const vd = validateRoomDraft(same);
+  check("re-solve unmoved: RoomDraft validates", vd.ok, vd.errors.join("; "));
+
+  // Move one corner of wall A by 20 px: that wall's openings move, the
+  // other walls' openings stay exactly put.
+  const cornersA = draft.photos.find((p) => p.wall === "A")?.corners;
+  if (cornersA === undefined) {
+    check("re-solve moved: wall A corners found", false);
+    return;
+  }
+  const moved = resolveRoomFromCorners({
+    base: draft,
+    corners: {
+      A: { ...cornersA, m3: [cornersA.m3[0] + 20, cornersA.m3[1]] },
+    },
+    sizes,
+    tapeA: 420,
+    tapeB: 360,
+  });
+  const movedA = moved.openings.filter((o) => o.wall === "A");
+  const baseA = draft.openings.filter((o) => o.wall === "A");
+  const aChanged =
+    movedA.length === baseA.length &&
+    movedA.some((o, i) => {
+      const b = baseA[i];
+      if (b === undefined) return true;
+      return Math.abs(o.offset.value - b.offset.value) > 0.5 || Math.abs(o.width.value - b.width.value) > 0.5;
+    });
+  check("re-solve moved: wall A openings change", aChanged);
+  let othersSame = true;
+  for (const o of draft.openings.filter((x) => x.wall !== "A")) {
+    const n = moved.openings.find((m) => m.id === o.id);
+    if (
+      n === undefined ||
+      n.offset.value !== o.offset.value ||
+      n.width.value !== o.width.value ||
+      n.height.value !== o.height.value ||
+      n.sillHeight.value !== o.sillHeight.value
+    ) {
+      othersSame = false;
+      break;
+    }
+  }
+  check("re-solve moved: other walls unchanged", othersSame);
+  check(
+    "re-solve moved: taped walls unchanged",
+    moved.wallLengths.A.value === 420 && moved.wallLengths.B.value === 360,
+    `${String(moved.wallLengths.A.value)}/${String(moved.wallLengths.B.value)}`,
+  );
+
+  let refused = false;
+  try {
+    resolveRoomFromCorners({
+      base: draft,
+      corners: { A: { ...cornersA, m1: [-10, cornersA.m1[1]] } },
+      sizes,
+      tapeA: 420,
+      tapeB: 360,
+    });
+  } catch {
+    refused = true;
+  }
+  check("re-solve moved: outside corner refused", refused);
+}
+
 async function main(): Promise<void> {
   tierSynthetic();
+  tierResolve();
   await tierExact();
   await tierSmoke();
   await tierEmptyOptionals();

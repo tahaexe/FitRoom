@@ -1,4 +1,6 @@
 export * from "./types.js";
 export * from "./geometry.js";
 export * from "./solve.js";
+export * from "./steps.js";
+export * from "./resolve.js";
 export * from "./synthetic.js";

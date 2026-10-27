@@ -10,9 +10,14 @@ import {
   focalPxOf,
   intersect,
   wallHomography,
-  widthHeightRatio,
   type LineFit,
 } from "./geometry.js";
+import {
+  blendCeilingHeight,
+  cornersOutOfFrame,
+  estimateWallHeightFromCorners,
+  tapeForLetter,
+} from "./steps.js";
 import {
   LETTER_TO_WALL_ID,
   type DraftFlag,
@@ -36,11 +41,10 @@ export const WINDOW_FRAME_CM = -5;
 export const GAP_MARGIN_CM = 3;
 /** Frame pieces sit inside the jambs (measured on the truth renders). */
 export const FRAME_MARGIN_CM = 8;
-const DEFAULT_CEILING_CM = 250;
 const DEFAULT_FOCAL_35MM = 26;
 
 function tapeFor(letter: WallLetter, tapeA: number, tapeB: number): number {
-  return letter === "A" || letter === "C" ? tapeA : tapeB;
+  return tapeForLetter(letter, tapeA, tapeB);
 }
 
 function maskAt(inst: SamInstance, x: number, y: number): boolean {
@@ -1040,30 +1044,26 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     const m3 = intersect(bounds.floor, bounds.left);
     const m4 = intersect(bounds.floor, bounds.right);
     const wallLen = tapeFor(photo.wall, input.tapeA, input.tapeB);
-    let ratio = widthHeightRatio(m1, m2, m3, m4, photo.width, photo.height, fPx);
-    if (!Number.isFinite(ratio) || ratio <= 0.2 || ratio > 8) {
-      ratio = wallLen / DEFAULT_CEILING_CM;
-    }
-    const wallPxH = Math.max(1, Math.abs((m3[1] + m4[1]) / 2 - (m1[1] + m2[1]) / 2));
+    // Ratio + height share one helper with the corner re-solve.
+    const estimate = estimateWallHeightFromCorners({
+      corners: { m1, m2, m3, m4 },
+      width: photo.width,
+      height: photo.height,
+      focalPx: fPx,
+      wallLenCm: wallLen,
+      floorRmse: bounds.floor.rmse,
+      ceilRmse: bounds.ceiling.rmse,
+      focal35mm,
+    });
+    const ratio = estimate.ratio;
+    const ratioUnc = estimate.ratioPlusMinus;
+    const height = estimate.heightEstimate;
+    const heightUnc = estimate.heightPlusMinus;
     const lineNoise = (bounds.floor.rmse + bounds.ceiling.rmse) / 2;
-    // A 0.5x photo's estimates carry a wider ±: the pinhole fit bends.
-    const wideMul = wide ? 2.5 : 1;
-    const ratioUnc = ratio * Math.max(0.01, (lineNoise + 1.5) / wallPxH) * wideMul;
-    const height = wallLen / ratio;
-    const heightUnc = Math.max(1.5, height * (ratioUnc / ratio));
     // A side edge at the image border means a corner out of frame: judge
     // the fitted corners (side-wall slivers may touch the border while the
     // facing corners sit inside). A corner on the border is already cut.
-    const margin = 3;
-    const outOfFrame = [m1, m2, m3, m4].some(
-      ([x, y]) =>
-        !Number.isFinite(x) ||
-        !Number.isFinite(y) ||
-        x < margin ||
-        x > photo.width - margin ||
-        y < margin ||
-        y > photo.height - margin,
-    );
+    const outOfFrame = cornersOutOfFrame({ m1, m2, m3, m4 }, photo.width, photo.height);
     if (outOfFrame) {
       flags.push({
         code: "corner-out-of-frame",
@@ -1111,7 +1111,7 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     // exists; a 0.5x photo weighs almost nothing either way.
     if (both && !outOfFrame && (trusted || !bounds.ceilUsable)) {
       const w = (1 / (1 + lineNoise * lineNoise)) * (trusted ? 1 : 1 / 16) * (wide ? 1 / 16 : 1);
-      perWallHeight.push({ wall: photo.wall, h: height, w, t: trusted });
+      perWallHeight.push({ wall: photo.wall, h: estimate.heightRaw, w, t: trusted });
     }
     photos.push({
       wall: photo.wall,
@@ -1136,31 +1136,18 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
   // One ceiling height: inverse-variance blend over walls showing both
   // corners and both lines. Untrusted heights (floor line hidden) stay
   // out while a trusted one exists; with none trusted the default stands.
-  const trustedHeights = perWallHeight.filter((e) => e.t);
-  const contributors = trustedHeights.length > 0 ? trustedHeights : [];
-  let ceiling = DEFAULT_CEILING_CM;
-  let ceilingUnc = 15;
-  let ceilingSource: Uncertain["source"] = "default";
-  if (contributors.length > 0) {
-    let sw = 0;
-    let sh = 0;
-    for (const e of contributors) {
-      sw += e.w;
-      sh += e.h * e.w;
-    }
-    ceiling = sh / sw;
+  // The blend itself lives in steps.ts, shared with the corner re-solve.
+  const blend = blendCeilingHeight(perWallHeight, photoWide);
+  const ceiling = blend.ceiling;
+  const ceilingUnc = blend.ceilingUnc;
+  const ceilingSource: Uncertain["source"] = blend.source;
+  if (blend.spread) {
     const mean = ceiling;
-    let spread = 0;
-    for (const e of contributors) spread = Math.max(spread, Math.abs(e.h - mean));
-    ceilingUnc = Math.max(2, spread / 2 + 2);
-    if (photoWide.some(Boolean)) ceilingUnc = Math.max(ceilingUnc * 1.5, 6);
-    ceilingSource = "photo";
-    if (spread > 0.03 * mean && contributors.length > 1) {
-      flags.push({
-        code: "ceiling-spread",
-        message: `Ceiling heights from different walls differ by ${String(Math.round((spread / mean) * 100))}%.`,
-      });
-    }
+    const spread = Math.max(...perWallHeight.filter((e) => e.t).map((e) => Math.abs(e.h - mean)));
+    flags.push({
+      code: "ceiling-spread",
+      message: `Ceiling heights from different walls differ by ${String(Math.round((spread / mean) * 100))}%.`,
+    });
   }
 
   // Openings through each wall's homography.
