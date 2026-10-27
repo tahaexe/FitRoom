@@ -146,10 +146,32 @@ async function refreshApiStatus(): Promise<void> {
   }
 }
 
-/** Plaster PBR on the shared wall material (ambientCG tiling). */
-function dressWalls(onLoad: () => void): void {
+/** Wall finish ids the builder knows (legacy ids fall back to paint). */
+export const WALL_TEXTURE_IDS = ["PaintedPlaster017", "Wallpaper002A"] as const;
+
+export function wallTextureIdFor(surfaceId: string | null | undefined): string {
+  if (
+    typeof surfaceId === "string" &&
+    (WALL_TEXTURE_IDS as readonly string[]).includes(surfaceId)
+  ) {
+    return surfaceId;
+  }
+  return "PaintedPlaster017";
+}
+
+/** Tint blended over the wall texture: the photo colour, else neutral. */
+export function wallTintFor(surfaceId: string | null | undefined): number {
+  if (typeof surfaceId === "string" && /^#[0-9a-fA-F]{6}$/.test(surfaceId)) {
+    return parseInt(surfaceId.slice(1), 16);
+  }
+  return 0xf1ece2;
+}
+
+/** ambientCG PBR on the shared wall material, tinted toward the photo. */
+function dressWalls(onLoad: () => void, wallId?: string, wallTint?: string): void {
   const loader = new THREE.TextureLoader();
-  const base = "assets/textures/ambientcg/PaintedPlaster017/PaintedPlaster017_1K-JPG";
+  const finish = wallTextureIdFor(wallId);
+  const base = `assets/textures/ambientcg/${finish}/${finish}_1K-JPG`;
   const map = loader.load(`${base}_Color.jpg`, onLoad);
   map.wrapS = THREE.RepeatWrapping;
   map.wrapT = THREE.RepeatWrapping;
@@ -161,6 +183,7 @@ function dressWalls(onLoad: () => void): void {
   normalMap.repeat.set(2, 1);
   WALL_MATERIAL.map = map;
   WALL_MATERIAL.normalMap = normalMap;
+  WALL_MATERIAL.color.setHex(wallTintFor(wallTint));
   WALL_MATERIAL.needsUpdate = true;
 }
 
@@ -360,8 +383,8 @@ class FitRoomApp {
     this.controls.maxDistance = 18;
     if (firstVisit) this.frameDollhouse(cxM, czM, wM, dM, aspect);
 
-    dressWalls(() => this.requestRender());
-    const floorMat = makeFloorMaterial(wM, dM, () => this.requestRender());
+    dressWalls(() => this.requestRender(), ROOM.surfaces.wall, ROOM.surfaces.wallTint);
+    const floorMat = makeFloorMaterial(wM, dM, () => this.requestRender(), ROOM.surfaces.floor);
     this.floorMaterial = floorMat;
     const built = buildRoom(ROOM, floorMat);
     this.scene.add(built.group);
@@ -1048,7 +1071,8 @@ class FitRoomApp {
       this.floorMaterial = null;
       owned.dispose();
     }
-    const floorMat = makeFloorMaterial(wM, dM, () => this.requestRender());
+    dressWalls(() => this.requestRender(), ROOM.surfaces.wall, ROOM.surfaces.wallTint);
+    const floorMat = makeFloorMaterial(wM, dM, () => this.requestRender(), ROOM.surfaces.floor);
     this.floorMaterial = floorMat;
     const built = buildRoom(ROOM, floorMat);
     this.scene.add(built.group);

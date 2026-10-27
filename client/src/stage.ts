@@ -33,15 +33,42 @@ function pbrSet(
   };
 }
 
-/** Tiled ambientCG PBR floor: WoodFloor070, repeat derived from room metres. */
+/** Known on-disk ambientCG floor finishes (plus legacy sample ids). */
+export const FLOOR_TEXTURE_IDS = [
+  "WoodFloor070",
+  "WoodFloor051",
+  "WoodFloor064",
+  "WoodFloor071",
+  "Tiles107",
+  "Tiles139",
+  "Carpet012",
+  "Carpet015",
+  "Carpet016",
+  "Concrete034",
+] as const;
+
+/** Resolve a layout floor id to an on-disk finish (legacy ids fall back). */
+export function floorTextureIdFor(surfaceId: string | null | undefined): string {
+  if (
+    typeof surfaceId === "string" &&
+    (FLOOR_TEXTURE_IDS as readonly string[]).includes(surfaceId)
+  ) {
+    return surfaceId;
+  }
+  return "WoodFloor070";
+}
+
+/** Tiled ambientCG PBR floor, repeat derived from room metres. */
 export function makeFloorMaterial(
   roomWM: number,
   roomDM: number,
   onLoad: () => void = () => {},
+  floorId?: string,
 ): THREE.MeshStandardMaterial {
   const tileM = 2;
+  const finish = floorTextureIdFor(floorId);
   const sets = pbrSet(
-    "assets/textures/ambientcg/WoodFloor070/WoodFloor070_1K-JPG",
+    `assets/textures/ambientcg/${finish}/${finish}_1K-JPG`,
     Math.max(1, roomWM / tileM),
     Math.max(1, roomDM / tileM),
     onLoad,

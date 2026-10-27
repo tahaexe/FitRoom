@@ -16,6 +16,7 @@ import {
   type WallLetter,
 } from "@fitroom/shared";
 import { EditorPlanView } from "./plan-view";
+import { renderFinishesPicker } from "./finishes";
 import { photoBandText, sourceMark, tapeWallLabel } from "./source-mark";
 import { EditorStore, type PhotoSession } from "./editor-store";
 import { draftMeta, type PhotoDraftMeta, type WallSourceMark } from "../photo-room/flow";
@@ -756,6 +757,7 @@ export class RoomEditor {
       hint.className = "editor-hint";
       hint.textContent = "Select a wall, a door, a window or one of your pieces to edit its sizes.";
       this.fieldsEl.appendChild(hint);
+      renderFinishesPicker(this.store, this.fieldsEl);
       return;
     }
     if (selection.kind === "wall") {
@@ -773,6 +775,7 @@ export class RoomEditor {
         (value) => this.setWallLength(wall.id, value),
       );
       this.fieldsEl.appendChild(this.markFor(this.draft?.walls[wall.id]));
+      renderFinishesPicker(this.store, this.fieldsEl);
       return;
     }
     if (selection.kind === "opening") {
@@ -849,6 +852,7 @@ export class RoomEditor {
         this.store.select(null);
       });
       this.fieldsEl.appendChild(remove);
+      renderFinishesPicker(this.store, this.fieldsEl);
       return;
     }
     const piece = room.existing.find((p) => p.id === selection.id);
@@ -910,6 +914,7 @@ export class RoomEditor {
       this.store.select(null);
     });
     this.fieldsEl.appendChild(remove);
+    renderFinishesPicker(this.store, this.fieldsEl);
   }
 
   private clampedSpan(

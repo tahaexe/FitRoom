@@ -97,6 +97,10 @@ export interface PhotoSolution {
   focalPx: number;
   focalSource: FocalSource;
   focal35mm: number;
+  /** Median wall colour of this photo (`#RRGGBB`), computed in the browser. */
+  wallTint?: string;
+  /** Median floor colour of this photo (`#RRGGBB`), computed in the browser. */
+  floorColor?: string;
   lines: { floor: FittedLine; ceiling: FittedLine; left: FittedLine; right: FittedLine };
   corners: {
     m1: [number, number];

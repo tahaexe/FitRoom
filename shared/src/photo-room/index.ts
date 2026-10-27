@@ -3,4 +3,5 @@ export * from "./geometry.js";
 export * from "./solve.js";
 export * from "./steps.js";
 export * from "./resolve.js";
+export * from "./surfaces.js";
 export * from "./synthetic.js";

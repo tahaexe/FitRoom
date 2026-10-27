@@ -12,6 +12,7 @@
 
 import { applyHomography, wallHomography, type RoomLayout } from "@fitroom/shared";
 import type { EditorStore, PhotoSession } from "./editor-store";
+import { renderFinishesPicker } from "./finishes";
 import type { PhotoDraftMeta } from "../photo-room/flow";
 import { photoBandText } from "./source-mark";
 
@@ -1048,5 +1049,6 @@ export class PhotoConfirmView {
       band.appendChild(text);
       this.planEl.appendChild(band);
     }
+    renderFinishesPicker(this.store, this.planEl);
   }
 }

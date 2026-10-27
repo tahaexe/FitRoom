@@ -103,6 +103,8 @@ export interface RoomSurfaces {
   floor: string;
   /** Wall material id. */
   wall: string;
+  /** Wall tint toward the photo colour, as `#RRGGBB`. Absent on older rooms. */
+  wallTint?: string;
 }
 
 export interface RoomStyle {

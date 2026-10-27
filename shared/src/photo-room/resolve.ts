@@ -230,6 +230,8 @@ export function resolveRoomFromCorners(input: ResolveRoomInput): RoomDraft {
     { wallLengths, ceilingHeight, openings },
     { photos: [], tapeA, tapeB },
   );
+  // A corner re-solve never changes the finishes: keep the base surfaces.
+  layout.surfaces = JSON.parse(JSON.stringify(base.layout.surfaces)) as RoomLayout["surfaces"];
   void room;
 
   return {

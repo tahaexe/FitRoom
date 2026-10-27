@@ -18,6 +18,7 @@ import {
 } from "@fitroom/shared";
 import { postSegment } from "../api";
 import { segmentInstances } from "../capture/sam";
+import { computeSurfaceColors } from "./surfaces";
 
 export const SEGMENT_CONCEPTS = ["wall", "floor", "ceiling", "door", "window"] as const;
 
@@ -33,6 +34,10 @@ export interface WallAnalysis {
   instances: SamInstance[];
   draft: RoomDraft;
   solution: PhotoSolution;
+  /** Median wall colour of this photo (`#RRGGBB`), null when unavailable. */
+  wallTint: string | null;
+  /** Median floor colour of this photo (`#RRGGBB`), null when unavailable. */
+  floorColor: string | null;
 }
 
 /** Mean side-edge deviation from vertical, in degrees: the phone-tilt readout. */
@@ -148,5 +153,22 @@ export async function analyseWallPhoto(
   });
   const solution = draft.photos[0];
   if (solution === undefined) throw new Error("The room scanner found no wall in that photo.");
-  return { instances, draft, solution };
+  // The masks are at hand now: tint from the photo pixels, no extra call.
+  // Pixels never block the check: a missed read keeps null colours.
+  let wallTint: string | null = null;
+  let floorColor: string | null = null;
+  try {
+    if (typeof document !== "undefined") {
+      const colors = await computeSurfaceColors(segUrl, segWidth, segHeight, instances);
+      wallTint = colors.wallTint;
+      floorColor = colors.floorColor;
+    }
+  } catch {
+    wallTint = null;
+    floorColor = null;
+  }
+  // Keep the colours with the photo's own solution, for the build step.
+  if (wallTint !== null) solution.wallTint = wallTint;
+  if (floorColor !== null) solution.floorColor = floorColor;
+  return { instances, draft, solution, wallTint, floorColor };
 }

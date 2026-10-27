@@ -36,6 +36,7 @@ export const roomLayoutSchema = {
       properties: {
         floor: { type: "string", minLength: 1 },
         wall: { type: "string", minLength: 1 },
+        wallTint: { type: "string", pattern: "^#[0-9a-fA-F]{6}$" },
       },
       required: ["floor", "wall"],
       additionalProperties: false,

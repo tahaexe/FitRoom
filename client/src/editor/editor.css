@@ -525,6 +525,59 @@
   white-space: nowrap;
 }
 
+/* ---- finishes picker: floor/wall swatches + tint reset ---- */
+
+.finishes-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 16px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border-color);
+}
+
+.finishes-title {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.finishes-label {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.finishes-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.finish-swatch {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  cursor: pointer;
+  padding: 0;
+}
+
+.finish-swatch:focus-visible {
+  outline: 2px solid var(--coral);
+  outline-offset: 2px;
+}
+
+.finish-tint-chip {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--border-color);
+  display: inline-block;
+}
+
 /* ---- phone viewport: same blocks stacked, 44px targets kept ---- */
 
 @media (max-width: 900px) {

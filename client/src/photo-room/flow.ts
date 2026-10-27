@@ -13,8 +13,11 @@
  */
 
 import {
+  blendWallTints,
   defaultRoomLabel,
   LETTER_TO_WALL_ID,
+  pickFloorTexture,
+  pickWallTexture,
   solveRoomFromPhotos,
   type DoorTap,
   type PhotoInput,
@@ -1138,10 +1141,34 @@ export class PhotoFlow {
     return data;
   }
 
+  /** Per-photo surface colours kept with each analysed wall. */
+  private surfaceColors(): { wallTints: Array<string | null>; floorColors: Array<string | null> } {
+    const wallTints: Array<string | null> = [];
+    const floorColors: Array<string | null> = [];
+    for (const letter of WALL_ORDER) {
+      const analysis = this.stateOf(letter).analysis;
+      wallTints.push(analysis?.wallTint ?? null);
+      floorColors.push(analysis?.floorColor ?? null);
+    }
+    return { wallTints, floorColors };
+  }
+
   private applyLabel(draft: RoomDraft, label: RoomLabelAnswer): void {
     draft.layout.style = {
       tags: [...label.style.tags],
       dominantColors: [...label.style.dominantColors],
+    };
+    // Finishes from the label + the mask medians: the floor family picks an
+    // on-disk texture (wood closest by floor colour), the wall family picks
+    // paint or wallpaper, and the per-photo wall medians blend into one tint.
+    const { wallTints, floorColors } = this.surfaceColors();
+    const floorMedian = blendWallTints(floorColors);
+    draft.layout.surfaces = {
+      floor: pickFloorTexture(label.floor.family, floorMedian),
+      wall: pickWallTexture(label.walls.family),
+      ...(blendWallTints(wallTints) === null
+        ? {}
+        : { wallTint: blendWallTints(wallTints) as string }),
     };
   }
 }
