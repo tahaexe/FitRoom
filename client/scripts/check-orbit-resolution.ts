@@ -24,6 +24,8 @@ import { fileURLToPath } from "node:url";
 import {
   ORBIT_MAX_SCALE,
   ORBIT_MIN_INTERVAL_MS,
+  ORBIT_MIN_SCALE,
+  ORBIT_START_SCALE,
   OrbitResolutionController,
 } from "../src/orbit-resolution.js";
 
@@ -188,6 +190,130 @@ function main(): void {
     "the view is back at full resolution 300 ms after the last motion",
     allFull,
     firstSettled === undefined ? "no settled frames" : `scale ${String(firstSettled.scale)}`,
+  );
+
+  // Steady-cost scenarios: constant motion with a constant frame cost.
+  // Cheap stays cheap so the scale climbs to 1.0 and sticks; expensive
+  // stays expensive so it sinks to 0.5 and sticks. Both start at 0.75.
+  interface SteadyRun {
+    scales: number[];
+    times: number[];
+    changes: FrameRecord[];
+  }
+
+  function runSteady(costMs: number, totalFrames: number): SteadyRun {
+    const ctrl = new OrbitResolutionController();
+    const scales: number[] = [];
+    const times: number[] = [];
+    const changes: FrameRecord[] = [];
+    let t = 0;
+    for (let i = 0; i < totalFrames; i += 1) {
+      const scale = ctrl.update(true, costMs, t);
+      scales.push(scale);
+      times.push(t);
+      const prev = changes[changes.length - 1];
+      if (prev === undefined || prev.scale !== scale) {
+        changes.push({ index: i, nowMs: t, moved: true, scale });
+      }
+      t += FRAME_DT_MS;
+    }
+    return { scales, times, changes };
+  }
+
+  function directionChangeTimes(changes: FrameRecord[]): number[] {
+    const times: number[] = [];
+    let prevDir = 0;
+    for (let i = 1; i < changes.length; i += 1) {
+      const prev = changes[i - 1];
+      const current = changes[i];
+      if (prev === undefined || current === undefined) continue;
+      const delta = current.scale - prev.scale;
+      const dir = delta > 0 ? 1 : delta < 0 ? -1 : 0;
+      if (dir === 0) continue;
+      if (prevDir !== 0 && dir !== prevDir) times.push(current.nowMs);
+      prevDir = dir;
+    }
+    return times;
+  }
+
+  function maxDirectionChangesPerSecond(changeTimes: number[]): number {
+    let max = 0;
+    for (let i = 0; i < changeTimes.length; i += 1) {
+      const start = changeTimes[i];
+      if (start === undefined) continue;
+      let count = 0;
+      for (let j = i; j < changeTimes.length; j += 1) {
+        const t = changeTimes[j];
+        if (t === undefined) continue;
+        if (t - start < 1000 - 0.5) count += 1;
+        else break;
+      }
+      if (count > max) max = count;
+    }
+    return max;
+  }
+
+  const cheap = runSteady(8, 400);
+  const expensive = runSteady(20, 400);
+
+  check(
+    "steady cheap motion starts at 0.75",
+    cheap.scales[0] === ORBIT_START_SCALE,
+    `scale ${String(cheap.scales[0])}`,
+  );
+  check(
+    "steady expensive motion starts at 0.75",
+    expensive.scales[0] === ORBIT_START_SCALE,
+    `scale ${String(expensive.scales[0])}`,
+  );
+
+  const cheapTail = cheap.scales.slice(1);
+  const cheapRisesOnly = cheapTail.every((s, i) => i === 0 || s >= (cheapTail[i - 1] ?? 0) - 1e-9);
+  check("steady cheap cost only raises the scale", cheapRisesOnly);
+  const cheapInRange = cheap.scales.every(
+    (s) => s >= ORBIT_MIN_SCALE - 1e-9 && s <= ORBIT_MAX_SCALE + 1e-9,
+  );
+  check("steady cheap cost stays within 0.5 and 1.0", cheapInRange);
+  const cheapEndsFull = cheap.scales[cheap.scales.length - 1] === ORBIT_MAX_SCALE;
+  check("steady cheap cost reaches 1.0", cheapEndsFull);
+  const cheapFirstFull = cheap.scales.findIndex((s) => s === ORBIT_MAX_SCALE);
+  const cheapStaysFull =
+    cheapFirstFull >= 0 && cheap.scales.slice(cheapFirstFull).every((s) => s === ORBIT_MAX_SCALE);
+  check("steady cheap cost stays at 1.0 once there", cheapStaysFull);
+
+  const expensiveFallsOnly = expensive.scales.every(
+    (s, i) => i === 0 || s <= (expensive.scales[i - 1] ?? 0) + 1e-9,
+  );
+  check("steady expensive cost only lowers the scale", expensiveFallsOnly);
+  const expensiveInRange = expensive.scales.every(
+    (s) => s >= ORBIT_MIN_SCALE - 1e-9 && s <= ORBIT_MAX_SCALE + 1e-9,
+  );
+  check("steady expensive cost stays within 0.5 and 1.0", expensiveInRange);
+  const expensiveEndsMin = expensive.scales[expensive.scales.length - 1] === ORBIT_MIN_SCALE;
+  check("steady expensive cost reaches 0.5", expensiveEndsMin);
+  const expensiveFirstMin = expensive.scales.findIndex((s) => s === ORBIT_MIN_SCALE);
+  const expensiveStaysMin =
+    expensiveFirstMin >= 0 &&
+    expensive.scales.slice(expensiveFirstMin).every((s) => s === ORBIT_MIN_SCALE);
+  check("steady expensive cost stays at 0.5 once there", expensiveStaysMin);
+
+  const cheapReversals = directionChangeTimes(cheap.changes);
+  const expensiveReversals = directionChangeTimes(expensive.changes);
+  const mainReversals = directionChangeTimes(changeFrames);
+  check(
+    "steady cheap cost changes direction at most once per second",
+    maxDirectionChangesPerSecond(cheapReversals) <= 1,
+    `${String(cheapReversals.length)} reversal(s)`,
+  );
+  check(
+    "steady expensive cost changes direction at most once per second",
+    maxDirectionChangesPerSecond(expensiveReversals) <= 1,
+    `${String(expensiveReversals.length)} reversal(s)`,
+  );
+  check(
+    "the orbit scenario changes direction at most once per second",
+    maxDirectionChangesPerSecond(mainReversals) <= 1,
+    `${String(mainReversals.length)} reversal(s)`,
   );
 
   // Static guard: the real frame() must decide and resize before drawing.

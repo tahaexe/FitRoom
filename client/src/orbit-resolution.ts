@@ -59,7 +59,6 @@ export class OrbitResolutionController {
       this.lastMotionMs = nowMs;
       this.emaMs = this.emaMs === 0 ? cost : this.emaMs * 0.8 + cost * 0.2;
       if (nowMs - this.lastChangeMs < ORBIT_MIN_INTERVAL_MS) return this.scaleValue;
-      if (this.scaleValue > ORBIT_START_SCALE) return this.apply(ORBIT_START_SCALE, nowMs);
       if (this.emaMs > ORBIT_FRAME_BUDGET_MS + 0.5) {
         return this.apply(this.scaleValue - ORBIT_DOWN_STEP, nowMs);
       }
