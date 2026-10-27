@@ -1387,6 +1387,9 @@ class FitRoomApp {
     this.setToggle("tool-assistant", name === "assistant");
     // Panels float over the 3D view: the stage keeps its size, so the
     // cameras keep their aspect and nothing under the pointer moves.
+    // While any panel is open the fit badge sits left of it (see
+    // `has-side-panel` in style.css), never over the panel's tabs.
+    this.container.classList.toggle("has-side-panel", name !== "none");
     this.resize();
   }
 

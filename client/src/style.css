@@ -482,6 +482,14 @@ button.danger {
   z-index: 4;
 }
 
+/* While a side panel is open the fit badge and its problem list sit in the
+ * visible part of the 3D view, left of the panel, so nothing covers the
+ * panel's tabs or scrolls over its content. */
+#scene-container.has-side-panel .fit-badge,
+#scene-container.has-side-panel .fit-list {
+  right: calc(var(--inspector-width) + 32px);
+}
+
 #scene-container canvas {
   display: block;
   width: 100%;
@@ -806,7 +814,7 @@ button.danger {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 16px;
-  z-index: 2;
+  z-index: 4;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1020,7 +1028,7 @@ button.danger {
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 16px;
-  z-index: 2;
+  z-index: 4;
   display: flex;
   flex-direction: column;
   gap: 8px;
