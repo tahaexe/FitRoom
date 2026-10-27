@@ -74,6 +74,39 @@ deploys, pipes the Meta key to `wrangler secret put` on standard input
 Live AI routes may briefly answer unavailable until the secret lands;
 demo mode answers throughout.
 
+## Developer
+
+The dev server (`npm run dev`) loads the twelve fit-test scenes into the
+scene menu (`?dev=1`) and offers a camera hook for exact wall views. The
+hook is dev-only: the production build contains no trace of it.
+
+Add any of these URL parameters to frame an eye-level view:
+
+- `camx`, `camz` — camera position in plan centimetres (default: room centre)
+- `cameye` — eye height in centimetres (default 160)
+- `camyaw` — yaw in degrees, clockwise from north, so 0 faces the north
+  wall and 180 faces the south wall (default 0)
+- `campitch` — pitch in degrees, positive looks up (default 0, level)
+- `camfov` — vertical field of view in degrees (default 60)
+
+Example — stand in the doorway at eye height and face the back wall:
+
+```sh
+# with `npm run dev` running:
+http://localhost:5173/?dev=1&camx=75&camz=45&cameye=160&camyaw=0&campitch=0&camfov=60
+```
+
+The hook renders a 4:3 frame, hides the interface panels and publishes
+the calibrated camera on `window.__fitroomCamera` for reading from the
+browser console: `width`, `height`, `fx`, `fy`, `cx`, `cy` in pixels,
+`position` in metres, plus `yawDeg`, `pitchDeg` and `fovDeg`.
+
+```js
+window.__fitroomCamera;
+// { width: 800, height: 600, fx: ..., fy: ..., cx: 400, cy: 300,
+//   position: { x: 0.75, y: 1.6, z: 0.45 }, yawDeg: 0, pitchDeg: 0, fovDeg: 60 }
+```
+
 ## How it's built
 
 All of the code in this repository was written by Meta's Muse Code agent. Recommendations and the layout assistant run on Muse Spark; the photoreal view runs on Muse Image.
