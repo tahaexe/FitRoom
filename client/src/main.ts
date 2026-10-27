@@ -17,6 +17,7 @@ import type {
 import {
   FitEngine,
   cmToMeters,
+  createManualRoom,
   describeRun,
   dollhouseWallView,
   isHealthResponse,
@@ -49,6 +50,10 @@ import { captureView } from "./render/capture";
 import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
 import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
+import { EditorStore } from "./editor/editor-store";
+import { RoomEditor } from "./editor/editor";
+import { RoomMenu } from "./editor/room-menu";
+import "./editor/editor.css";
 import {
   catalogProducts,
   cornersOverlap,
@@ -81,7 +86,28 @@ const TEST_SCENES: Record<string, SceneState> = {
 };
 
 const ROOM = roomJson as unknown as RoomLayout;
+/** Pristine sample room: a deep copy, since ROOM is mutated in place. */
+const SAMPLE_ROOM = JSON.parse(JSON.stringify(roomJson)) as unknown as RoomLayout;
 const CATALOG = catalogJson as unknown as CatalogItem[];
+
+/**
+ * Replace a live room's contents in place: panels hold the room reference,
+ * so the identity never changes while walls, openings and pieces do.
+ */
+function applyRoomLayout(target: RoomLayout, source: RoomLayout): void {
+  const clone = JSON.parse(JSON.stringify(source)) as RoomLayout;
+  target.id = clone.id;
+  target.name = clone.name;
+  target.units = clone.units;
+  target.walls = clone.walls;
+  target.openings = clone.openings;
+  target.fixtures = clone.fixtures;
+  target.existing = clone.existing;
+  target.surfaces = clone.surfaces;
+  target.style = clone.style;
+  target.source = clone.source;
+  target.confidence = clone.confidence;
+}
 const CATALOG_MAP = new Map<string, CatalogItem>(CATALOG.map((c) => [c.id, c]));
 
 const MAX_PIXEL_RATIO = 2;
@@ -171,6 +197,16 @@ class FitRoomApp {
   private devCam = false;
   /** Reframe + republish intrinsics together (hook window resizes). */
   private devRefresh: (() => void) | null = null;
+  /** Built room group, floor material and own-piece boxes (rebuilt per room). */
+  private roomGroup: THREE.Group | null = null;
+  private floorMaterial: THREE.Material | null = null;
+  private existingGroup: THREE.Group | null = null;
+  /** Plan editor state, screen and header menu. */
+  private editorStore: EditorStore | null = null;
+  private editor: RoomEditor | null = null;
+  private roomMenu: RoomMenu | null = null;
+  private editing = false;
+  private menuChoice = "sample";
   private drag: { id: string; offsetX: number; offsetZ: number } | null = null;
   private rotating = false;
   /** Throttled live fit feedback while dragging (moved id, consumed once per frame). */
@@ -265,9 +301,12 @@ class FitRoomApp {
 
     dressWalls(() => this.requestRender());
     const floorMat = makeFloorMaterial(wM, dM, () => this.requestRender());
+    this.floorMaterial = floorMat;
     const built = buildRoom(ROOM, floorMat);
     this.scene.add(built.group);
+    this.roomGroup = built.group;
     this.scene.add(this.modelsRoot);
+    this.rebuildExistingGroup();
     const floor = built.group.getObjectByName("fitroom-floor");
     if (floor instanceof THREE.Mesh) this.floorMesh = floor;
     this.rig = setupStage(this.renderer, this.scene, built.floorSize, built.wallHeightM, () =>
@@ -377,8 +416,20 @@ class FitRoomApp {
       this.markSceneChanged();
     });
 
-    const roomName = document.getElementById("room-name");
-    if (roomName !== null) roomName.textContent = ROOM.name;
+    const roomNameHost = document.getElementById("room-name");
+    if (roomNameHost !== null) {
+      roomNameHost.textContent = "";
+      this.roomMenu = new RoomMenu(roomNameHost, (id) => this.pickRoom(id));
+      this.refreshMenu();
+    }
+    this.editorStore = new EditorStore(ROOM);
+    this.editorStore.onCommitted((room) => {
+      applyRoomLayout(ROOM, room);
+      this.syncRoomId();
+      this.rebuildRoom();
+    });
+    this.editor = new RoomEditor(this.editorStore, { onBuild: () => this.finishBuild() });
+    document.body.appendChild(this.editor.element);
     document.getElementById("fit-badge")?.addEventListener("click", () => {
       document.getElementById("fit-list")?.toggleAttribute("hidden");
     });
@@ -533,6 +584,181 @@ class FitRoomApp {
     this.store.commit((draft) => {
       draft.items = clone.items;
     });
+  }
+
+  /** Header room menu: sample room, manual build, or reopen the editor. */
+  private pickRoom(id: string): void {
+    if (id === "manual") {
+      this.menuChoice = "manual";
+      applyRoomLayout(ROOM, createManualRoom());
+      this.syncRoomId();
+      this.rebuildRoom();
+      this.editorStore?.load(ROOM);
+      this.openEditor();
+    } else if (id === "edit") {
+      this.editorStore?.load(ROOM);
+      this.openEditor();
+    } else {
+      this.menuChoice = "sample";
+      applyRoomLayout(ROOM, SAMPLE_ROOM);
+      this.syncRoomId();
+      this.closeEditor();
+      this.rebuildRoom();
+    }
+    this.refreshMenu();
+  }
+
+  private refreshMenu(): void {
+    const current =
+      this.menuChoice === "edit"
+        ? ROOM.source === "manual"
+          ? "manual"
+          : "sample"
+        : this.menuChoice;
+    this.roomMenu?.setItems(
+      [
+        { id: "sample", label: "Sample living room", hint: "Today's furnished demo room" },
+        {
+          id: "manual",
+          label: "Build a room",
+          hint: "Draw your own 400 × 350 cm room in the plan editor",
+        },
+        { id: "edit", label: "Edit plan", hint: "Reopen the plan editor for the current room" },
+      ],
+      current,
+    );
+  }
+
+  private openEditor(): void {
+    this.editing = true;
+    this.select(null);
+    this.showSidePanel("none");
+    this.editor?.element.removeAttribute("hidden");
+  }
+
+  private closeEditor(): void {
+    this.editing = false;
+    this.editor?.element.setAttribute("hidden", "");
+  }
+
+  /** Leave the editor for the 3D room view with catalogue and fit checks. */
+  private finishBuild(): void {
+    this.menuChoice = ROOM.source === "manual" ? "manual" : "sample";
+    this.closeEditor();
+    this.rebuildRoom();
+    this.refreshMenu();
+  }
+
+  /** Keep the scene's room id with the live room (autosave coherence). */
+  private syncRoomId(): void {
+    if (this.store.state.roomId !== ROOM.id) {
+      this.store.replace({ ...this.store.state, roomId: ROOM.id });
+    }
+  }
+
+  /** Rebuild the 3D room, fit engine and overlays after a plan edit. */
+  private rebuildRoom(): void {
+    if (this.roomGroup !== null) {
+      this.scene.remove(this.roomGroup);
+      this.roomGroup.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) obj.geometry.dispose();
+      });
+      this.roomGroup = null;
+    }
+    const bounds = roomBounds(ROOM);
+    const wM = cmToMeters(bounds.maxX - bounds.minX);
+    const dM = cmToMeters(bounds.maxZ - bounds.minZ);
+    const cxM = cmToMeters((bounds.minX + bounds.maxX) / 2);
+    const czM = cmToMeters((bounds.minZ + bounds.maxZ) / 2);
+    if (this.floorMaterial !== null) {
+      const owned = this.floorMaterial;
+      this.floorMaterial = null;
+      owned.dispose();
+    }
+    const floorMat = makeFloorMaterial(wM, dM, () => this.requestRender());
+    this.floorMaterial = floorMat;
+    const built = buildRoom(ROOM, floorMat);
+    this.scene.add(built.group);
+    this.roomGroup = built.group;
+    this.roomWalls = built.group;
+    this.wallEntries = built.wallEntries.map((e) => ({
+      wallId: e.wallId,
+      meshes: e.meshes,
+      outward: e.outward,
+    }));
+    const floor = built.group.getObjectByName("fitroom-floor");
+    this.floorMesh = floor instanceof THREE.Mesh ? floor : null;
+    this.rebuildExistingGroup();
+    if (this.rig !== null) {
+      this.scene.remove(this.rig.contactPlane);
+      this.rig.contactPlane.geometry.dispose();
+      const contact = new THREE.Mesh(
+        new THREE.PlaneGeometry(wM, dM),
+        this.rig.contactPlane.material,
+      );
+      contact.rotation.x = -Math.PI / 2;
+      contact.position.set(cxM, 0.005, czM);
+      contact.receiveShadow = true;
+      contact.name = "fitroom-contact";
+      this.scene.add(contact);
+      this.rig.contactPlane = contact;
+    }
+    const aspect =
+      Math.max(1, this.container.clientWidth) / Math.max(1, this.container.clientHeight);
+    const half = Math.max(wM, dM) / 2 + 1;
+    this.planCam.top = half;
+    this.planCam.bottom = -half;
+    this.planCam.left = -half * aspect;
+    this.planCam.right = half * aspect;
+    this.planCam.position.set(cxM, 12, czM);
+    this.planCam.lookAt(cxM, 0, czM);
+    this.planCam.updateProjectionMatrix();
+    this.planOverlay.svg.remove();
+    this.planOverlay = new PlanOverlay(this.container, ROOM);
+    this.planOverlay.setVisible(this.mode === "plan");
+    this.fitEngine = new FitEngine(ROOM, catalogProducts(CATALOG_MAP));
+    this.refreshIssues();
+    this.updateMeasure();
+    this.recommendPanel?.refresh();
+    this.markSceneChanged();
+  }
+
+  /** Own pieces as simple blocks in the 3D room. */
+  private rebuildExistingGroup(): void {
+    if (this.existingGroup !== null) {
+      this.scene.remove(this.existingGroup);
+      this.existingGroup.traverse((obj) => {
+        if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          const material = obj.material;
+          if (material instanceof THREE.Material) material.dispose();
+        }
+      });
+      this.existingGroup = null;
+    }
+    const group = new THREE.Group();
+    group.name = "fitroom-existing";
+    for (const piece of ROOM.existing) {
+      const geometry = new THREE.BoxGeometry(
+        cmToMeters(piece.footprint.w),
+        cmToMeters(piece.height),
+        cmToMeters(piece.footprint.d),
+      );
+      const material = new THREE.MeshStandardMaterial({ color: 0xd8d3cc, roughness: 0.9 });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.position.set(
+        cmToMeters(piece.footprint.x + piece.footprint.w / 2),
+        cmToMeters(piece.height / 2),
+        cmToMeters(piece.footprint.z + piece.footprint.d / 2),
+      );
+      mesh.rotation.y = (piece.footprint.rotationY * Math.PI) / 180;
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      mesh.name = `existing-${piece.id}`;
+      group.add(mesh);
+    }
+    this.scene.add(group);
+    this.existingGroup = group;
   }
 
   /** Highlight a free wall run on the floor while it is hovered. */
@@ -1067,6 +1293,10 @@ class FitRoomApp {
       if (tag === "input" || tag === "textarea") return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
+        if (this.editing) {
+          this.editorStore?.undo();
+          return;
+        }
         if (this.store.undo()) {
           void this.syncInstances();
           this.refreshIssues();
@@ -1209,7 +1439,12 @@ class FitRoomApp {
     this.controls.enableRotate = mode === "orbit";
     this.controls.maxPolarAngle = mode === "plan" ? 0.01 : MAX_POLAR;
     if (mode === "plan") {
-      this.controls.target.set(cmToMeters(210), 0, cmToMeters(180));
+      const bounds = roomBounds(ROOM);
+      this.controls.target.set(
+        cmToMeters((bounds.minX + bounds.maxX) / 2),
+        0,
+        cmToMeters((bounds.minZ + bounds.maxZ) / 2),
+      );
     }
     this.controls.update();
     // Walls hide in plan view, so the shadow map must render again without
