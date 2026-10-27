@@ -62,6 +62,11 @@ import {
   synthPhoto,
 } from "../shared/src/photo-room/index.js";
 import { validateRoomLayout } from "../shared/src/validate.js";
+import {
+  WALL_EDGE_CYCLE,
+  cornerHandleLabel,
+  type CornerId,
+} from "../client/src/editor/photo-confirm.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -256,6 +261,120 @@ function checkBars(tag: string, room: SynthRoom, draft: RoomDraft, expectedFlags
   }
   const vd = validateRoomDraft(draft);
   check(`${tag}: RoomDraft validates`, vd.ok, vd.errors.join("; "));
+  checkConfirmOutline(tag, draft);
+}
+
+type CornerPoint = [number, number];
+
+/**
+ * Confirm-outline bar: the photo confirm view draws every wall in the
+ * solver's corner order (`m1` top left, `m2` top right, `m3` bottom left,
+ * `m4` bottom right). For each solved photo the drawn edge cycle must be a
+ * simple quadrilateral (no crossing edges — the desktop bowtie regression)
+ * and every handle's position must match its name. The cycle comes from the
+ * view itself, so the view cannot drift from this bar.
+ */
+function outlineLoop(corners: Record<CornerId, CornerPoint>): CornerPoint[] {
+  const order: CornerId[] = ["m1"];
+  for (const pair of WALL_EDGE_CYCLE) {
+    const last = order[order.length - 1] as CornerId;
+    if (pair[0] === last && !order.includes(pair[1])) order.push(pair[1]);
+    else if (pair[1] === last && !order.includes(pair[0])) order.push(pair[0]);
+    else break;
+  }
+  return order.map((id) => corners[id]);
+}
+
+function orient(a: CornerPoint, b: CornerPoint, c: CornerPoint): number {
+  const v = (b[0] - a[0]) * (c[1] - a[1]) - (b[1] - a[1]) * (c[0] - a[0]);
+  return v > 0 ? 1 : v < 0 ? -1 : 0;
+}
+
+/** Proper crossing of two segments (shared endpoints do not count). */
+function segmentsCross(
+  p1: CornerPoint,
+  p2: CornerPoint,
+  p3: CornerPoint,
+  p4: CornerPoint,
+): boolean {
+  return (
+    orient(p1, p2, p3) * orient(p1, p2, p4) < 0 && orient(p3, p4, p1) * orient(p3, p4, p2) < 0
+  );
+}
+
+function checkConfirmLabels(): void {
+  console.log("== tier 6: confirm outline ==");
+  const names: Array<[CornerId, string]> = [
+    ["m1", "top left"],
+    ["m2", "top right"],
+    ["m3", "bottom left"],
+    ["m4", "bottom right"],
+  ];
+  for (const [id, position] of names) {
+    for (const wall of ["A", "B", "C", "D"] as const) {
+      check(
+        `confirm-outline: handle ${id} reads ${position}`,
+        cornerHandleLabel(id, wall) === `Corner ${position} of wall ${wall}`,
+        cornerHandleLabel(id, wall),
+      );
+    }
+  }
+}
+
+function checkConfirmOutline(tag: string, draft: RoomDraft): void {
+  for (const sol of draft.photos) {
+    const corners = sol.corners as Record<CornerId, CornerPoint>;
+    const ids = ["m1", "m2", "m3", "m4"] as const;
+    const finite = ids.every(
+      (id) =>
+        corners[id] !== undefined &&
+        Number.isFinite(corners[id][0]) &&
+        Number.isFinite(corners[id][1]),
+    );
+    check(`confirm-outline ${tag} wall ${sol.wall}: corners finite`, finite);
+    if (!finite) continue;
+    const loop = outlineLoop(corners);
+    check(
+      `confirm-outline ${tag} wall ${sol.wall}: edge cycle covers four corners`,
+      loop.length === 4,
+      loop.length === 4 ? undefined : `covers ${String(loop.length)}`,
+    );
+    if (loop.length !== 4) continue;
+    const [p0, p1, p2, p3] = loop as [CornerPoint, CornerPoint, CornerPoint, CornerPoint];
+    check(
+      `confirm-outline ${tag} wall ${sol.wall}: outline is a simple quadrilateral`,
+      !segmentsCross(p0, p1, p2, p3) && !segmentsCross(p1, p2, p3, p0),
+    );
+    const [m1, m2, m3, m4] = [corners.m1, corners.m2, corners.m3, corners.m4] as [
+      CornerPoint,
+      CornerPoint,
+      CornerPoint,
+      CornerPoint,
+    ];
+    // Each handle against its own side: steep perspective can lift one
+    // side's bottom corner above the other side's top corner, so only
+    // same-side comparisons hold on every real photo.
+    check(
+      `confirm-outline ${tag} wall ${sol.wall}: m1 is top left`,
+      m1[1] < m3[1] && m1[0] < m2[0],
+      `m1 ${m1.join(",")} m2 ${m2.join(",")} m3 ${m3.join(",")} m4 ${m4.join(",")}`,
+    );
+    check(
+      `confirm-outline ${tag} wall ${sol.wall}: m2 is top right`,
+      m2[1] < m4[1] && m2[0] > m1[0],
+      `m1 ${m1.join(",")} m2 ${m2.join(",")} m3 ${m3.join(",")} m4 ${m4.join(",")}`,
+    );
+    check(
+      `confirm-outline ${tag} wall ${sol.wall}: m3 is bottom left`,
+      m3[1] > m1[1] && m3[0] < m4[0],
+      `m1 ${m1.join(",")} m2 ${m2.join(",")} m3 ${m3.join(",")} m4 ${m4.join(",")}`,
+    );
+    check(
+      `confirm-outline ${tag} wall ${sol.wall}: m4 is bottom right`,
+      m4[1] > m2[1] && m4[0] > m3[0],
+      `m1 ${m1.join(",")} m2 ${m2.join(",")} m3 ${m3.join(",")} m4 ${m4.join(",")}`,
+    );
+  }
 }
 
 function tierSynthetic(): void {
@@ -431,6 +550,7 @@ function tierSynthetic(): void {
   }
   const vdSofaFull = validateRoomDraft(dSofaFull);
   check("synthetic sofa-full: RoomDraft validates", vdSofaFull.ok, vdSofaFull.errors.join("; "));
+  checkConfirmOutline("synthetic sofa-full", dSofaFull);
 
   // Full-height wardrobe at a corner (square-on, so its face sits where
   // the corner hides).
@@ -618,6 +738,7 @@ function tierSynthetic(): void {
   );
   const vdWide = validateRoomDraft(dWide);
   check("synthetic wide-05x: RoomDraft validates", vdWide.ok, vdWide.errors.join("; "));
+  checkConfirmOutline("synthetic wide-05x", dWide);
 }
 
 /** Truth file schema in `.inbox/truth/` (and copied fixtures). */
@@ -856,6 +977,7 @@ async function tierSmoke(): Promise<void> {
         const vd = validateRoomDraft(draft);
         check(`smoke ${photoId}: runs and validates`, vd.ok, vd.errors.join("; "));
         smokeExpectations(photoId, draft);
+        checkConfirmOutline(`smoke ${photoId}`, draft);
       } catch (error) {
         check(
           `smoke ${photoId}: never throws`,
@@ -996,6 +1118,7 @@ async function tierEmptyOptionals(): Promise<void> {
     );
     const vd = validateRoomDraft(draft);
     check("empty-optionals: RoomDraft validates", vd.ok, vd.errors.join("; "));
+    checkConfirmOutline("empty-optionals", draft);
   } catch (error) {
     check(
       "empty-optionals: wall without window or door still solves",
@@ -1128,6 +1251,7 @@ function tierResolve(): void {
 }
 
 async function main(): Promise<void> {
+  checkConfirmLabels();
   tierSynthetic();
   tierResolve();
   await tierExact();

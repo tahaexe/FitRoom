@@ -23,9 +23,24 @@ export const CORNER_IDS: CornerId[] = ["m1", "m2", "m3", "m4"];
 const CORNER_NAME: Record<CornerId, string> = {
   m1: "top left",
   m2: "top right",
-  m3: "bottom right",
-  m4: "bottom left",
+  m3: "bottom left",
+  m4: "bottom right",
 };
+
+/**
+ * The drawn wall outline in solver corner order: `m1` top left, `m2` top
+ * right, `m3` bottom left, `m4` bottom right (see `solve.ts`, which builds
+ * the corners as ceiling-left, ceiling-right, floor-left, floor-right, and
+ * the `wallHomography` table, which maps them to the wall rectangle's
+ * top-left, top-right, bottom-left and bottom-right). Top, right, bottom,
+ * then left: a simple quadrilateral, never a bowtie.
+ */
+export const WALL_EDGE_CYCLE: Array<[CornerId, CornerId]> = [
+  ["m1", "m2"],
+  ["m2", "m4"],
+  ["m4", "m3"],
+  ["m3", "m1"],
+];
 
 /** Focusable corner handle name: "Corner top left of wall B". Pure. */
 export function cornerHandleLabel(corner: CornerId, wall: WallLetter): string {
@@ -324,13 +339,8 @@ export class PhotoConfirmView {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("class", "photo-stage-svg");
     svg.setAttribute("viewBox", `0 0 ${String(this.photo.width)} ${String(this.photo.height)}`);
-    const edges: Array<[CornerId, CornerId]> = [
-      ["m1", "m2"],
-      ["m2", "m3"],
-      ["m3", "m4"],
-      ["m4", "m1"],
-    ];
-    edges.forEach(([a, b], index) => {
+    // One corner order everywhere: the solver's (see WALL_EDGE_CYCLE).
+    WALL_EDGE_CYCLE.forEach(([a, b], index) => {
       const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
       line.setAttribute("x1", String(corners[a][0]));
       line.setAttribute("y1", String(corners[a][1]));
@@ -695,14 +705,8 @@ export class PhotoConfirmView {
       }
       if (this.dragEdge !== null && start !== null) {
         const next = { ...start };
-        const ids: CornerId[] =
-          this.dragEdge === 0
-            ? ["m1", "m2"]
-            : this.dragEdge === 1
-              ? ["m2", "m3"]
-              : this.dragEdge === 2
-                ? ["m3", "m4"]
-                : ["m4", "m1"];
+        // The dragged edge's own corners, in solver order (WALL_EDGE_CYCLE).
+        const ids: CornerId[] = [...(WALL_EDGE_CYCLE[this.dragEdge] ?? ["m1", "m2"])];
         const keep = { ...corners };
         const first = ids[0] ?? "m1";
         const second = ids[1] ?? "m2";
