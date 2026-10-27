@@ -168,7 +168,7 @@ async function main(): Promise<void> {
   const def = route === undefined ? undefined : DEFS[route];
   if (route === undefined || def === undefined) {
     fail(
-      "usage: npm run demo:record -- <recommend|assistant|render|label> [1-based request numbers] [--only furnish]",
+      "usage: npm run demo:record -- <recommend|assistant|render|label> [1-based request numbers] [--only furnish] [--dry-run]",
     );
   }
   // `--only furnish` records only brief (furnish) turns: never re-records
@@ -177,6 +177,8 @@ async function main(): Promise<void> {
   // only="furnish"`), so the env fallback `npm_config_only=furnish` that npm
   // sets for scripts counts too; so does `--only=furnish`/`--only-furnish`.
   const args = process.argv.slice(3);
+  // `--dry-run` prints the requests it would record and makes no call.
+  const dryRun = args.includes("--dry-run");
   const onlyFurnish =
     (args.includes("--only") && args.includes("furnish")) ||
     args.includes("--only=furnish") ||
@@ -188,7 +190,7 @@ async function main(): Promise<void> {
   }
   const only = new Set<number>();
   for (const arg of args) {
-    if (arg === "--" || arg === "--only" || arg === "furnish") continue;
+    if (arg === "--" || arg === "--only" || arg === "furnish" || arg === "--dry-run") continue;
     const n = Number(arg);
     if (!Number.isInteger(n) || n < 1) {
       fail(`invalid request number "${arg}".`);
@@ -208,6 +210,17 @@ async function main(): Promise<void> {
     (_, index) =>
       (only.size === 0 || only.has(index + 1)) && (!onlyFurnish || isBriefTurn(requests[index])),
   );
+  if (dryRun) {
+    // No live call, no config needed: list the requests that would record.
+    for (const item of picked) {
+      const request =
+        typeof item === "object" && item !== null && "request" in item
+          ? (item as Record<string, unknown>)["request"]
+          : null;
+      console.log(typeof request === "string" ? request : JSON.stringify(item));
+    }
+    return;
+  }
   console.log(
     `demo:record: selected ${String(picked.length)} of ${String(requests.length)} ` +
       `${route} request(s)${onlyFurnish ? " (--only furnish)" : ""}.`,
