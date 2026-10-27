@@ -45,6 +45,8 @@ import {
   catalogProducts,
   cornersOverlap,
   distanceToWallM,
+  emptyScene,
+  hasAutosave,
   itemCorners,
   makeInstanceId,
   nearestFreeSpot,
@@ -172,7 +174,10 @@ class FitRoomApp {
 
   constructor(container: HTMLElement) {
     this.container = container;
-    this.store = new SceneStore(ROOM.id);
+    // First visit (no autosave) opens the furnished demo room — the scene
+    // the chips reset to — while returning visits restore the autosave.
+    const firstVisit = !hasAutosave(ROOM.id);
+    this.store = new SceneStore(ROOM.id, validScene as unknown as SceneState);
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
     // The app uses only built-in materials, so there are no custom shaders
@@ -218,6 +223,7 @@ class FitRoomApp {
     this.controls.maxPolarAngle = MAX_POLAR;
     this.controls.minDistance = 1.2;
     this.controls.maxDistance = 18;
+    if (firstVisit) this.frameDollhouse(cxM, czM, wM, dM, aspect);
 
     dressWalls(() => this.requestRender());
     const floorMat = makeFloorMaterial(wM, dM, () => this.requestRender());
@@ -335,6 +341,9 @@ class FitRoomApp {
     });
 
     window.addEventListener("resize", () => this.resize());
+    this.applyDevGating();
+    // Nothing open on first load: the side column starts empty.
+    this.showSidePanel("none");
     void this.syncInstances();
     this.refreshIssues();
     this.updateMeasure();
@@ -550,8 +559,46 @@ class FitRoomApp {
       id === null ? null : (this.store.state.items.find((i) => i.instanceId === id) ?? null);
     this.inspector.setSelection(current);
     this.recommendPanel?.setSelected(current);
+    // Selecting a piece shows the Inspector in the right-hand column.
+    if (id !== null) this.showSidePanel("inspector");
     this.updateMeasure();
     this.requestRender();
+  }
+
+  /** Right-hand column: one panel at a time (Inspector, Recommend, Arrange). */
+  private showSidePanel(name: "inspector" | "recommend" | "assistant" | "none"): void {
+    const inspector = document.getElementById("inspector");
+    const recommend = document.getElementById("recommend-panel");
+    const assistant = document.getElementById("assistant-panel");
+    if (name === "inspector") inspector?.removeAttribute("hidden");
+    else inspector?.setAttribute("hidden", "");
+    if (name === "recommend") recommend?.removeAttribute("hidden");
+    else recommend?.setAttribute("hidden", "");
+    if (name === "assistant") {
+      assistant?.removeAttribute("hidden");
+      this.assistantPanel?.syncMode();
+    } else {
+      assistant?.setAttribute("hidden", "");
+    }
+    document
+      .getElementById("tool-recommend")
+      ?.setAttribute("data-active", String(name === "recommend"));
+    document
+      .getElementById("tool-assistant")
+      ?.setAttribute("data-active", String(name === "assistant"));
+  }
+
+  /** Hide developer controls unless the address has `?dev=1`. */
+  private applyDevGating(): void {
+    let dev = false;
+    try {
+      dev = new URLSearchParams(window.location.search).get("dev") === "1";
+    } catch {
+      // Non-browser context: stay non-dev.
+    }
+    if (dev) return;
+    document.getElementById("tool-scenes")?.setAttribute("hidden", "");
+    document.getElementById("api-status")?.setAttribute("hidden", "");
   }
 
   private positionHandle(entry: InstanceEntry): void {
@@ -704,6 +751,13 @@ class FitRoomApp {
     const clone = JSON.parse(JSON.stringify(scene)) as SceneState;
     this.select(null);
     this.store.replace({ ...clone, camera: this.store.state.camera });
+  }
+
+  /** Scene menu: start from an empty room (items only, keep the camera). */
+  private startEmptyRoom(): void {
+    this.select(null);
+    const next = emptyScene(ROOM.id);
+    this.store.replace({ ...next, camera: this.store.state.camera });
   }
 
   /** Room total in the top bar (sum of placed pieces, tabular figures). */
@@ -885,6 +939,10 @@ class FitRoomApp {
 
   private bindKeys(): void {
     window.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        this.renderViewer?.close();
+        return;
+      }
       const tag = (document.activeElement?.tagName ?? "").toLowerCase();
       if (tag === "input" || tag === "textarea") return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
@@ -916,24 +974,27 @@ class FitRoomApp {
     on("tool-recommend", () => {
       const panel = document.getElementById("recommend-panel");
       if (panel === null) return;
-      const hidden = panel.toggleAttribute("hidden");
-      document.getElementById("tool-recommend")?.setAttribute("data-active", String(!hidden));
+      this.showSidePanel(panel.hasAttribute("hidden") ? "recommend" : "none");
     });
     on("tool-assistant", () => {
       const panel = document.getElementById("assistant-panel");
       if (panel === null) return;
-      const hidden = panel.toggleAttribute("hidden");
-      document.getElementById("tool-assistant")?.setAttribute("data-active", String(!hidden));
-      if (!hidden) this.assistantPanel?.syncMode();
+      this.showSidePanel(panel.hasAttribute("hidden") ? "assistant" : "none");
     });
     on("tool-orbit", () => this.setMode("orbit"));
     on("tool-plan", () => this.setMode("plan"));
-    on("tool-render", () => void this.renderViewer?.visualise());
+    on("tool-render", () => {
+      this.showSidePanel("none");
+      this.select(null);
+      void this.renderViewer?.visualise();
+    });
     on("tool-clearance", () => this.toggleClearance());
     const scenes = document.getElementById("tool-scenes");
     if (scenes instanceof HTMLSelectElement) {
       scenes.addEventListener("change", () => {
-        if (scenes.value !== "") this.loadTestScene(scenes.value);
+        if (scenes.value === "empty") this.startEmptyRoom();
+        else if (scenes.value !== "") this.loadTestScene(scenes.value);
+        scenes.value = "";
       });
     }
     on("tool-rot-left", () => this.nudgeRotate(-15));
@@ -951,6 +1012,27 @@ class FitRoomApp {
       const dlg = document.getElementById("credits-dialog");
       if (dlg instanceof HTMLDialogElement) dlg.showModal();
     });
+  }
+
+  /**
+   * Dollhouse framing for the first visit: the whole room in view with a
+   * margin, from a raised front corner so the two cutaway walls (hidden by
+   * updateDollhouse) face the camera. Fits the room's bounding sphere
+   * inside the smaller of the vertical/horizontal fields of view.
+   */
+  private frameDollhouse(cxM: number, czM: number, wM: number, dM: number, aspect: number): void {
+    const wallHeightM = 2.6;
+    const radius = Math.sqrt(
+      (wM / 2) * (wM / 2) + (dM / 2) * (dM / 2) + (wallHeightM / 2) * (wallHeightM / 2),
+    );
+    const vFov = (this.orbitCam.fov * Math.PI) / 180;
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
+    const fitFov = Math.min(vFov, hFov);
+    const dist = (radius / Math.sin(fitFov / 2)) * 1.12;
+    const dir = new THREE.Vector3(0.85, 0.85, 1).normalize();
+    this.controls.target.set(cxM, 0.3, czM);
+    this.orbitCam.position.set(cxM + dir.x * dist, 0.3 + dir.y * dist, czM + dir.z * dist);
+    this.controls.update();
   }
 
   /** Preset name for the render key: plan, eye-level, or dollhouse. */

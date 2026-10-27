@@ -1,4 +1,4 @@
-export { buildRenderPrompt } from "./prompt.js";
+export { buildRenderPrompt, describeOpenings } from "./prompt.js";
 export { buildRenderKeyInput, type RenderKeyInput, type RenderKeySceneItem } from "./key.js";
 export {
   renderRequestSchema,

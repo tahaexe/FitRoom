@@ -30,3 +30,7 @@ Client: http://localhost:5173 (proxies `/api` to the server). Server: http://loc
 - `npm run typecheck` — strict TypeScript check for every workspace.
 - `npm run lint` — ESLint plus a Prettier check.
 - `npm start` — serve the built API and the built client from one process.
+
+## How it's built
+
+All of the code in this repository was written by Meta's Muse Code agent. Recommendations and the layout assistant run on Muse Spark; the photoreal view runs on Muse Image.

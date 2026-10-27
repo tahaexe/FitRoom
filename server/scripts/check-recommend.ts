@@ -1,19 +1,19 @@
 /**
  * `npm run check:recommend` — headless recommend check for the demo room.
  *
- * For the demo room and the four demo requests (coffee tables in front of
- * the sofa, shelves, "What fits here?" on the longest free run of the back
- * wall, "Find a replacement" for the Chester Leather Sofa) it builds each
- * request with the shared code, answers it from the demo store through the
- * gateway pipeline in demo mode, places every recommended item at its spot
- * and runs the fit engine (0 errors expected; seat accessories and the
- * replacement leave the same instances out of the check as the builder),
- * and checks that every "N cm" in a reason equals a number in the request
- * within 1 cm and that no reason mentions a `wall-` id. It also checks the
- * nothing-fits path for the demo room: a sofa request has no candidates,
- * so the panel answers locally with sizes (longest free wall run and depth,
- * smallest sofa footprint, the 45 cm a seat needs in front) plus the
- * "Replace the Chester Leather Sofa" offer — with no model call.
+ * For the demo room and every demo request (coffee tables in front of the
+ * sofa, shelves, "What fits here?" on every free run the demo room lists,
+ * "Find a replacement" for the Chester Leather Sofa) it builds each request
+ * with the shared code, answers it from the demo store through the gateway
+ * pipeline in demo mode, places every recommended item at its spot and runs
+ * the fit engine (0 errors expected; seat accessories and the replacement
+ * leave the same instances out of the check as the builder), and checks
+ * that every "N cm" in a reason equals a number in the request within 1 cm
+ * and that no reason mentions a `wall-` id. It also checks the nothing-fits
+ * path for the demo room: a sofa request has no candidates, so the panel
+ * answers locally with sizes (longest free wall run and depth, smallest sofa
+ * footprint, the 45 cm a seat needs in front) plus the "Replace the Chester
+ * Leather Sofa" offer — with no model call.
  * Prints PASS or FAIL per item and exits non-zero on any FAIL. Demo mode
  * only: no live Meta calls.
  */
@@ -157,7 +157,13 @@ async function main(): Promise<void> {
   // The recorded list matches what the shared code builds today.
   const rebuilt = buildRecommendDemoRequests();
   const listed = DEMO_REQUESTS["recommend"];
-  check("demo list holds the four recommend requests", listed.length === 4);
+  check("demo list holds every recommend request", listed.length === rebuilt.length);
+  const spotWalls = rebuilt
+    .map((r) => (r as RecommendRequest).request.spot?.wall)
+    .filter((w): w is string => typeof w === "string");
+  for (const wall of ["Door wall", "Back wall (window)", "Right wall (window)", "Left wall"]) {
+    check(`demo list covers ${wall}`, spotWalls.includes(wall), spotWalls.join(" | "));
+  }
   const keysMatch =
     listed.length === rebuilt.length &&
     listed.every((entry, index) => {

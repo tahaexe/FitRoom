@@ -93,10 +93,23 @@ export const renderDef: RouteDef = {
   liveReady: true,
   parseBody: parseRenderBody,
   keyInput: (input: unknown) => {
-    const record = input as Partial<RenderRouteInput>;
+    const record = input as Partial<RenderRouteInput> & {
+      camera?: { preset?: unknown };
+    };
     const prompt = typeof record["prompt"] === "string" ? record["prompt"] : "";
     const scene = record["scene"] as
       { roomId?: unknown; items?: unknown; camera?: unknown } | undefined;
+    // The preset travels top-level (`cameraPreset`) on live requests; the
+    // stored demo inputs carry it nested under `camera.preset`. Both name
+    // the same preset view, so both key the same way.
+    const preset =
+      typeof record["cameraPreset"] === "string" && record["cameraPreset"] !== ""
+        ? record["cameraPreset"]
+        : typeof record["camera"] === "object" &&
+            record["camera"] !== null &&
+            typeof (record["camera"] as { preset?: unknown })["preset"] === "string"
+          ? ((record["camera"] as { preset?: unknown })["preset"] as string)
+          : undefined;
     if (
       typeof scene === "object" &&
       scene !== null &&
@@ -106,7 +119,7 @@ export const renderDef: RouteDef = {
         return buildRenderKeyInput(
           scene as Parameters<typeof buildRenderKeyInput>[0],
           prompt,
-          record["cameraPreset"],
+          preset,
         );
       } catch {
         return { prompt };

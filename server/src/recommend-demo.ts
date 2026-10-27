@@ -1,9 +1,8 @@
 /**
- * Demo recommend requests: the four recorded requests for the demo room
- * (the sample room with `shared/samples/fit-tests/valid.json`) — coffee
- * tables (in front of the sofa), shelves, "What fits here?" on the longest
- * free run of the back wall, and "Find a replacement" for the Chester
- * Leather Sofa.
+ * Demo recommend requests for the demo room (the sample room with
+ * `shared/samples/fit-tests/valid.json`): coffee tables (in front of the
+ * sofa), shelves, "What fits here?" on every free run the demo room lists,
+ * and "Find a replacement" for the Chester Leather Sofa.
  *
  * Built with the shared code (free-space analysis + candidate filter), with
  * every candidate spot verified by the fit engine: seat accessories ignore
@@ -44,7 +43,7 @@ function issueKey(issue: FitIssue): string {
 }
 
 /**
- * The four demo requests, rebuilt deterministically. `demo-requests.ts`
+ * The demo requests, rebuilt deterministically. `demo-requests.ts`
  * embeds their output; `check:recommend` rebuilds and compares.
  */
 export function buildRecommendDemoRequests(): RecommendRequest[] {
@@ -107,15 +106,33 @@ export function buildRecommendDemoRequests(): RecommendRequest[] {
       category: "any",
       spot: { wall: back.wall, start_cm: back.start_cm, end_cm: back.end_cm },
     },
-    {
-      category: "sofa",
-      replace: {
-        productId: chester.productId,
-        position: { ...chester.position },
-        rotationY: chester.rotationY,
-      },
-    },
   ];
+  // Every other free run the demo room lists gets its own "What fits here?"
+  // request (longest first), so every entry answers from the demo store.
+  // Runs with no fitting candidate stay local (no model call) and are left out.
+  const rest = free.runs
+    .filter(
+      (run) =>
+        !(run.wall === back.wall && run.start_cm === back.start_cm && run.end_cm === back.end_cm),
+    )
+    .sort((a, b) => b.length_cm - a.length_cm);
+  for (const run of rest) {
+    const query: CandidateQuery = {
+      category: "any",
+      spot: { wall: run.wall, start_cm: run.start_cm, end_cm: run.end_cm },
+    };
+    const built = buildRecommendRequest(room, scene, catalog, query, verifyFor(query));
+    if (built.candidates.length === 0) continue;
+    queries.push(query);
+  }
+  queries.push({
+    category: "sofa",
+    replace: {
+      productId: chester.productId,
+      position: { ...chester.position },
+      rotationY: chester.rotationY,
+    },
+  });
   return queries.map((query) =>
     buildRecommendRequest(room, scene, catalog, query, verifyFor(query)),
   );

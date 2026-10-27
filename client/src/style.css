@@ -305,6 +305,10 @@ button {
   overflow-y: auto;
 }
 
+#inspector[hidden] {
+  display: none;
+}
+
 #inspector h2 {
   font-size: 18px;
   font-weight: 700;
@@ -508,12 +512,8 @@ button.danger {
   border: 1.5px solid var(--amber);
 }
 
-/* While the Arrange panel is open it owns the top-right corner, so the fit
- * verdict badge (and its list) step left of it; both stay visible. */
-#assistant-panel:not([hidden]) ~ #fit-badge,
-#assistant-panel:not([hidden]) ~ #fit-list {
-  right: 392px;
-}
+/* Side panels live in the right-hand column, never over the 3D stage, so
+ * the fit verdict badge always keeps the top-right corner of the view. */
 
 /* ---- fit issue labels floating over the room view ---- */
 
@@ -546,7 +546,12 @@ button.danger {
   border: 1.5px solid var(--amber);
 }
 
-/* ---- dev scene menu in the bottom toolbar ---- */
+/* ---- dev scene menu in the bottom toolbar (hidden unless ?dev=1) ---- */
+
+.dev-scenes[hidden],
+.api-status[hidden] {
+  display: none;
+}
 
 .dev-scenes {
   background: #ffffff;
@@ -631,16 +636,16 @@ button.danger {
   margin: 0 0 8px;
 }
 
-/* ---- recommend panel: white card floating left over the room view ---- */
+/* ---- recommend panel: right-hand column (where the Inspector is) ---- */
 
 #recommend-panel {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  width: 360px;
-  max-height: calc(100% - 96px);
+  position: fixed;
+  top: calc(var(--top-bar-height) + var(--gap));
+  bottom: var(--gap);
+  right: var(--gap);
+  width: var(--inspector-width);
   overflow-y: auto;
-  background: #ffffff;
+  background: var(--panel-bg);
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -831,16 +836,16 @@ button.danger {
   margin: 0;
 }
 
-/* ---- assistant panel: white card floating right over the room view ---- */
+/* ---- assistant panel: right-hand column (where the Inspector is) ---- */
 
 #assistant-panel {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  width: 360px;
-  max-height: calc(100% - 96px);
+  position: fixed;
+  top: calc(var(--top-bar-height) + var(--gap));
+  bottom: var(--gap);
+  right: var(--gap);
+  width: var(--inspector-width);
   overflow-y: auto;
-  background: #ffffff;
+  background: var(--panel-bg);
   border: 1px solid var(--border-color);
   border-radius: var(--radius);
   box-shadow: var(--shadow);
@@ -1026,14 +1031,16 @@ button.danger {
   cursor: default;
 }
 
-/* ---- render viewer: photoreal visualisation card ---- */
+/* ---- render viewer: large photoreal result over the 3D stage ---- */
 
 .render-viewer {
   position: absolute;
-  right: 16px;
-  bottom: 72px;
-  width: 360px;
-  max-width: calc(100% - 32px);
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(960px, 78%);
+  max-height: calc(100% - 32px);
+  overflow-y: auto;
   z-index: 30;
 }
 

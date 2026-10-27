@@ -26,6 +26,7 @@ import {
 import { Hono } from "hono";
 import { META_MODELS } from "../config.js";
 import { callSpark, type ChatMessage, type UpstreamResult } from "../meta/client.js";
+import { listDemoStore } from "../meta/demo.js";
 import {
   UpstreamFriendlyError,
   serveGatewayRequest,
@@ -109,5 +110,26 @@ export const recommendDef: RouteDef = {
 export function recommendRoutes(deps: PipelineDeps): Hono {
   const app = new Hono();
   app.post("/recommend", (c) => serveGatewayRequest(c, deps, recommendDef));
+  app.get("/recommend/demo-spots", (c) => {
+    const spots: Array<{ wall: string; start_cm: number; end_cm: number }> = [];
+    for (const file of listDemoStore(deps.config.dataDir, recommendDef.route)) {
+      const input = file.input as {
+        request?: {
+          category?: unknown;
+          spot?: { wall?: unknown; start_cm?: unknown; end_cm?: unknown };
+        };
+      };
+      const spot = input.request?.spot;
+      if (
+        input.request?.category === "any" &&
+        typeof spot?.wall === "string" &&
+        typeof spot?.start_cm === "number" &&
+        typeof spot?.end_cm === "number"
+      ) {
+        spots.push({ wall: spot.wall, start_cm: spot.start_cm, end_cm: spot.end_cm });
+      }
+    }
+    return c.json({ status: "ok", spots });
+  });
   return app;
 }

@@ -32,7 +32,7 @@
     </header>
     <aside id="catalog" aria-label="Furniture catalog"></aside>
     <main id="scene-container" aria-label="True-scale 3D fitting room">
-      <div id="recommend-panel" aria-label="Furniture recommendations"></div>
+      <div id="recommend-panel" aria-label="Furniture recommendations" hidden></div>
       <div id="assistant-panel" aria-label="Layout assistant" hidden></div>
       <div id="render-viewer" aria-label="Photoreal visualisation"></div>
       <div id="size-tag" class="size-tag" style="display: none"></div>
@@ -56,6 +56,7 @@
         </button>
         <select id="tool-scenes" class="dev-scenes" aria-label="Load a fit-test scene">
           <option value="">Dev scene…</option>
+          <option value="empty">Start from an empty room</option>
           <option value="valid">valid</option>
           <option value="overlap">overlap</option>
           <option value="outside">outside</option>
@@ -72,7 +73,7 @@
         <span id="measure-readout" class="measure" aria-live="polite"></span>
       </div>
     </main>
-    <aside id="inspector" aria-label="Selection inspector"></aside>
+    <aside id="inspector" aria-label="Selection inspector" hidden></aside>
     <dialog id="credits-dialog" aria-label="Asset credits">
       <h2>Credits</h2>
       <p>All 3D and texture assets are CC0-1.0 (public domain, courtesy credit):</p>
@@ -83,6 +84,11 @@
         <li>Studio HDRI “lebombo”: Poly Haven (CC0).</li>
       </ul>
       <p>Full per-file credits live in CREDITS.md at the repo root.</p>
+      <h2>Meta AI models</h2>
+      <p>
+        Recommendations and the layout assistant run on Muse Spark; the photoreal view runs on Muse
+        Image.
+      </p>
       <form method="dialog"><button type="submit">Close</button></form>
     </dialog>
     <script type="module" src="/src/main.ts"></script>

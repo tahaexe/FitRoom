@@ -110,9 +110,9 @@ export function buildRoom(room: RoomLayout, floorMaterial: THREE.Material): Room
   floor.name = "fitroom-floor";
   group.add(floor);
 
-  // Grey studio backdrop disc far below the visual floor edge.
+  // Light neutral studio backdrop disc far below the visual floor edge.
   const backdropGeo = new THREE.CircleGeometry(Math.max(wM, dM) * 4, 48);
-  const backdropMat = new THREE.MeshStandardMaterial({ color: 0x9aa0a6, roughness: 1 });
+  const backdropMat = new THREE.MeshStandardMaterial({ color: 0xe8e6e3, roughness: 1 });
   const backdrop = new THREE.Mesh(backdropGeo, backdropMat);
   backdrop.rotation.x = -Math.PI / 2;
   backdrop.position.set(cxM, -0.02, czM);

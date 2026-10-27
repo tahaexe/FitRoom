@@ -33,6 +33,7 @@ import {
   recommendIgnoreIds,
   replacementOfferFor,
   runDisplayLabel,
+  wallDisplayName,
   type CandidateQuery,
 } from "@fitroom/shared";
 import { isLive, postRecommend, setLive, type ApiResult } from "../api";
@@ -248,13 +249,80 @@ export class RecommendPanel {
       b.className = "recommend-run";
       b.textContent = name;
       b.title = `What fits on ${name}?`;
+      b.dataset["wall"] = wallDisplayName(this.deps.room, run.wall);
+      b.dataset["start"] = String(run.start_cm);
+      b.dataset["end"] = String(run.end_cm);
       b.addEventListener("mouseenter", () => this.deps.hoverRun(run));
       b.addEventListener("mouseleave", () => this.deps.hoverRun(null));
       b.addEventListener("focus", () => this.deps.hoverRun(run));
       b.addEventListener("blur", () => this.deps.hoverRun(null));
-      b.addEventListener("click", () => void this.askSpot(run));
+      b.addEventListener("click", () => void this.askSpot(run, b));
       host.appendChild(b);
     }
+    void this.markUnavailableRuns(host);
+  }
+
+  /** Demo-store spot requests, once loaded (demo mode disables the rest). */
+  private recordedSpots: Array<{ wall: string; start_cm: number; end_cm: number }> | null = null;
+
+  private async loadRecordedSpots(): Promise<Array<{
+    wall: string;
+    start_cm: number;
+    end_cm: number;
+  }> | null> {
+    if (this.recordedSpots !== null) return this.recordedSpots;
+    try {
+      const res = await fetch("/api/recommend/demo-spots");
+      const payload = (await res.json()) as unknown;
+      if (
+        typeof payload === "object" &&
+        payload !== null &&
+        Array.isArray((payload as Record<string, unknown>)["spots"])
+      ) {
+        const spots = (payload as Record<string, unknown>)["spots"] as unknown[];
+        this.recordedSpots = spots.filter(
+          (entry): entry is { wall: string; start_cm: number; end_cm: number } =>
+            typeof entry === "object" &&
+            entry !== null &&
+            typeof (entry as Record<string, unknown>)["wall"] === "string" &&
+            typeof (entry as Record<string, unknown>)["start_cm"] === "number" &&
+            typeof (entry as Record<string, unknown>)["end_cm"] === "number",
+        );
+        return this.recordedSpots;
+      }
+    } catch {
+      // Fall through to leaving every entry enabled below.
+    }
+    return null;
+  }
+
+  /** In demo mode an entry with no stored answer is disabled with a Live AI hint. */
+  private async markUnavailableRuns(host: Element): Promise<void> {
+    if (isLive()) return;
+    const recorded = await this.loadRecordedSpots();
+    if (recorded === null) return;
+    for (const b of host.querySelectorAll("button.recommend-run")) {
+      if (!(b instanceof HTMLButtonElement)) continue;
+      const wall = b.dataset["wall"] ?? "";
+      const start = Number(b.dataset["start"] ?? "NaN");
+      const end = Number(b.dataset["end"] ?? "NaN");
+      const known = recorded.some(
+        (spot) =>
+          spot.wall === wall &&
+          Math.abs(spot.start_cm - start) <= 1 &&
+          Math.abs(spot.end_cm - end) <= 1,
+      );
+      if (!known) {
+        b.toggleAttribute("disabled", true);
+        b.title = `${b.textContent ?? ""} — Live AI`;
+      }
+    }
+  }
+
+  /** Mark one entry as needing Live AI after a demo-miss. */
+  private disableRun(button: HTMLButtonElement): void {
+    button.toggleAttribute("disabled", true);
+    button.title = `${button.textContent ?? ""} — Live AI`;
   }
 
   private setLoading(on: boolean): void {
@@ -304,7 +372,7 @@ export class RecommendPanel {
     await this.ask(request, `No fitting ${this.category} right now.`, { kind: "place" });
   }
 
-  private async askSpot(run: FreeRun): Promise<void> {
+  private async askSpot(run: FreeRun, button?: HTMLButtonElement): Promise<void> {
     if (this.loading) return;
     this.deps.hoverRun(run);
     const query: CandidateQuery = {
@@ -318,7 +386,10 @@ export class RecommendPanel {
       this.showSpotEmpty(run);
       return;
     }
-    await this.ask(request, "Nothing fits this run right now.", { kind: "place" });
+    const result = await this.ask(request, "Nothing fits this run right now.", { kind: "place" });
+    if ((result.status === "demo-miss" || result.status === "capped") && button !== undefined) {
+      this.disableRun(button);
+    }
     this.deps.hoverRun(null);
   }
 
@@ -367,7 +438,7 @@ export class RecommendPanel {
     request: RecommendRequest,
     emptyText: string,
     mode: { kind: "place" } | { kind: "swap"; oldInstanceId: string },
-  ): Promise<void> {
+  ): Promise<ApiResult> {
     this.setLoading(true);
     let result: ApiResult;
     try {
@@ -388,6 +459,7 @@ export class RecommendPanel {
     } else {
       this.showNotice(result.message, false);
     }
+    return result;
   }
 
   /** No candidates: local message with sizes, no model call. */

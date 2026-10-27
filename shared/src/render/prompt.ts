@@ -1,4 +1,5 @@
 import type { CatalogItem, RoomLayout, SceneState } from "../types.js";
+import { wallDisplayName } from "../recommend/walls.js";
 
 function roomSizeText(room: RoomLayout): string {
   let minX = Infinity;
@@ -38,12 +39,37 @@ function variantText(
 }
 
 /**
+ * One line per wall naming its openings with kind and place, e.g.
+ * "Door wall: closed solid door door-1 (90 cm wide, hinged left)".
+ * Walls without openings say "no openings".
+ */
+export function describeOpenings(room: RoomLayout): string {
+  return room.walls
+    .map((wall) => {
+      const name = wallDisplayName(room, wall.id);
+      const openings = room.openings.filter((o) => o.wallId === wall.id);
+      if (openings.length === 0) return `- ${name}: no openings`;
+      const parts = openings.map((o) => {
+        const width = `${String(Math.round(o.width))} cm wide`;
+        if (o.type === "door") {
+          return `closed solid door ${o.id} (${width}, hinged ${o.hinge})`;
+        }
+        return `window ${o.id} (${width}, sill ${String(Math.round(o.sillHeight))} cm)`;
+      });
+      return `- ${name}: ${parts.join("; ")}`;
+    })
+    .join("\n");
+}
+
+/**
  * Photoreal edit prompt built from the live scene.
  *
- * Names the room size, floor and wall materials, every product with its
- * colour and fabric variant, and the window light; then asks to keep the
- * camera, the room shell, every product and its exact placement, rendered
- * as a photoreal photograph.
+ * Names the room size, floor and wall materials, every wall's openings by
+ * kind and place, every product with its colour and fabric variant, and
+ * the window light; then asks to keep the camera, the room shell, every
+ * product and its exact placement, rendered as a photoreal photograph.
+ * The door stays a closed solid door where it is; windows appear only
+ * where the room has them.
  */
 export function buildRenderPrompt(
   scene: SceneState,
@@ -69,11 +95,16 @@ export function buildRenderPrompt(
     lines.push(`- ${name} (${colourPart})`);
   }
   const furniture = lines.length === 0 ? "- (empty room)" : lines.join("\n");
+  const openings = describeOpenings(room);
   return (
     `Photorealistic interior photo of ${room.name}, ${size}, ` +
     `floor ${room.surfaces.floor}, walls ${room.surfaces.wall}, ${windowText}.\n` +
+    `Openings:\n${openings}\n` +
     `Furniture in place:\n${furniture}\n` +
     `Keep the camera viewpoint, the room shell, every product and its exact placement exactly as shown. ` +
+    `Keep every opening where it is: the door stays a closed solid door where it is, ` +
+    `windows only where the room has them — do not turn the door into a window or a glass door ` +
+    `and do not add windows or doors. ` +
     `Do not move, add, remove or restyle anything. Render as a photoreal photograph with natural ` +
     `colours and soft contact shadows.`
   );

@@ -58,14 +58,33 @@ export function saveAutosave(state: SceneState): void {
   }
 }
 
+/** True when an autosave exists for the room (a returning visit). */
+export function hasAutosave(roomId: string): boolean {
+  try {
+    const raw = window.localStorage.getItem(AUTOSAVE_KEY);
+    if (raw === null) return false;
+    const parsed = JSON.parse(raw) as SceneState;
+    return parsed.roomId === roomId && Array.isArray(parsed.items);
+  } catch {
+    return false;
+  }
+}
+
 /** Store with undo (Ctrl+Z) and autosave. */
 export class SceneStore {
   state: SceneState;
   private past: SceneState[] = [];
   private listeners = new Set<() => void>();
 
-  constructor(roomId: string) {
-    this.state = loadAutosave(roomId) ?? emptyScene(roomId);
+  constructor(roomId: string, fallback?: SceneState) {
+    const saved = loadAutosave(roomId);
+    if (saved !== null) {
+      this.state = saved;
+    } else if (fallback !== undefined) {
+      this.state = JSON.parse(JSON.stringify(fallback)) as SceneState;
+    } else {
+      this.state = emptyScene(roomId);
+    }
   }
 
   subscribe(fn: () => void): () => void {

@@ -163,21 +163,24 @@ export class AssistantPanel {
 
   private async fillChips(host: HTMLElement): Promise<void> {
     const recorded = await this.loadRecordedChips();
-    const texts =
-      recorded === null
-        ? ASSISTANT_DEMO_CHIPS
-        : ASSISTANT_DEMO_CHIPS.filter((text) => recorded.includes(text));
-    if (texts.length === 0) {
+    if (recorded !== null && recorded.length === 0) {
       host.remove();
       return;
     }
-    for (const text of texts) {
+    for (const text of ASSISTANT_DEMO_CHIPS) {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.className = "assistant-chip";
       chip.textContent = text.length > 42 ? `${text.slice(0, 42)}…` : text;
-      chip.title = text;
-      chip.addEventListener("click", () => void this.sendDemo(text));
+      const stored = recorded === null || recorded.includes(text);
+      if (stored) {
+        chip.title = text;
+        chip.addEventListener("click", () => void this.sendDemo(text));
+      } else {
+        // In demo mode a chip with no stored answer is disabled: Live AI only.
+        chip.title = `${text} — Live AI`;
+        chip.toggleAttribute("disabled", true);
+      }
       host.appendChild(chip);
     }
   }

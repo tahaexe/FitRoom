@@ -174,6 +174,29 @@ async function main(): Promise<void> {
       `${name}: prompt names floor and wall materials`,
       prompt.includes(room.surfaces.floor) && prompt.includes(room.surfaces.wall),
     );
+    check(
+      `${name}: prompt names every opening with kind and place`,
+      room.openings.every(
+        (o) =>
+          prompt.includes(o.id) &&
+          prompt.includes(o.type === "door" ? "closed solid door" : "window"),
+      ) &&
+        prompt.includes("Door wall") &&
+        prompt.includes("Back wall (window)") &&
+        prompt.includes("Right wall (window)") &&
+        prompt.includes("Left wall"),
+      prompt.slice(0, 200),
+    );
+    check(
+      `${name}: prompt keeps the door a closed solid door`,
+      prompt.includes("the door stays a closed solid door where it is") &&
+        prompt.includes("do not turn the door into a window or a glass door"),
+    );
+    check(
+      `${name}: prompt allows windows only where the room has them`,
+      prompt.includes("windows only where the room has them") &&
+        prompt.includes("do not add windows or doors"),
+    );
 
     const keyA = gatewayKey(
       "render",
