@@ -16,7 +16,7 @@ import {
   type WallLetter,
 } from "@fitroom/shared";
 import { EditorPlanView } from "./plan-view";
-import { sourceMark } from "./source-mark";
+import { photoBandText, sourceMark, tapeWallLabel } from "./source-mark";
 import { EditorStore } from "./editor-store";
 import type { PhotoDraftMeta, WallSourceMark } from "../photo-room/flow";
 
@@ -232,12 +232,8 @@ export class RoomEditor {
       return;
     }
     this.bandEl.removeAttribute("hidden");
-    const pm = Math.round(this.draft.estimatedWallPm);
     const text = document.createElement("span");
-    text.textContent =
-      count === 1
-        ? `1 wall is estimated (± ${String(pm)} cm). Tape it to make it exact.`
-        : `${String(count)} walls are estimated (± ${String(pm)} cm). Tape one to make it exact.`;
+    text.textContent = photoBandText(count, this.draft.estimatedWallPm);
     const nextId =
       (["wall-1", "wall-2", "wall-3", "wall-4"] as const).find(
         (id) => this.draft?.walls[id]?.source === "estimated",
@@ -246,7 +242,7 @@ export class RoomEditor {
     const tape = document.createElement("button");
     tape.type = "button";
     tape.className = "photo-draft-tape";
-    tape.textContent = `Tape wall ${nextLetter}`;
+    tape.textContent = tapeWallLabel(nextLetter);
     tape.addEventListener("click", () => this.store.select({ kind: "wall", id: nextId }));
     this.bandEl.append(text, tape);
   }

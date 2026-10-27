@@ -18,6 +18,23 @@ export function measuredMarkText(toleranceCm?: number): string {
   return `Measured ± ${String(Math.round(toleranceCm * 10) / 10)} cm`;
 }
 
+/**
+ * Amber photo-draft band text: how many walls are still estimated and the
+ * rounded ± tolerance. Pure (no DOM) so `check:guidance` covers the words.
+ */
+export function photoBandText(estimatedWallCount: number, estimatedWallPm: number): string {
+  const pm = Math.round(estimatedWallPm);
+  if (estimatedWallCount === 1) {
+    return `1 wall is estimated (± ${String(pm)} cm). Tape it to make it exact.`;
+  }
+  return `${String(estimatedWallCount)} walls are estimated (± ${String(pm)} cm). Tape one to make it exact.`;
+}
+
+/** Tape-pill label for the next estimated wall letter (A-D). Pure. */
+export function tapeWallLabel(wallLetter: string): string {
+  return `Tape wall ${wallLetter}`;
+}
+
 export function sourceMark(source: ValueSource, toleranceCm?: number): HTMLElement {
   const mark = document.createElement("span");
   mark.className = "source-mark";

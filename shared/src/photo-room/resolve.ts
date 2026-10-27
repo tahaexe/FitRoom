@@ -120,7 +120,12 @@ export function resolveRoomFromCorners(input: ResolveRoomInput): RoomDraft {
     photos.push({
       ...sol,
       lines: { ...sol.lines },
-      corners: { m1: [...next.m1] as [number, number], m2: [...next.m2] as [number, number], m3: [...next.m3] as [number, number], m4: [...next.m4] as [number, number] },
+      corners: {
+        m1: [...next.m1] as [number, number],
+        m2: [...next.m2] as [number, number],
+        m3: [...next.m3] as [number, number],
+        m4: [...next.m4] as [number, number],
+      },
       ratio: estimate.ratio,
       ratioPlusMinus: estimate.ratioPlusMinus,
       heightEstimate: estimate.heightEstimate,
@@ -176,12 +181,7 @@ export function resolveRoomFromCorners(input: ResolveRoomInput): RoomDraft {
         const pts = [
           remapPoint(oldH, newH, o.offset.value, o.sillHeight.value),
           remapPoint(oldH, newH, o.offset.value + o.width.value, o.sillHeight.value),
-          remapPoint(
-            oldH,
-            newH,
-            o.offset.value,
-            o.sillHeight.value + o.height.value,
-          ),
+          remapPoint(oldH, newH, o.offset.value, o.sillHeight.value + o.height.value),
           remapPoint(
             oldH,
             newH,

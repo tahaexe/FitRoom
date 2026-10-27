@@ -750,10 +750,25 @@ class FitRoomApp {
     return fresh();
   }
 
+  /**
+   * Drop a photo-built session the way Cancel does: the stored photos go
+   * and the editor loses its draft, while the room layout itself stays as
+   * the Cancel path leaves it (callers clearing the saved layout do so).
+   */
+  private discardPhotoSession(): void {
+    this.photoDraft = null;
+    this.photoMeta = null;
+    this.editor?.setPhotoDraft(null);
+    void clearAllPhotos();
+  }
+
   /** Header room menu: sample room, manual build, or reopen the editor. Each room keeps its own placed pieces. */
   private pickRoom(id: string): void {
     if (id === "manual") {
       if (ROOM.id !== "manual-room") {
+        // Leaving a photo-built plan editor by the room menu drops the
+        // photo session as Cancel does (Build is the only way to keep it).
+        if (this.photoDraft !== null || ROOM.id === "photos-room") this.discardPhotoSession();
         this.stashRoomLayout();
         applyRoomLayout(
           ROOM,
@@ -790,6 +805,8 @@ class FitRoomApp {
         // Leaving the photo-built room drops its saved layout so the
         // sample room opens again on reload.
         if (leavingPhotos) clearRoomLayout("photos-room");
+        // Leaving its plan editor by Reset drops the photo session too.
+        if (this.photoDraft !== null || leavingPhotos) this.discardPhotoSession();
         this.editor?.setPhotoDraft(null);
         this.closeEditor();
         this.rebuildRoom();
@@ -797,6 +814,12 @@ class FitRoomApp {
       this.resetDemoRoom();
       this.menuChoice = "sample";
     } else if (id === "photos") {
+      // A new photo flow leaves the photo-built plan editor, so the old
+      // stored photos go and its session drops as Cancel does.
+      if (this.photoDraft !== null) {
+        this.discardPhotoSession();
+        this.closeEditor();
+      }
       if (this.menuChoice !== "photos") this.menuBeforePhotos = this.menuChoice;
       this.menuChoice = "photos";
       this.openPhotoFlow();
@@ -814,6 +837,8 @@ class FitRoomApp {
         // Leaving the photo-built room drops its saved layout so the
         // sample room opens again on reload.
         if (leavingPhotos) clearRoomLayout("photos-room");
+        // Leaving its plan editor by the sample room drops the session too.
+        if (this.photoDraft !== null || leavingPhotos) this.discardPhotoSession();
         const fallback = JSON.parse(JSON.stringify(validScene)) as SceneState;
         fallback.roomId = ROOM.id;
         this.store.switchRoom(ROOM.id, fallback);

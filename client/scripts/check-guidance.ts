@@ -11,6 +11,8 @@
  *   (the panel then shows its no-match message with the categories);
  * - an overlap verdict names both pieces in shopper words;
  * - the selected-piece status pill reads in plain words (never symbols).
+ * - a typed wall length reads "Measured ± 0.5 cm", the amber band counts
+ *   down the estimated walls and its pill reads "Tape wall <letter>".
  *
  * Prints PASS or FAIL per check and exits non-zero on any FAIL.
  */
@@ -40,6 +42,7 @@ import {
   formatTopBar,
   matchesCatalogQuery,
 } from "../src/catalog-ui.js";
+import { measuredMarkText, photoBandText, tapeWallLabel } from "../src/editor/source-mark.js";
 
 let failures = 0;
 
@@ -366,6 +369,24 @@ check(
     furnishCard.rows[0]?.name === "Chester Leather Sofa" &&
     furnishCard.rows[0]?.price === 1490,
 );
+
+// Typed wall lengths turn measured with a ± 0.5 cm tape mark.
+check("measured:plain", measuredMarkText() === "Measured", measuredMarkText());
+check("measured:plus-minus", measuredMarkText(0.5) === "Measured ± 0.5 cm", measuredMarkText(0.5));
+// The amber photo-draft band counts down the estimated walls.
+check(
+  "band:singular",
+  photoBandText(1, 8) === "1 wall is estimated (± 8 cm). Tape it to make it exact.",
+  photoBandText(1, 8),
+);
+check(
+  "band:plural",
+  photoBandText(3, 8) === "3 walls are estimated (± 8 cm). Tape one to make it exact.",
+  photoBandText(3, 8),
+);
+// The band's tape pill names the next estimated wall letter.
+check("tape:wall-a", tapeWallLabel("A") === "Tape wall A", tapeWallLabel("A"));
+check("tape:wall-c", tapeWallLabel("C") === "Tape wall C", tapeWallLabel("C"));
 
 if (failures > 0) process.exit(1);
 console.log("guidance: all checks passed");

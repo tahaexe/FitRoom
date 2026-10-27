@@ -57,7 +57,9 @@ export function estimateWallHeightFromCorners(args: {
   }
   const wallPxH = Math.max(
     1,
-    Math.abs((args.corners.m3[1] + args.corners.m4[1]) / 2 - (args.corners.m1[1] + args.corners.m2[1]) / 2),
+    Math.abs(
+      (args.corners.m3[1] + args.corners.m4[1]) / 2 - (args.corners.m1[1] + args.corners.m2[1]) / 2,
+    ),
   );
   const lineNoise = (args.floorRmse + args.ceilRmse) / 2;
   const wideMul = wide ? 2.5 : 1;
@@ -76,11 +78,7 @@ export function estimateWallHeightFromCorners(args: {
 }
 
 /** True when any corner leaves the photo frame (same 3 px margin). */
-export function cornersOutOfFrame(
-  corners: CornerSet,
-  width: number,
-  height: number,
-): boolean {
+export function cornersOutOfFrame(corners: CornerSet, width: number, height: number): boolean {
   const margin = 3;
   return [corners.m1, corners.m2, corners.m3, corners.m4].some(
     ([x, y]) =>

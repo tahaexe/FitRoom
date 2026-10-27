@@ -1085,7 +1085,10 @@ function tierResolve(): void {
     movedA.some((o, i) => {
       const b = baseA[i];
       if (b === undefined) return true;
-      return Math.abs(o.offset.value - b.offset.value) > 0.5 || Math.abs(o.width.value - b.width.value) > 0.5;
+      return (
+        Math.abs(o.offset.value - b.offset.value) > 0.5 ||
+        Math.abs(o.width.value - b.width.value) > 0.5
+      );
     });
   check("re-solve moved: wall A openings change", aChanged);
   let othersSame = true;
