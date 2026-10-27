@@ -41,6 +41,7 @@ function run(command, args, options = {}) {
     const child = spawn(command, args, {
       cwd: repoRoot,
       stdio: ["pipe", "pipe", "pipe"],
+      shell: command === "npm.cmd",
       ...options,
     });
     let stdout = "";

@@ -71,7 +71,7 @@ function gatewayDeps(env: WorkerEnv): PipelineDeps {
     config,
     store: createD1Store(env.DB, {
       demo: new Map(BUNDLED_DEMO),
-      mock: new Map(Object.entries(BUNDLED_MOCK) as Array<[string, MockAnswer]>),
+      mock: new Map(BUNDLED_MOCK) as Map<string, MockAnswer>,
     }),
     clientIp: (c) => workerClientIp(c.req.raw),
   };

@@ -63,12 +63,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function run(
   command: string,
   args: string[],
-  options: { cwd?: string } = {},
+  options: { cwd?: string; shell?: boolean } = {},
 ): Promise<{ exit: number | null; stdout: string; stderr: string }> {
   return new Promise((resolvePromise) => {
     const child = spawn(command, args, {
       cwd: options.cwd ?? repoRoot,
       stdio: ["ignore", "pipe", "pipe"],
+      shell: options.shell ?? false,
     });
     let stdout = "";
     let stderr = "";
@@ -355,12 +356,11 @@ async function main(): Promise<void> {
   try {
     // 0. Builds: shared, server (regenerates the Worker bundle data), client.
     for (const workspace of ["@fitroom/shared", "@fitroom/server", "@fitroom/client"]) {
-      const built = await run(process.platform === "win32" ? "npm.cmd" : "npm", [
-        "run",
-        "build",
-        "-w",
-        workspace,
-      ]);
+      const built = await run(
+        process.platform === "win32" ? "npm.cmd" : "npm",
+        ["run", "build", "-w", workspace],
+        { shell: process.platform === "win32" },
+      );
       if (built.exit !== 0) {
         check(`build ${workspace}`, false, built.stderr.slice(-300).trim());
         process.exitCode = 1;
