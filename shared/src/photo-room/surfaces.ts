@@ -1,20 +1,30 @@
 /**
- * Photo-built room surfaces: wall tint + floor/wall finish picks.
+ * Photo-built room surfaces: wall albedo + floor/wall finish picks.
  *
- * Pure TypeScript, no DOM. The browser computes per-photo medians from the
- * 1280 px photo pixels plus the SAM masks at hand (`client/src/photo-room/`);
- * this module holds the shared contracts both sides use:
+ * Pure TypeScript, no DOM. The browser computes per-photo colours from the
+ * 1280 px photo pixels plus the SAM masks at hand
+ * (`client/src/photo-room/`); this module holds the shared contracts both
+ * sides use:
  *
  * - per-channel median over a full-frame include mask minus an exclude mask
  *   (`medianMaskColor`), as `#RRGGBB`;
  * - full-frame union masks from SAM instances (`conceptMask`);
- * - floor finish by label family, wood/tile/carpet closest by median colour;
+ * - wall/floor albedo from the ceiling white reference (albedo 0.9):
+ *   `albedo = surface median / ceiling median x 0.9` per channel,
+ *   clamped to 0-1; without a ceiling mask the 90th luminance percentile
+ *   pixel of the surface's own mask is the albedo reference;
+ * - floor finish by label family, wood/tile/carpet closest by measured mean
+ *   albedo (means computed from the texture files by
+ *   `scripts/measure-texture-means.mjs` into `texture-means.json`);
  * - wall finish by label family (`wallpaper` -> wallpaper, else paint);
- * - blending per-photo tints into one room tint.
+ * - blending per-photo albedos into one room tint;
+ * - wall display colour for a texture normalised to a mean of 1, so the
+ *   texture weave shows without darkening the albedo again.
  */
 
 import type { SamInstance } from "../sam.js";
 import type { RoomLabelFloorFamily, RoomLabelWallFamily } from "../room-label.js";
+import textureMeans from "./texture-means.json" with { type: "json" };
 
 export const WALL_TEXTURE_PAINT = "PaintedPlaster017";
 export const WALL_TEXTURE_WALLPAPER = "Wallpaper002A";
@@ -46,24 +56,16 @@ export const SAMPLE_FLOOR_SURFACE = "oak-light";
 export const SAMPLE_WALL_SURFACE = "warm-white";
 
 /**
- * Approximate mean colour per ambientCG finish (sRGB hex), for closest-by-
- * colour picks and picker swatches. Coarse on purpose: only the ordering
- * between finishes of one family matters.
+ * Mean sRGB colour per ambientCG finish, measured from each finish's own
+ * `*_Color.jpg` by `scripts/measure-texture-means.mjs` (never hand-typed).
  */
-export const TEXTURE_MEAN_COLORS: Readonly<Record<string, string>> = {
-  WoodFloor070: "#8A6642",
-  WoodFloor051: "#6E4E30",
-  WoodFloor064: "#A07A4F",
-  WoodFloor071: "#7A5A38",
-  Tiles107: "#CFCFCF",
-  Tiles139: "#9AA0A3",
-  Carpet012: "#B0A897",
-  Carpet015: "#8B8D90",
-  Carpet016: "#5E6063",
-  Concrete034: "#9B9B9B",
-  PaintedPlaster017: "#E8E2D9",
-  Wallpaper002A: "#D8CFC2",
-};
+export const TEXTURE_MEAN_COLORS: Readonly<Record<string, string>> = textureMeans as Record<
+  string,
+  string
+>;
+
+/** White reference albedo for the ceiling (a matte white ceiling). */
+export const CEILING_REFERENCE_ALBEDO = 0.9;
 
 const HEX_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -96,6 +98,13 @@ function medianOf(values: number[]): number {
   return Math.round(((sorted[mid - 1] as number) + (sorted[mid] as number)) / 2);
 }
 
+function percentileOfSorted(sorted: number[], p: number): number {
+  if (sorted.length === 0) return 0;
+  const clamped = Math.min(1, Math.max(0, p));
+  const idx = Math.min(sorted.length - 1, Math.floor(clamped * sorted.length));
+  return sorted[idx] as number;
+}
+
 export interface RgbaImage {
   width: number;
   height: number;
@@ -113,6 +122,16 @@ export function medianMaskColor(
   include: ArrayLike<number>,
   exclude?: ArrayLike<number> | null,
 ): string | null {
+  const rgb = medianMaskRgb(image, include, exclude);
+  if (rgb === null) return null;
+  return rgbToHex(rgb[0], rgb[1], rgb[2]);
+}
+
+function medianMaskRgb(
+  image: RgbaImage,
+  include: ArrayLike<number>,
+  exclude?: ArrayLike<number> | null,
+): [number, number, number] | null {
   const n = image.width * image.height;
   if (n <= 0) return null;
   const rs: number[] = [];
@@ -127,7 +146,65 @@ export function medianMaskColor(
     bs.push(image.data[o + 2] ?? 0);
   }
   if (rs.length === 0) return null;
-  return rgbToHex(medianOf(rs), medianOf(gs), medianOf(bs));
+  return [medianOf(rs), medianOf(gs), medianOf(bs)];
+}
+
+function maskLuminance(r: number, g: number, b: number): number {
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/**
+ * Colour of the pixel at the `percentile` luminance rank inside the mask
+ * (window/door exclusions apply when given). The bright end of a shaded
+ * surface is the white reference when no ceiling is in view.
+ */
+export function percentileMaskColor(
+  image: RgbaImage,
+  include: ArrayLike<number>,
+  exclude?: ArrayLike<number> | null,
+  percentile = 0.9,
+): string | null {
+  const n = image.width * image.height;
+  if (n <= 0) return null;
+  const order: Array<{ lum: number; r: number; g: number; b: number }> = [];
+  for (let i = 0; i < n; i += 1) {
+    if ((include[i] ?? 0) === 0) continue;
+    if (exclude !== undefined && exclude !== null && (exclude[i] ?? 0) !== 0) continue;
+    const o = i * 4;
+    const r = image.data[o] ?? 0;
+    const g = image.data[o + 1] ?? 0;
+    const b = image.data[o + 2] ?? 0;
+    order.push({ lum: maskLuminance(r, g, b), r, g, b });
+  }
+  if (order.length === 0) return null;
+  order.sort((a, b) => a.lum - b.lum);
+  const pick = order[
+    percentileOfSorted(
+      order.map((_, i) => i),
+      percentile,
+    )
+  ] as {
+    r: number;
+    g: number;
+    b: number;
+  };
+  return rgbToHex(pick.r, pick.g, pick.b);
+}
+
+/** Albedo from a surface median and a ceiling/reference median. */
+export function albedoFromMedianPair(
+  surfaceHex: string | null,
+  referenceHex: string | null,
+): string | null {
+  if (surfaceHex === null || referenceHex === null) return null;
+  if (!HEX_RE.test(surfaceHex) || !HEX_RE.test(referenceHex)) return null;
+  const [sr, sg, sb] = hexToRgb(surfaceHex);
+  const [rr, rg, rb] = hexToRgb(referenceHex);
+  if (rr <= 0 || rg <= 0 || rb <= 0) return null;
+  const ar = Math.min(1, Math.max(0, (sr / rr) * CEILING_REFERENCE_ALBEDO));
+  const ag = Math.min(1, Math.max(0, (sg / rg) * CEILING_REFERENCE_ALBEDO));
+  const ab = Math.min(1, Math.max(0, (sb / rb) * CEILING_REFERENCE_ALBEDO));
+  return rgbToHex(ar * 255, ag * 255, ab * 255);
 }
 
 function maskAt(inst: SamInstance, x: number, y: number): boolean {
@@ -218,6 +295,55 @@ export function floorMedianColor(
   return medianMaskColor(image, include);
 }
 
+/** Median ceiling colour of one photo, or null when no ceiling is in view. */
+export function ceilingMedianColor(
+  image: RgbaImage,
+  instances: SamInstance[],
+  width: number,
+  height: number,
+): string | null {
+  const include = conceptMask(instances, "ceiling", width, height);
+  return medianMaskColor(image, include);
+}
+
+/**
+ * Wall albedo of one photo: the wall median divided by the ceiling median
+ * (albedo 0.9) per channel. Without a ceiling mask the 90th luminance
+ * percentile pixel of the wall's own mask is the albedo reference.
+ */
+export function wallAlbedoColor(
+  image: RgbaImage,
+  instances: SamInstance[],
+  width: number,
+  height: number,
+): string | null {
+  const include = conceptMask(instances, "wall", width, height);
+  const exclude = unionConceptMask(instances, ["window", "door"], width, height);
+  const surface = medianMaskColor(image, include, exclude);
+  if (surface === null) return null;
+  const ceiling = ceilingMedianColor(image, instances, width, height);
+  if (ceiling !== null) return albedoFromMedianPair(surface, ceiling);
+  return percentileMaskColor(image, include, exclude, 0.9);
+}
+
+/**
+ * Floor albedo of one photo: same white-reference rule as the wall, over
+ * the floor mask.
+ */
+export function floorAlbedoColor(
+  image: RgbaImage,
+  instances: SamInstance[],
+  width: number,
+  height: number,
+): string | null {
+  const include = conceptMask(instances, "floor", width, height);
+  const surface = medianMaskColor(image, include);
+  if (surface === null) return null;
+  const ceiling = ceilingMedianColor(image, instances, width, height);
+  if (ceiling !== null) return albedoFromMedianPair(surface, ceiling);
+  return percentileMaskColor(image, include, null, 0.9);
+}
+
 function colorDistance(a: [number, number, number], b: [number, number, number]): number {
   return (a[0] - b[0]) ** 2 + (a[1] - b[1]) ** 2 + (a[2] - b[2]) ** 2;
 }
@@ -240,9 +366,9 @@ function closestByColor(options: readonly string[], medianHex: string | null): s
 }
 
 /**
- * Floor finish for a label family; wood/tile/carpet pick the closest finish
- * to the floor mask's median colour. `other` (or anything unknown, or no
- * label) falls back to the sample room's floor.
+ * Floor finish for a label family; wood/tile/carpet pick the finish whose
+ * measured mean albedo is closest to the floor's albedo. `other` (or
+ * anything unknown, or no label) falls back to the sample room's floor.
  */
 export function pickFloorTexture(
   family: RoomLabelFloorFamily | string | null | undefined,
@@ -265,6 +391,30 @@ export function pickFloorTexture(
 /** Wall finish for a label family: wallpaper keeps its paper, else paint. */
 export function pickWallTexture(family: RoomLabelWallFamily | string | null | undefined): string {
   return family === "wallpaper" ? WALL_TEXTURE_WALLPAPER : WALL_TEXTURE_PAINT;
+}
+
+/**
+ * Display colour to put on the wall material for one albedo over a wall
+ * texture normalised to a mean of 1: `albedo / textureMean` per channel, so
+ * the weave shows without darkening the albedo again. Falls back to the
+ * albedo itself when the texture mean is unknown.
+ */
+export function wallDisplayHex(
+  albedoHex: string | null | undefined,
+  textureId: string | null | undefined,
+): string | null {
+  if (typeof albedoHex !== "string" || !HEX_RE.test(albedoHex)) return null;
+  const meanHex = (
+    textureId !== null && textureId !== undefined ? TEXTURE_MEAN_COLORS[textureId] : undefined
+  ) as string | undefined;
+  if (meanHex === undefined || !HEX_RE.test(meanHex)) return albedoHex;
+  const [ar, ag, ab] = hexToRgb(albedoHex);
+  const [mr, mg, mb] = hexToRgb(meanHex);
+  if (mr <= 0 || mg <= 0 || mb <= 0) return albedoHex;
+  const cr = Math.min(255, Math.max(0, Math.round((ar / mr) * 255)));
+  const cg = Math.min(255, Math.max(0, Math.round((ag / mg) * 255)));
+  const cb = Math.min(255, Math.max(0, Math.round((ab / mb) * 255)));
+  return rgbToHex(cr, cg, cb);
 }
 
 /**

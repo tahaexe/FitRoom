@@ -22,6 +22,7 @@ import {
   dollhouseWallView,
   isHealthResponse,
   orientedFootprint,
+  wallDisplayHex,
   type RenderWallView,
 } from "@fitroom/shared";
 import roomJson from "../../shared/samples/living-420x360.json";
@@ -159,10 +160,20 @@ export function wallTextureIdFor(surfaceId: string | null | undefined): string {
   return "PaintedPlaster017";
 }
 
-/** Tint blended over the wall texture: the photo colour, else neutral. */
-export function wallTintFor(surfaceId: string | null | undefined): number {
+/**
+ * Display colour over the wall texture: the photo albedo divided by the
+ * finish mean (the texture is normalised to a mean of 1), else neutral.
+ */
+export function wallTintFor(
+  surfaceId: string | null | undefined,
+  textureId?: string | null,
+): number {
   if (typeof surfaceId === "string" && /^#[0-9a-fA-F]{6}$/.test(surfaceId)) {
-    return parseInt(surfaceId.slice(1), 16);
+    const display =
+      textureId === undefined || textureId === null
+        ? surfaceId
+        : (wallDisplayHex(surfaceId, textureId) ?? surfaceId);
+    return parseInt(display.slice(1), 16);
   }
   return 0xf1ece2;
 }
@@ -183,7 +194,7 @@ function dressWalls(onLoad: () => void, wallId?: string, wallTint?: string): voi
   normalMap.repeat.set(2, 1);
   WALL_MATERIAL.map = map;
   WALL_MATERIAL.normalMap = normalMap;
-  WALL_MATERIAL.color.setHex(wallTintFor(wallTint));
+  WALL_MATERIAL.color.setHex(wallTintFor(wallTint, finish));
   WALL_MATERIAL.needsUpdate = true;
 }
 

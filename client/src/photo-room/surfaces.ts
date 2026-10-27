@@ -1,10 +1,10 @@
 /**
- * Browser surface colours: median wall/floor colours from the 1280 px photo
- * pixels plus the SAM masks at hand. No model call: the pixels come from the
+ * Browser surface colours: wall/floor albedo from the 1280 px photo pixels
+ * plus the SAM masks at hand. No model call: the pixels come from the
  * already-downloaded photo, the masks from the segment answers.
  */
 
-import { floorMedianColor, wallMedianColor, type RgbaImage } from "@fitroom/shared";
+import { floorAlbedoColor, wallAlbedoColor, type RgbaImage } from "@fitroom/shared";
 import type { SamInstance } from "@fitroom/shared";
 
 export interface SurfaceColors {
@@ -49,7 +49,7 @@ export function loadPhotoPixels(url: string): Promise<RgbaImage | null> {
   });
 }
 
-/** Medians for one photo from its pixels + instances (pure part, testable). */
+/** Albedos for one photo from its pixels + instances (pure part, testable). */
 export function surfaceColorsOf(
   image: RgbaImage,
   instances: SamInstance[],
@@ -57,13 +57,13 @@ export function surfaceColorsOf(
   height: number,
 ): SurfaceColors {
   return {
-    wallTint: wallMedianColor(image, instances, width, height),
-    floorColor: floorMedianColor(image, instances, width, height),
+    wallTint: wallAlbedoColor(image, instances, width, height),
+    floorColor: floorAlbedoColor(image, instances, width, height),
   };
 }
 
 /**
- * Medians for one analysed wall photo. Resolves nulls (never throws) when
+ * Albedos for one analysed wall photo. Resolves nulls (never throws) when
  * the pixels cannot be read or the masks are empty.
  */
 export async function computeSurfaceColors(
