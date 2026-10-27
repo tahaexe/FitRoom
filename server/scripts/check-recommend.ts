@@ -151,7 +151,7 @@ async function main(): Promise<void> {
     readFileSync(join(repoRoot, "shared", "catalog", "catalog.json"), "utf8"),
   ) as CatalogItem[];
   const products: FitProducts = new Map(
-    catalog.map((c) => [c.id, { size: c.size, category: c.category }]),
+    catalog.map((c) => [c.id, { size: c.size, category: c.category, name: c.name }]),
   );
 
   // The recorded list matches what the shared code builds today.

@@ -146,7 +146,7 @@ async function replayTurn(
   ) as AssistantMessage[];
   const room = first.room as RoomLayout;
   const replayProducts: FitProducts = new Map(
-    replayCatalog.map((c) => [c.id, { size: c.size, category: c.category }]),
+    replayCatalog.map((c) => [c.id, { size: c.size, category: c.category, name: c.name }]),
   );
   // Like the client's turn loop: a refused "does not fit" placement enforces
   // the refusal, so the turn applies no change at all, whatever the model
@@ -348,7 +348,7 @@ async function main(): Promise<void> {
   ) as CatalogItem[];
   replayCatalog = catalog;
   const products: FitProducts = new Map(
-    catalog.map((c) => [c.id, { size: c.size, category: c.category }]),
+    catalog.map((c) => [c.id, { size: c.size, category: c.category, name: c.name }]),
   );
 
   const rebuilt = buildAssistantDemoRequests();

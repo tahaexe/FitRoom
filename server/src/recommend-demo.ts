@@ -53,7 +53,7 @@ export function buildRecommendDemoRequests(): RecommendRequest[] {
   const catalog = readJson(resolve(sharedDir, "catalog", "catalog.json")) as CatalogItem[];
   const catalogById = new Map(catalog.map((c) => [c.id, c]));
   const products = new Map(
-    catalog.map((c) => [c.id, { size: { ...c.size }, category: c.category }]),
+    catalog.map((c) => [c.id, { size: { ...c.size }, category: c.category, name: c.name }]),
   );
   const engine = new FitEngine(room, products);
   const base = new Set<string>();

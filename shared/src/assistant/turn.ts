@@ -53,7 +53,7 @@ export function assistantToolMessages(
 /** True when the draft has no fit error (warnings are fine). */
 export function isFitClean(room: RoomLayout, scene: SceneState, catalog: CatalogItem[]): boolean {
   const products = new Map(
-    catalog.map((c) => [c.id, { size: { ...c.size }, category: c.category }]),
+    catalog.map((c) => [c.id, { size: { ...c.size }, category: c.category, name: c.name }]),
   );
   return checkFit(room, scene, products).every((issue) => issue.severity !== "error");
 }
@@ -65,7 +65,7 @@ export function turnErrors(
   catalog: CatalogItem[],
 ): FitIssue[] {
   const products = new Map(
-    catalog.map((c) => [c.id, { size: { ...c.size }, category: c.category }]),
+    catalog.map((c) => [c.id, { size: { ...c.size }, category: c.category, name: c.name }]),
   );
   return checkFit(room, scene, products).filter((issue) => issue.severity === "error");
 }

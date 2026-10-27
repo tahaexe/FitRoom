@@ -16,7 +16,10 @@ export const ROTATE_SNAP_DEG = 15;
 /** Product sizes + categories for the shared fit engine. */
 export function catalogProducts(catalog: Map<string, CatalogItem>): FitProducts {
   return new Map(
-    [...catalog.values()].map((c) => [c.id, { size: { ...c.size }, category: c.category }]),
+    [...catalog.values()].map((c) => [
+      c.id,
+      { size: { ...c.size }, category: c.category, name: c.name },
+    ]),
   );
 }
 
