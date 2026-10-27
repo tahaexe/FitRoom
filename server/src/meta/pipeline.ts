@@ -28,20 +28,14 @@ import {
   newSessionId,
 } from "./caps.js";
 import { readMockFixture, type UpstreamResult } from "./client.js";
+import { UpstreamFriendlyError } from "./errors.js";
+
+export { UpstreamFriendlyError };
 import { readDemoStore, writeRecorded } from "./demo.js";
 import { gatewayKey } from "./keys.js";
 import { appendCostLine } from "./metering.js";
 import { costUsd } from "./pricing.js";
 import type { CapsState } from "./caps.js";
-
-/**
- * Thrown by a route's upstream call when the model answer is unusable after
- * its retry: the pipeline answers HTTP 200 `{ status: "error", ... }` with
- * this friendly message instead of the generic "unavailable" 502.
- */
-export class UpstreamFriendlyError extends Error {
-  override name = "UpstreamFriendlyError";
-}
 
 export interface ParsedBody {
   /** The route's typed input (the live flag already stripped). */

@@ -1,15 +1,21 @@
 /**
- * `POST /api/render` — thin route over the shared gateway pipeline.
+ * `POST /api/render` — photoreal visualisation over the shared gateway
+ * pipeline (Muse Image edit with the 3D capture as the reference image).
  *
- * Takes `{ "prompt": string of at most 600 characters }` (text only, Muse
- * Image). A later task adds the scene-and-camera key input
- * (`POST /api/room/analyze` arrives separately).
+ * New body: `{ prompt, scene, referenceImage?, cameraPreset?, live? }`.
+ * The prompt is built client-side with the shared prompt builder; the key
+ * input is the normalised scene + camera + prompt (never image bytes), so
+ * moving a piece changes the key while the capture bytes never do. Upstream
+ * sends the prompt as `input_text` and the capture as an `input_image` JPEG
+ * data URL. A legacy `{ prompt }` body still answers (text-only render) so
+ * older checks keep passing.
  */
 
-import { MAX_RENDER_PROMPT_CHARS } from "@fitroom/shared";
+import { MAX_RENDER_PROMPT_CHARS, buildRenderKeyInput, renderRequestError } from "@fitroom/shared";
 import { Hono } from "hono";
 import { META_MODELS } from "../config.js";
 import { callImage, type UpstreamResult } from "../meta/client.js";
+import { UpstreamFriendlyError } from "../meta/errors.js";
 import {
   parsePrompt,
   serveGatewayRequest,
@@ -17,18 +23,107 @@ import {
   type RouteDef,
 } from "../meta/pipeline.js";
 
+export const RENDER_FRIENDLY_ERROR =
+  "The visualiser couldn't make an image just now. Please try again.";
+
+function stripDataUrl(value: string): string {
+  const comma = value.indexOf(",");
+  if (value.startsWith("data:") && comma >= 0) {
+    return value.slice(comma + 1);
+  }
+  return value;
+}
+
+function decodeJpegBase64(value: string): Uint8Array | null {
+  try {
+    const bare = stripDataUrl(value).trim();
+    if (bare.length < 16) return null;
+    const bytes = Buffer.from(bare, "base64");
+    if (bytes.length < 32) return null;
+    return new Uint8Array(bytes);
+  } catch {
+    return null;
+  }
+}
+
+export interface RenderRouteInput {
+  prompt: string;
+  scene?: unknown;
+  cameraPreset?: string;
+  referenceJpeg?: Uint8Array;
+}
+
+export function parseRenderBody(body: unknown): { input: RenderRouteInput } | { error: string } {
+  if (typeof body !== "object" || body === null || Array.isArray(body)) {
+    return { error: "Expected a JSON object with a prompt, a scene and a capture." };
+  }
+  const record = body as Record<string, unknown>;
+  // Legacy text-only body: `{ prompt }` (gateway check + old demo entry).
+  if (record["scene"] === undefined && record["referenceImage"] === undefined) {
+    const parsed = parsePrompt(body, MAX_RENDER_PROMPT_CHARS);
+    if ("error" in parsed) return parsed;
+    return { input: { prompt: parsed.prompt } };
+  }
+  const problem = renderRequestError(body);
+  if (problem !== null) return { error: problem };
+  const typed = body as {
+    prompt: string;
+    scene: unknown;
+    referenceImage?: string;
+    cameraPreset?: string;
+    live?: unknown;
+  };
+  let referenceJpeg: Uint8Array | undefined;
+  if (typeof typed.referenceImage === "string" && typed.referenceImage !== "") {
+    const decoded = decodeJpegBase64(typed.referenceImage);
+    if (decoded === null) return { error: "The capture must be base64 JPEG." };
+    referenceJpeg = decoded;
+  }
+  const input: RenderRouteInput = { prompt: typed.prompt, scene: typed.scene };
+  if (typeof typed.cameraPreset === "string" && typed.cameraPreset !== "") {
+    input.cameraPreset = typed.cameraPreset;
+  }
+  if (referenceJpeg !== undefined) input.referenceJpeg = referenceJpeg;
+  return { input };
+}
+
 export const renderDef: RouteDef = {
   route: "render",
   model: META_MODELS.image,
   liveReady: true,
-  parseBody: (body: unknown) => {
-    const parsed = parsePrompt(body, MAX_RENDER_PROMPT_CHARS);
-    if ("error" in parsed) return parsed;
-    return { input: { prompt: parsed.prompt } };
+  parseBody: parseRenderBody,
+  keyInput: (input: unknown) => {
+    const record = input as Partial<RenderRouteInput>;
+    const prompt = typeof record["prompt"] === "string" ? record["prompt"] : "";
+    const scene = record["scene"] as
+      { roomId?: unknown; items?: unknown; camera?: unknown } | undefined;
+    if (
+      typeof scene === "object" &&
+      scene !== null &&
+      typeof (scene as { roomId?: unknown })["roomId"] === "string"
+    ) {
+      try {
+        return buildRenderKeyInput(
+          scene as Parameters<typeof buildRenderKeyInput>[0],
+          prompt,
+          record["cameraPreset"],
+        );
+      } catch {
+        return { prompt };
+      }
+    }
+    // Legacy prompt-only input.
+    return { prompt };
   },
-  keyInput: (input: unknown) => input,
-  upstream: async (apiKey: string, input: unknown): Promise<UpstreamResult> =>
-    callImage(apiKey, { prompt: (input as { prompt: string }).prompt }),
+  upstream: async (apiKey: string, input: unknown): Promise<UpstreamResult> => {
+    const record = input as Partial<RenderRouteInput>;
+    const prompt = typeof record["prompt"] === "string" ? record["prompt"] : "";
+    if (prompt === "") {
+      throw new UpstreamFriendlyError(RENDER_FRIENDLY_ERROR);
+    }
+    const referenceJpeg = record["referenceJpeg"] as Uint8Array | undefined;
+    return callImage(apiKey, { prompt, referenceJpeg });
+  },
 };
 
 export function renderRoutes(deps: PipelineDeps): Hono {

@@ -26,6 +26,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { META_BASE_URL, META_MODELS } from "../config.js";
+import { UpstreamFriendlyError } from "./errors.js";
 import { emptyUsage, usageFromUpstream, type TokenUsage } from "./pricing.js";
 
 export interface ChatMessage {
@@ -147,6 +148,58 @@ function dataUrlJpeg(bytes: Uint8Array): string {
   return `data:image/jpeg;base64,${Buffer.from(bytes).toString("base64")}`;
 }
 
+export const IMAGE_FRIENDLY_ERROR =
+  "The visualiser couldn't make an image just now. Please try again.";
+
+/**
+ * Read WebP width/height from the decoded bytes (VP8, VP8L or VP8X).
+ * Returns null when the bytes are not a recognised WebP image.
+ */
+export function webpDimensions(bytes: Uint8Array): { width: number; height: number } | null {
+  if (bytes.length < 30) return null;
+  const ascii = (at: number, len: number): string => {
+    let out = "";
+    for (let i = 0; i < len; i += 1) out += String.fromCharCode(bytes[at + i] ?? 0);
+    return out;
+  };
+  if (ascii(0, 4) !== "RIFF" || ascii(8, 4) !== "WEBP") return null;
+  const u16 = (at: number): number => (bytes[at] ?? 0) | ((bytes[at + 1] ?? 0) << 8);
+  const u24 = (at: number): number =>
+    (bytes[at] ?? 0) | ((bytes[at + 1] ?? 0) << 8) | ((bytes[at + 2] ?? 0) << 16);
+  const chunk = ascii(12, 4);
+  if (chunk === "VP8 ") {
+    // Lossy bitstream: frame tag (3) + start code (3) + 9D012A + w/h (14 bits each).
+    if (bytes.length < 30) return null;
+    const w = u16(26) & 0x3fff;
+    const h = u16(28) & 0x3fff;
+    if (w === 0 || h === 0) return null;
+    return { width: w, height: h };
+  }
+  if (chunk === "VP8L") {
+    // Lossless: signature 0x2F + 14-bit w-1 + 14-bit h-1 packed in 4 bytes.
+    if (bytes.length < 25) return null;
+    const b0 = bytes[21] ?? 0;
+    const b1 = bytes[22] ?? 0;
+    const b2 = bytes[23] ?? 0;
+    const b3 = bytes[24] ?? 0;
+    if (b0 !== 0x2f) return null;
+    const bits = b1 | (b2 << 8) | (b3 << 16) | (0 << 24);
+    const w = (bits & 0x3fff) + 1;
+    const h = ((bits >> 14) & 0x3fff) + 1;
+    void u24;
+    if (w <= 0 || h <= 0 || w > 16384 || h > 16384) return null;
+    return { width: w, height: h };
+  }
+  if (chunk === "VP8X") {
+    if (bytes.length < 30) return null;
+    const w = u24(24) + 1;
+    const h = u24(27) + 1;
+    if (w <= 0 || h <= 0 || w > 16384 || h > 16384) return null;
+    return { width: w, height: h };
+  }
+  return null;
+}
+
 /** Muse Image generation: text only, or an edit with a reference image. */
 export async function callImage(
   apiKey: string,
@@ -177,12 +230,30 @@ export async function callImage(
     const type = (item as Record<string, unknown>)["type"];
     if (type === "image_generation_call") {
       const result = (item as Record<string, unknown>)["result"];
-      if (typeof result === "string") imageBase64 = result;
+      if (typeof result === "string" && result.length > 0) imageBase64 = result;
     }
   }
+  if (imageBase64 === null) {
+    throw new UpstreamFriendlyError(IMAGE_FRIENDLY_ERROR);
+  }
+  let width = 0;
+  let height = 0;
+  try {
+    const bytes = Buffer.from(imageBase64, "base64");
+    const dims = webpDimensions(new Uint8Array(bytes));
+    if (dims !== null) {
+      width = dims.width;
+      height = dims.height;
+    }
+  } catch {
+    // Falls through to the friendly error below.
+  }
+  if (width === 0 || height === 0) {
+    throw new UpstreamFriendlyError(IMAGE_FRIENDLY_ERROR);
+  }
   return {
-    data: { imageBase64, format: "webp", width: 2048, height: 1152 },
-    usage: usageFromUpstream(record["usage"], imageBase64 === null ? 0 : 1),
+    data: { imageBase64, format: "webp", width, height },
+    usage: usageFromUpstream(record["usage"], 1),
   };
 }
 
