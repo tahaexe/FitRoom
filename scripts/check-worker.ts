@@ -20,6 +20,8 @@
  * - the dry-run Worker bundle gzips under 3 MB;
  * - neither the Worker bundle nor `client/dist` holds the `META_API_KEY`
  *   value (a sentinel stands in for the secret; it is never printed).
+ * - every wrangler flag used by the deploy script appears in the installed
+ *   wrangler's `<command> --help` output (help output only, no account).
  *
  * Prints PASS or FAIL per check, stops every Worker it started itself, and
  * exits non-zero on any FAIL.
@@ -34,6 +36,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { gzipSync } from "node:zlib";
 import { unstable_dev, type Unstable_DevWorker } from "wrangler";
+import { WRANGLER_COMMANDS } from "./deploy.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -89,6 +92,47 @@ const WRANGLER_BIN = join("node_modules", "wrangler", "bin", "wrangler.js");
 async function wrangler(args: string[]): Promise<{ exit: number | null; stdout: string }> {
   const res = await run("node", [WRANGLER_BIN, ...args]);
   return { exit: res.exit, stdout: `${res.stdout}\n${res.stderr}` };
+}
+
+interface DeployWranglerEntry {
+  key: string;
+  command: string[];
+  flags: string[];
+}
+
+function helpFlags(helpOutput: string): Set<string> {
+  return new Set(helpOutput.match(/--[A-Za-z0-9][A-Za-z0-9_-]*/g) ?? []);
+}
+
+/**
+ * Every wrangler flag the deploy script passes must be named in the
+ * installed wrangler's `<command> --help` output. Help output only:
+ * nothing here reaches Cloudflare.
+ */
+async function checkDeployWranglerFlags(): Promise<void> {
+  const entries = WRANGLER_COMMANDS as DeployWranglerEntry[];
+  if (!Array.isArray(entries) || entries.length === 0) {
+    check("deploy script lists its wrangler calls", false, "empty table");
+    return;
+  }
+  for (const entry of entries) {
+    const res = await wrangler([...entry.command, "--help"]);
+    if (res.exit !== 0) {
+      check(
+        `deploy wrangler flags: ${entry.key} (${entry.command.join(" ")})`,
+        false,
+        res.stdout.slice(-300).trim(),
+      );
+      continue;
+    }
+    const available = helpFlags(res.stdout);
+    const missing = entry.flags.filter((flag) => !available.has(flag));
+    check(
+      `deploy wrangler flags: ${entry.key} (${entry.command.join(" ")})`,
+      missing.length === 0,
+      missing.length === 0 ? undefined : `unknown flags: ${missing.join(", ")}`,
+    );
+  }
 }
 
 /** A free local port (discovered by binding port 0, then released). */
@@ -354,6 +398,13 @@ async function main(): Promise<void> {
   let worker: Unstable_DevWorker | null = null;
   let lastBase: string | null;
   try {
+    // Deploy script flags against the installed wrangler's help.
+    await checkDeployWranglerFlags();
+    if (failures > 0) {
+      process.exitCode = 1;
+      return;
+    }
+
     // 0. Builds: shared, server (regenerates the Worker bundle data), client.
     for (const workspace of ["@fitroom/shared", "@fitroom/server", "@fitroom/client"]) {
       const built = await run(
