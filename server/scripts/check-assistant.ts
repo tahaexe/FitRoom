@@ -122,17 +122,26 @@ interface Replay {
 }
 
 async function fetchRound(body: unknown): Promise<{ status: number; payload: unknown } | null> {
-  try {
-    const res = await fetch(`${BASE}/api/assistant`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(15_000),
-    });
-    return { status: res.status, payload: (await res.json()) as unknown };
-  } catch {
-    return null;
+  // The turn loop runs seconds of executor work between rounds; a pooled
+  // keep-alive connection can go stale in that gap and the next POST then
+  // fails before a single byte reaches the server (ECONNRESET, server
+  // healthy). Retry once on a fresh connection when nothing was received:
+  // demo lookups are read-only, so resending is safe. Any HTTP answer —
+  // including demo-miss — still goes through the strict checks below.
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const res = await fetch(`${BASE}/api/assistant`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(15_000),
+      });
+      return { status: res.status, payload: (await res.json()) as unknown };
+    } catch {
+      if (attempt === 1) return null;
+    }
   }
+  return null;
 }
 
 async function replayTurn(
