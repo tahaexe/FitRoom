@@ -402,8 +402,13 @@ check(
 );
 check(
   "confirm:corner-shift",
-  cornerHandleLabel("m3", "D") === "Corner bottom right of wall D",
+  cornerHandleLabel("m3", "D") === "Corner bottom left of wall D",
   cornerHandleLabel("m3", "D"),
+);
+check(
+  "confirm:corner-m4",
+  cornerHandleLabel("m4", "A") === "Corner bottom right of wall A",
+  cornerHandleLabel("m4", "A"),
 );
 check(
   "confirm:opening-box",
@@ -420,8 +425,14 @@ check(
   openingBoxText("window", 120, 140) === "Window 120 × 140",
   openingBoxText("window", 120, 140),
 );
-check("confirm:active", wallCardStatus(true) === "Active", wallCardStatus(true));
-check("confirm:done", wallCardStatus(false) === "Done", wallCardStatus(false));
+check("confirm:active", wallCardStatus(true, true) === "Active", wallCardStatus(true, true));
+check(
+  "confirm:active-unseen",
+  wallCardStatus(true, false) === "Active",
+  wallCardStatus(true, false),
+);
+check("confirm:done", wallCardStatus(false, true) === "Done", wallCardStatus(false, true));
+check("confirm:todo", wallCardStatus(false, false) === "To do", wallCardStatus(false, false));
 
 if (failures > 0) process.exit(1);
 console.log("guidance: all checks passed");

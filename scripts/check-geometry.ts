@@ -297,9 +297,7 @@ function segmentsCross(
   p3: CornerPoint,
   p4: CornerPoint,
 ): boolean {
-  return (
-    orient(p1, p2, p3) * orient(p1, p2, p4) < 0 && orient(p3, p4, p1) * orient(p3, p4, p2) < 0
-  );
+  return orient(p1, p2, p3) * orient(p1, p2, p4) < 0 && orient(p3, p4, p1) * orient(p3, p4, p2) < 0;
 }
 
 function checkConfirmLabels(): void {
