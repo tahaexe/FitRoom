@@ -51,6 +51,8 @@ import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
 import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
 import { OrbitResolutionController } from "./orbit-resolution";
+import { PointerOwnership } from "./pointer-ownership";
+import { SceneSynchronizer } from "./scene-sync";
 import { EditorStore } from "./editor/editor-store";
 import { RoomEditor } from "./editor/editor";
 import { RoomMenu } from "./editor/room-menu";
@@ -171,8 +173,10 @@ class FitRoomApp {
   private controls: OrbitControls;
   private rig: StageRig | null = null;
   private store: SceneStore;
-  private instances = new Map<string, InstanceEntry>();
   private modelsRoot = new THREE.Group();
+  private get instances(): Map<string, InstanceEntry> {
+    return this.syncer?.instances ?? new Map<string, InstanceEntry>();
+  }
   private raycaster = new THREE.Raycaster();
   private floorMesh: THREE.Mesh | null = null;
   private selectedId: string | null = null;
@@ -210,8 +214,13 @@ class FitRoomApp {
   private photoFlow: PhotoFlow | null = null;
   /** Edited room layouts stashed by room id, so each room keeps its own walls, openings and own blocks. */
   private savedRoomLayouts = new Map<string, RoomLayout>();
-  private drag: { id: string; offsetX: number; offsetZ: number } | null = null;
+  private drag: { pointerId: number; id: string; offsetX: number; offsetZ: number } | null = null;
   private rotating = false;
+  private rotatePointerId: number | null = null;
+  private ownership = new PointerOwnership();
+  private syncer: SceneSynchronizer<THREE.Group> | null = null;
+  private toastTimer = 0;
+  private toastEl: HTMLElement | null = null;
   /** Throttled live fit feedback while dragging (moved id, consumed once per frame). */
   private liveDirty: string | null = null;
   private container: HTMLElement;
@@ -337,6 +346,32 @@ class FitRoomApp {
     this.scene.add(built.group);
     this.roomGroup = built.group;
     this.scene.add(this.modelsRoot);
+    this.syncer = new SceneSynchronizer<THREE.Group>({
+      load: async (item) => {
+        const catalogEntry = CATALOG_MAP.get(item.productId);
+        if (catalogEntry === undefined) throw new Error(`unknown product ${item.productId}`);
+        const group = await loadModel(catalogEntry);
+        group.position.set(cmToMeters(item.position.x), 0, cmToMeters(item.position.z));
+        group.rotation.y = (item.rotationY * Math.PI) / 180;
+        await applyVariant(group, catalogEntry, item.variant);
+        return group;
+      },
+      place: (group, item) => {
+        group.position.set(cmToMeters(item.position.x), 0, cmToMeters(item.position.z));
+        group.rotation.y = (item.rotationY * Math.PI) / 180;
+      },
+      attach: (group) => {
+        this.modelsRoot.add(group);
+      },
+      detach: (group) => {
+        this.modelsRoot.remove(group);
+      },
+      dispose: (group) => {
+        group.traverse((obj) => {
+          if (obj instanceof THREE.Mesh) obj.geometry.dispose();
+        });
+      },
+    });
     this.rebuildExistingGroup();
     const floor = built.group.getObjectByName("fitroom-floor");
     if (floor instanceof THREE.Mesh) this.floorMesh = floor;
@@ -444,6 +479,7 @@ class FitRoomApp {
       void this.syncInstances();
       this.refreshIssues();
       this.recommendPanel?.refresh();
+      this.updateUndoRedo();
       this.markSceneChanged();
     });
 
@@ -476,6 +512,7 @@ class FitRoomApp {
     this.refreshIssues();
     this.updateMeasure();
     this.updateTopBar();
+    this.updateUndoRedo();
     // Render on demand: frames only while the camera moves, after scene or
     // selection changes, or when a texture finishes loading. No idle loop.
     this.requestRender();
@@ -956,10 +993,102 @@ class FitRoomApp {
   }
 
   private deleteItem(id: string): void {
+    const item = this.store.state.items.find((i) => i.instanceId === id);
+    const entry = item === undefined ? undefined : CATALOG_MAP.get(item.productId);
+    const label = entry?.name ?? "Piece";
     this.store.commit((draft) => {
       draft.items = draft.items.filter((i) => i.instanceId !== id);
     });
     if (this.selectedId === id) this.select(null);
+    this.updateUndoRedo();
+    this.showDeleteToast(label);
+  }
+
+  private doUndo(): void {
+    if (this.editing) {
+      this.editorStore?.undo();
+      return;
+    }
+    if (this.store.undo()) {
+      void this.syncInstances();
+      this.refreshIssues();
+    }
+    this.updateUndoRedo();
+  }
+
+  private doRedo(): void {
+    if (this.editing) return;
+    if (this.store.redo()) {
+      void this.syncInstances();
+      this.refreshIssues();
+    }
+    this.updateUndoRedo();
+  }
+
+  private updateUndoRedo(): void {
+    const undo = document.getElementById("tool-undo");
+    const redo = document.getElementById("tool-redo");
+    if (undo instanceof HTMLButtonElement) undo.disabled = !this.store.canUndo();
+    if (redo instanceof HTMLButtonElement) redo.disabled = !this.store.canRedo();
+  }
+
+  private showDeleteToast(label: string): void {
+    let host = document.getElementById("delete-toast");
+    if (host === null) {
+      host = document.createElement("div");
+      host.id = "delete-toast";
+      host.className = "delete-toast";
+      host.setAttribute("hidden", "");
+      document.getElementById("scene-container")?.appendChild(host);
+      this.toastEl = host;
+    }
+    host.innerHTML = "";
+    const text = document.createElement("span");
+    text.textContent = `Deleted ${label} · `;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Undo";
+    btn.addEventListener("click", () => {
+      this.hideDeleteToast();
+      this.doUndo();
+    });
+    host.append(text, btn);
+    host.removeAttribute("hidden");
+    window.clearTimeout(this.toastTimer);
+    this.toastTimer = window.setTimeout(() => this.hideDeleteToast(), 5000);
+  }
+
+  private hideDeleteToast(): void {
+    window.clearTimeout(this.toastTimer);
+    document.getElementById("delete-toast")?.setAttribute("hidden", "");
+  }
+
+  /** Pan stays inside the room: clamp the orbit target to the floor + 1 m. */
+  private clampTarget(): void {
+    const bounds = roomBounds(ROOM);
+    const minX = cmToMeters(bounds.minX) - 1;
+    const maxX = cmToMeters(bounds.maxX) + 1;
+    const minZ = cmToMeters(bounds.minZ) - 1;
+    const maxZ = cmToMeters(bounds.maxZ) + 1;
+    const t = this.controls.target;
+    t.x = Math.min(maxX, Math.max(minX, t.x));
+    t.z = Math.min(maxZ, Math.max(minZ, t.z));
+  }
+
+  /** Frame the whole room from the default angle (button + Home key). */
+  private resetView(): void {
+    const bounds = roomBounds(ROOM);
+    const wM = cmToMeters(bounds.maxX - bounds.minX);
+    const dM = cmToMeters(bounds.maxZ - bounds.minZ);
+    const cxM = cmToMeters((bounds.minX + bounds.maxX) / 2);
+    const czM = cmToMeters((bounds.minZ + bounds.maxZ) / 2);
+    const aspect =
+      Math.max(1, this.container.clientWidth) / Math.max(1, this.container.clientHeight);
+    if (this.mode !== "orbit") this.setMode("orbit");
+    this.frameDollhouse(cxM, czM, wM, dM, aspect);
+    this.clampTarget();
+    this.controls.update();
+    this.requestRender();
   }
 
   /** Follow the selected piece every frame so the outline turns with it. */
@@ -1068,49 +1197,12 @@ class FitRoomApp {
   // ---- sync ----
 
   private async syncInstances(): Promise<void> {
-    const seen = new Set<string>();
-    for (const item of this.store.state.items) {
-      seen.add(item.instanceId);
-      const existing = this.instances.get(item.instanceId);
-      const entry = CATALOG_MAP.get(item.productId);
-      if (entry === undefined) continue;
-      if (existing === undefined) {
-        try {
-          const group = await loadModel(entry);
-          group.position.set(cmToMeters(item.position.x), 0, cmToMeters(item.position.z));
-          group.rotation.y = (item.rotationY * Math.PI) / 180;
-          await applyVariant(group, entry, item.variant);
-          this.modelsRoot.add(group);
-          this.instances.set(item.instanceId, { item: { ...item }, group, variant: item.variant });
-        } catch {
-          continue;
-        }
-      } else {
-        existing.group.position.set(cmToMeters(item.position.x), 0, cmToMeters(item.position.z));
-        existing.group.rotation.y = (item.rotationY * Math.PI) / 180;
-        if (existing.variant !== item.variant) {
-          const parent = existing.group.parent;
-          if (parent !== null) parent.remove(existing.group);
-          try {
-            const group = await loadModel(entry);
-            group.position.copy(existing.group.position);
-            group.rotation.y = (item.rotationY * Math.PI) / 180;
-            await applyVariant(group, entry, item.variant);
-            this.modelsRoot.add(group);
-            existing.group = group;
-            existing.variant = item.variant;
-          } catch {
-            continue;
-          }
-        }
-        existing.item = { ...item };
-      }
-    }
-    for (const [id, entry] of this.instances) {
-      if (!seen.has(id)) {
-        this.modelsRoot.remove(entry.group);
-        this.instances.delete(id);
-      }
+    // Single sync path: the synchronizer reconciles the whole scene from
+    // the store state, serializing concurrent runs so a delete or undo
+    // landing mid-load can never leave a ghost model behind or add a
+    // second one.
+    if (this.syncer !== null) {
+      await this.syncer.sync(this.store.state.items);
     }
     if (this.selectedId !== null && !this.instances.has(this.selectedId)) {
       this.select(null);
@@ -1307,55 +1399,106 @@ class FitRoomApp {
     return this.mode === "plan" ? this.planCam : this.orbitCam;
   }
 
+  private applyCameraLock(): void {
+    this.controls.enabled = !this.ownership.locked;
+  }
+
+  private pickInstanceId(): string | null {
+    const targets = [...this.instances.values()].map((e) => e.group);
+    if (targets.length === 0) return null;
+    const picks = this.raycaster.intersectObjects(targets, true);
+    if (picks.length === 0) return null;
+    let obj: THREE.Object3D | null = picks[0]?.object ?? null;
+    while (obj !== null && ![...this.instances.values()].some((e) => e.group === obj)) {
+      obj = obj.parent;
+    }
+    const found = [...this.instances.entries()].find(([, e]) => e.group === obj);
+    return found?.[0] ?? null;
+  }
+
   private bindPointer(): void {
     const el = this.renderer.domElement;
     const floorPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
     const hit = new THREE.Vector3();
 
-    el.addEventListener("pointerdown", (event) => {
-      if (event.button !== 0) return;
-      const ndc = this.setPointer(event);
-      this.raycaster.setFromCamera(ndc, this.activeCamera());
-      if (this.rotateHandle.visible) {
-        const hits = this.raycaster.intersectObject(this.rotateHandle, false);
-        if (hits.length > 0) {
-          this.rotating = this.selectedId !== null;
-          if (this.rotating) this.store.checkpoint();
-          el.setPointerCapture(event.pointerId);
+    // Capture phase: own piece/handle pointers before OrbitControls sees
+    // them, so holding a piece never moves the camera. Stopping the event
+    // here keeps OrbitControls (listening on the same canvas) from
+    // starting an orbit with the same pointer. A second finger that goes
+    // down while a piece is held is owned too.
+    el.addEventListener(
+      "pointerdown",
+      (event) => {
+        if (event.button !== 0) return;
+        if (this.ownership.locked) {
+          this.ownership.own(event.pointerId, event.clientX, event.clientY);
+          this.applyCameraLock();
+          event.stopImmediatePropagation();
+          event.preventDefault();
+          try {
+            el.setPointerCapture(event.pointerId);
+          } catch {
+            // Capture may be unavailable; the ownership set still locks.
+          }
           return;
         }
-      }
-      const targets = [...this.instances.values()].map((e) => e.group);
-      const picks = this.raycaster.intersectObjects(targets, true);
-      if (picks.length > 0) {
-        let obj: THREE.Object3D | null = picks[0]?.object ?? null;
-        while (obj !== null && ![...this.instances.values()].some((e) => e.group === obj)) {
-          obj = obj.parent;
+        const ndc = this.setPointer(event);
+        this.raycaster.setFromCamera(ndc, this.activeCamera());
+        if (this.rotateHandle.visible) {
+          const hits = this.raycaster.intersectObject(this.rotateHandle, false);
+          if (hits.length > 0 && this.selectedId !== null) {
+            this.ownership.own(event.pointerId, event.clientX, event.clientY);
+            this.rotating = true;
+            this.rotatePointerId = event.pointerId;
+            this.store.checkpoint();
+            this.applyCameraLock();
+            event.stopImmediatePropagation();
+            event.preventDefault();
+            try {
+              el.setPointerCapture(event.pointerId);
+            } catch {
+              // ignore
+            }
+            return;
+          }
         }
-        const found = [...this.instances.entries()].find(([, e]) => e.group === obj);
-        if (found !== undefined) {
-          const [id] = found;
-          this.select(id);
-          const item = this.store.state.items.find((i) => i.instanceId === id);
+        const foundId = this.pickInstanceId();
+        if (foundId !== null) {
+          this.ownership.own(event.pointerId, event.clientX, event.clientY);
+          this.select(foundId);
+          const item = this.store.state.items.find((i) => i.instanceId === foundId);
           if (item !== undefined && this.raycaster.ray.intersectPlane(floorPlane, hit)) {
             this.drag = {
-              id,
+              pointerId: event.pointerId,
+              id: foundId,
               offsetX: item.position.x - hit.x * 100,
               offsetZ: item.position.z - hit.z * 100,
             };
             this.store.checkpoint();
-            el.setPointerCapture(event.pointerId);
+            try {
+              el.setPointerCapture(event.pointerId);
+            } catch {
+              // ignore
+            }
+          } else {
+            this.drag = { pointerId: event.pointerId, id: foundId, offsetX: 0, offsetZ: 0 };
+            this.store.checkpoint();
           }
+          this.applyCameraLock();
+          event.stopImmediatePropagation();
+          event.preventDefault();
           return;
         }
-      }
-      this.select(null);
-    });
+        this.ownership.noteEmptyDown(event.pointerId, event.clientX, event.clientY);
+      },
+      true,
+    );
 
     el.addEventListener("pointermove", (event) => {
+      if (!this.ownership.isOwned(event.pointerId)) return;
       const ndc = this.setPointer(event);
       this.raycaster.setFromCamera(ndc, this.activeCamera());
-      if (this.rotating && this.selectedId !== null) {
+      if (this.rotating && event.pointerId === this.rotatePointerId && this.selectedId !== null) {
         const item = this.store.state.items.find((i) => i.instanceId === this.selectedId);
         const entry = this.selectedId === null ? undefined : this.instances.get(this.selectedId);
         if (item !== undefined && entry !== undefined) {
@@ -1374,7 +1517,7 @@ class FitRoomApp {
         }
         return;
       }
-      if (this.drag !== null) {
+      if (this.drag !== null && event.pointerId === this.drag.pointerId) {
         const item = this.store.state.items.find((i) => i.instanceId === this.drag?.id);
         if (item !== undefined && this.raycaster.ray.intersectPlane(floorPlane, hit)) {
           // 5cm wall snap: snap to the 5cm grid while dragging.
@@ -1395,44 +1538,146 @@ class FitRoomApp {
       }
     });
 
-    el.addEventListener("pointerup", () => {
-      const releasedId = this.drag?.id ?? (this.rotating ? this.selectedId : null);
-      // Flush one last live check before the commit so the release verdict
-      // matches the final pose.
+    el.addEventListener("pointerup", (event) => {
+      const wasOwned = this.ownership.isOwned(event.pointerId);
+      const down = this.ownership.downRecord(event.pointerId);
+      const isDragPointer = this.drag !== null && event.pointerId === this.drag.pointerId;
+      const isRotatePointer = this.rotating && event.pointerId === this.rotatePointerId;
+      const releasedId = isDragPointer
+        ? (this.drag?.id ?? null)
+        : isRotatePointer
+          ? this.selectedId
+          : null;
+      if (wasOwned) {
+        // Flush one last live check before the commit so the release
+        // verdict matches the final pose.
+        if (this.liveDirty !== null) {
+          const movedId = this.liveDirty;
+          this.liveDirty = null;
+          this.refreshIssues([movedId]);
+        }
+        if (isDragPointer || isRotatePointer) {
+          // Commit: the store emits, which runs the full (non-incremental)
+          // fit check once.
+          this.store.touch();
+        }
+      }
+      this.ownership.release(event.pointerId);
+      this.ownership.forget(event.pointerId);
+      if (isDragPointer) this.drag = null;
+      if (isRotatePointer) {
+        this.rotating = false;
+        this.rotatePointerId = null;
+      }
+      if (!this.ownership.locked) {
+        this.drag = null;
+        this.rotating = false;
+        this.rotatePointerId = null;
+        this.applyCameraLock();
+      }
+      if (releasedId !== null) {
+        this.maybeShowFits(releasedId);
+        this.requestRender();
+        return;
+      }
+      if (!wasOwned) {
+        // Empty space: only a click (down and up within 5 px) deselects;
+        // an orbit or pan drag keeps the selection.
+        if (PointerOwnership.isClick(down, event.clientX, event.clientY)) {
+          this.select(null);
+        }
+        this.ownership.forget(event.pointerId);
+      }
+      this.requestRender();
+    });
+
+    const cancelPointer = (event: PointerEvent): void => {
+      const isDragPointer = this.drag !== null && event.pointerId === this.drag.pointerId;
+      const isRotatePointer = this.rotating && event.pointerId === this.rotatePointerId;
+      if (isDragPointer || isRotatePointer) {
+        if (this.liveDirty !== null) {
+          const movedId = this.liveDirty;
+          this.liveDirty = null;
+          this.refreshIssues([movedId]);
+        }
+        this.store.touch();
+      }
+      this.ownership.cancel(event.pointerId);
+      if (isDragPointer) this.drag = null;
+      if (isRotatePointer) {
+        this.rotating = false;
+        this.rotatePointerId = null;
+      }
+      if (!this.ownership.locked) {
+        this.drag = null;
+        this.rotating = false;
+        this.rotatePointerId = null;
+        this.applyCameraLock();
+      }
+      this.requestRender();
+    };
+    el.addEventListener("pointercancel", cancelPointer);
+    el.addEventListener("lostpointercapture", cancelPointer);
+    window.addEventListener("blur", () => {
       if (this.liveDirty !== null) {
         const movedId = this.liveDirty;
         this.liveDirty = null;
         this.refreshIssues([movedId]);
       }
-      if (this.drag !== null || this.rotating) {
-        // Commit: the store emits, which runs the full (non-incremental)
-        // fit check once.
-        this.store.touch();
-      }
+      if (this.drag !== null || this.rotating) this.store.touch();
       this.drag = null;
       this.rotating = false;
-      if (releasedId !== null) this.maybeShowFits(releasedId);
+      this.rotatePointerId = null;
+      this.ownership.clear();
+      this.applyCameraLock();
+      this.requestRender();
     });
   }
 
   private bindKeys(): void {
     window.addEventListener("keydown", (event) => {
       if (event.key === "Escape") {
-        this.renderViewer?.close();
+        const openDialog = document.querySelector("dialog[open]");
+        if (openDialog !== null) return;
+        if (this.photoFlow !== null || this.editing) return;
+        if (this.renderViewer !== null) {
+          // Only close the viewer when it is actually open.
+          const host = document.getElementById("render-viewer");
+          const isOpen = host !== null && !host.hasAttribute("hidden") && host.children.length > 0;
+          if (isOpen) {
+            this.renderViewer.close();
+            return;
+          }
+        }
+        const fitList = document.getElementById("fit-list");
+        if (fitList !== null && !fitList.hasAttribute("hidden")) {
+          fitList.setAttribute("hidden", "");
+          return;
+        }
+        this.select(null);
+        return;
+      }
+      if (event.key === "Home") {
+        event.preventDefault();
+        this.resetView();
         return;
       }
       const tag = (document.activeElement?.tagName ?? "").toLowerCase();
-      if (tag === "input" || tag === "textarea") return;
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active.isContentEditable) return;
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
+        event.preventDefault();
+        this.doRedo();
+        return;
+      }
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
         event.preventDefault();
-        if (this.editing) {
-          this.editorStore?.undo();
+        if (event.shiftKey) {
+          this.doRedo();
           return;
         }
-        if (this.store.undo()) {
-          void this.syncInstances();
-          this.refreshIssues();
-        }
+        this.doUndo();
         return;
       }
       if (this.selectedId === null) return;
@@ -1484,12 +1729,9 @@ class FitRoomApp {
     on("tool-delete", () => {
       if (this.selectedId !== null) this.deleteItem(this.selectedId);
     });
-    on("tool-undo", () => {
-      if (this.store.undo()) {
-        void this.syncInstances();
-        this.refreshIssues();
-      }
-    });
+    on("tool-undo", () => this.doUndo());
+    on("tool-redo", () => this.doRedo());
+    on("tool-reset-view", () => this.resetView());
     on("tool-credits", () => {
       const dlg = document.getElementById("credits-dialog");
       if (dlg instanceof HTMLDialogElement) dlg.showModal();
@@ -1690,6 +1932,7 @@ class FitRoomApp {
     // OrbitControls.update() returns true while the camera is still moving
     // (including damping glide): keep drawing until it settles, then stop.
     const moved = this.controls.update();
+    this.clampTarget();
     // Decide this frame's resolution first and apply it before drawing.
     const scale = this.orbitResolution.update(moved, this.lastFrameCostMs, t0);
     const pixelRatio = this.basePixelRatio * scale;

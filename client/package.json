@@ -9,6 +9,8 @@
     "check:capture": "tsx scripts/check-capture.ts",
     "check:photo-intake": "tsx scripts/check-photo-intake.ts",
     "check:orbit-resolution": "tsx scripts/check-orbit-resolution.ts",
+    "check:pointer-ownership": "tsx scripts/check-pointer-ownership.ts",
+    "check:scene-sync": "tsx scripts/check-scene-sync.ts",
     "check:footprints": "node scripts/check-model-footprints.mjs",
     "preview": "vite preview --port 5173 --strictPort",
     "typecheck": "tsc --noEmit -p tsconfig.json"

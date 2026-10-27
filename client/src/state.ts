@@ -131,9 +131,11 @@ export function hasAutosave(roomId: string): boolean {
 export class SceneStore {
   state: SceneState;
   private past: SceneState[] = [];
+  private future: SceneState[] = [];
   private listeners = new Set<() => void>();
   private rooms = new Map<string, SceneState>();
   private roomPasts = new Map<string, SceneState[]>();
+  private roomFutures = new Map<string, SceneState[]>();
 
   constructor(roomId: string, fallback?: SceneState) {
     const saved = loadAutosave(roomId);
@@ -165,6 +167,7 @@ export class SceneStore {
   commit(mutator: (draft: SceneState) => void): void {
     this.past.push(this.snapshot());
     if (this.past.length > 60) this.past.shift();
+    this.future = [];
     mutator(this.state);
     this.emit();
   }
@@ -184,27 +187,49 @@ export class SceneStore {
     if (roomId === this.state.roomId) return;
     this.rooms.set(this.state.roomId, this.snapshot());
     this.roomPasts.set(this.state.roomId, this.past);
+    this.roomFutures.set(this.state.roomId, this.future);
     const stashed = this.rooms.get(roomId);
     const saved = stashed ?? loadAutosave(roomId) ?? fallback;
     this.state =
       saved === undefined ? emptyScene(roomId) : (JSON.parse(JSON.stringify(saved)) as SceneState);
     this.state.roomId = roomId;
     this.past = this.roomPasts.get(roomId) ?? [];
+    this.future = this.roomFutures.get(roomId) ?? [];
     this.emit();
   }
 
   undo(): boolean {
     const prev = this.past.pop();
     if (prev === undefined) return false;
+    this.future.push(this.snapshot());
     this.state = prev;
     this.emit();
     return true;
+  }
+
+  redo(): boolean {
+    const next = this.future.pop();
+    if (next === undefined) return false;
+    this.past.push(this.snapshot());
+    if (this.past.length > 60) this.past.shift();
+    this.state = next;
+    this.emit();
+    return true;
+  }
+
+  canUndo(): boolean {
+    return this.past.length > 0;
+  }
+
+  canRedo(): boolean {
+    return this.future.length > 0;
   }
 
   /** Push the current state to the undo stack (start of a drag gesture). */
   checkpoint(): void {
     this.past.push(this.snapshot());
     if (this.past.length > 60) this.past.shift();
+    this.future = [];
   }
 
   touch(): void {
