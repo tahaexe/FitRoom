@@ -13,16 +13,17 @@
         <span id="room-name" class="room-name">Living room</span>
       </div>
       <div class="top-bar-actions">
-        <button
+        <div
           id="live-switch"
           class="live-switch"
-          type="button"
-          data-live="false"
-          aria-pressed="false"
+          role="switch"
+          aria-checked="false"
+          tabindex="0"
           title="Demo mode: answers come from stored responses at zero cost"
         >
-          Demo
-        </button>
+          <span class="live-option" data-value="demo" data-active="true">Demo</span>
+          <span class="live-option" data-value="live" data-active="false">Live AI</span>
+        </div>
         <span id="cart-total" class="cart-total" aria-live="polite">$0</span>
         <button id="tool-cart" class="btn-cart" type="button">Add to cart</button>
         <button id="tool-undo" class="btn-quiet" type="button" title="Undo (Ctrl+Z)">Undo</button>

@@ -104,20 +104,33 @@ export function postRender(body: Record<string, unknown>): Promise<ApiResult> {
 
 /** Bind the top bar's Live AI switch (off = "Demo"). */
 export function initLiveSwitch(): void {
-  document.getElementById("live-switch")?.addEventListener("click", () => {
+  const root = document.getElementById("live-switch");
+  if (root === null) return;
+  root.addEventListener("click", () => {
     setLive(!isLive());
+  });
+  root.addEventListener("keydown", (event) => {
+    if (event.key === " " || event.key === "Enter") {
+      event.preventDefault();
+      setLive(!isLive());
+    }
   });
   updateLiveSwitch();
 }
 
 function updateLiveSwitch(): void {
-  const button = document.getElementById("live-switch");
-  if (!(button instanceof HTMLButtonElement)) return;
+  const root = document.getElementById("live-switch");
+  if (!(root instanceof HTMLElement)) return;
   const live = isLive();
-  button.dataset["live"] = String(live);
-  button.setAttribute("aria-pressed", String(live));
-  button.textContent = live ? "Live AI" : "Demo";
-  button.title = live
+  root.setAttribute("aria-checked", String(live));
+  root.title = live
     ? "Live AI is on: requests may call the metered Meta API"
     : "Demo mode: answers come from stored responses at zero cost";
+  for (const option of root.querySelectorAll(".live-option")) {
+    if (!(option instanceof HTMLElement)) continue;
+    const active =
+      (option.dataset["value"] === "live" && live) ||
+      (option.dataset["value"] === "demo" && !live);
+    option.dataset["active"] = String(active);
+  }
 }

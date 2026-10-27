@@ -129,31 +129,37 @@ button {
   background: var(--panel-bg);
 }
 
-/* ---- Live AI switch: white "Demo" pill when off, coral "Live AI" when on ---- */
+/* ---- Live AI switch: two states (Demo / Live AI) in a track ---- */
 
 .live-switch {
-  background: #ffffff;
-  color: var(--ink);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--panel-bg);
   border: 1px solid var(--border-color);
   border-radius: 999px;
-  padding: 8px 16px;
-  font-weight: 600;
-  font-size: 14px;
+  padding: 2px;
   cursor: pointer;
 }
 
-.live-switch:hover {
-  background: var(--panel-bg);
+.live-switch:focus-visible {
+  outline: 2px solid var(--ink);
+  outline-offset: 2px;
 }
 
-.live-switch[data-live="true"] {
-  background: var(--coral);
-  border-color: var(--coral);
-  color: var(--on-coral);
+.live-option {
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-weight: 600;
+  font-size: 14px;
+  color: var(--muted);
+  white-space: nowrap;
 }
 
-.live-switch[data-live="true"]:hover {
-  background: var(--coral-hover);
+.live-option[data-active="true"] {
+  background: #ffffff;
+  color: var(--ink);
+  box-shadow: var(--shadow);
 }
 
 .api-status {
