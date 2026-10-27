@@ -1498,7 +1498,7 @@ export class FitEngine {
               itemIds: [seat.instanceId],
               message:
                 `Seat can't be reached: ${String(width)} cm clear, ` +
-                `needs ${String(APPROACH_MIN_CM)} cm within ${String(APPROACH_STEPS)} steps of the walkway`,
+                `needs ${String(APPROACH_MIN_CM)} cm within ${String(APPROACH_STEPS)} cm of the walkway`,
               location: { ...seat.position },
               amountCm: width,
               limitCm: APPROACH_MIN_CM,
