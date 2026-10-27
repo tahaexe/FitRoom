@@ -43,11 +43,14 @@ import type {
   SizeCm,
   Wall,
 } from "./types.js";
+import { wallDisplayName } from "./recommend/walls.js";
 
-/** Product size plus the category bits the rules need (seats, rugs). */
+/** Product size plus the category and display name the verdicts need. */
 export interface FitProduct {
   size: SizeCm;
   category: string;
+  /** Catalog display name, used for the "other piece" in overlap verdicts. */
+  name: string;
 }
 
 export type FitProducts = ReadonlyMap<string, FitProduct>;
@@ -107,6 +110,11 @@ const OUTSIDE_TOL_CM = 1;
 const CIRC_GROWTH_CM = 39.5;
 /** Approach growth: open at 22 cm or more. */
 const APPROACH_GROWTH_CM = 22;
+/**
+ * Seat approach rule: the clear width a seat's approach needs (both sides
+ * of the 22 cm approach growth).
+ */
+const APPROACH_MIN_CM = APPROACH_GROWTH_CM * 2;
 /** Approach BFS depth cap from the circulation area. */
 const APPROACH_STEPS = 60;
 /** Access strip depth for seats. */
@@ -115,6 +123,12 @@ const STRIP_CM = 45;
 const START_IN_CM = 45;
 /** Window warning reach. */
 const WINDOW_REACH_CM = 30;
+/**
+ * Customer-facing walkway rule: corridors and the entrance need 80 cm
+ * clear. The engine implements it as 39.5 cm of growth per side (a 79 cm
+ * corridor still reads blocked on the 1 cm grid), while verdicts name 80.
+ */
+const WALKWAY_MIN_CM = 80;
 /** Float noise guard for exact-threshold comparisons. */
 const SLACK = 1e-9;
 
@@ -459,6 +473,414 @@ function seatStrips(seat: OrientedRect): OrientedRect[] {
   ];
 }
 
+/**
+ * Verdict measurements: every fit verdict reads as a measurement, so each
+ * issue carries how far (amountCm, whole cm), the rule it breaks (limitCm),
+ * the other side in shopper words (otherLabel), the conflict region (area)
+ * and a dimension line (dimension). All geometry is deterministic: fixed
+ * axis and wall orders, index-ordered heap ties.
+ */
+
+/** Whole centimetres for a depth that fired (an issue means depth > 0). */
+function depthCm(value: number): number {
+  return Math.max(1, Math.round(value));
+}
+
+/** Lowercase first letter ("Left wall" → "left wall"). */
+function lowerFirst(value: string): string {
+  return value.length === 0 ? value : value.charAt(0).toLowerCase() + value.slice(1);
+}
+
+/** Shopper-words wall name without the "(window)" suffix. */
+function wallShortName(room: RoomLayout, wallId: string): string {
+  return lowerFirst(wallDisplayName(room, wallId).replace(/ \(window\)$/, ""));
+}
+
+/** "the door" (or "the door on the left wall" when several could clash). */
+function doorLabel(room: RoomLayout, doorId: string, inSwingCount: number): string {
+  if (inSwingCount <= 1) return "the door";
+  const door = room.openings.find((o) => o.id === doorId);
+  if (door === undefined) return "the door";
+  return `the door on the ${wallShortName(room, door.wallId)}`;
+}
+
+/** "the window" (or "the window on the left wall" when several could clash). */
+function windowLabel(room: RoomLayout, opening: Opening, windowCount: number): string {
+  if (windowCount <= 1) return "the window";
+  return `the window on the ${wallShortName(room, opening.wallId)}`;
+}
+
+/**
+ * Smallest separating translation of two rotated footprints (the minimum
+ * over the four edge-normal penetrations) plus its unit axis. Call only
+ * when the pair overlaps, so every penetration — and the minimum — is
+ * positive.
+ */
+function separatingDepth(
+  a: OrientedRect,
+  b: OrientedRect,
+): { depth: number; nx: number; nz: number } {
+  const axes: Array<[number, number]> = [
+    [a.cos, -a.sin],
+    [a.sin, a.cos],
+    [b.cos, -b.sin],
+    [b.sin, b.cos],
+  ];
+  let best = Infinity;
+  let bx = 1;
+  let bz = 0;
+  for (const [ax, az] of axes) {
+    const len = Math.hypot(ax, az) || 1;
+    const nx = ax / len;
+    const nz = az / len;
+    const ca = a.cx * nx + a.cz * nz;
+    const ra = a.hx * Math.abs(a.cos * nx - a.sin * nz) + a.hz * Math.abs(a.sin * nx + a.cos * nz);
+    const cb = b.cx * nx + b.cz * nz;
+    const rb = b.hx * Math.abs(b.cos * nx - b.sin * nz) + b.hz * Math.abs(b.sin * nx + b.cos * nz);
+    const penetration = Math.min(ca + ra, cb + rb) - Math.max(ca - ra, cb - rb);
+    if (penetration < best) {
+      best = penetration;
+      bx = nx;
+      bz = nz;
+    }
+  }
+  return { depth: best, nx: bx, nz: bz };
+}
+
+/** Intersect a convex polygon with an oriented rectangle (4 half-planes). */
+function intersectOriented(poly: PlanPoint[], r: OrientedRect): PlanPoint[] {
+  const ux = r.cos;
+  const uz = -r.sin;
+  const vx = r.sin;
+  const vz = r.cos;
+  let out = poly.map((p) => ({ ...p }));
+  out = clipHalfPlane(out, r.cx + ux * r.hx, r.cz + uz * r.hx, -ux, -uz);
+  out = clipHalfPlane(out, r.cx - ux * r.hx, r.cz - uz * r.hx, ux, uz);
+  out = clipHalfPlane(out, r.cx + vx * r.hz, r.cz + vz * r.hz, -vx, -vz);
+  out = clipHalfPlane(out, r.cx - vx * r.hz, r.cz - vz * r.hz, vx, vz);
+  return out;
+}
+
+/** Area-weighted centroid of a polygon (average point when degenerate). */
+function polygonCentroid(poly: PlanPoint[]): PlanPoint {
+  let ax = 0;
+  let az = 0;
+  let area2 = 0;
+  for (let i = 0; i < poly.length; i += 1) {
+    const cur = poly[i] as PlanPoint;
+    const nxt = poly[(i + 1) % poly.length] as PlanPoint;
+    const cross = cur.x * nxt.z - nxt.x * cur.z;
+    area2 += cross;
+    ax += (cur.x + nxt.x) * cross;
+    az += (cur.z + nxt.z) * cross;
+  }
+  if (Math.abs(area2) < 1e-9) {
+    let x = 0;
+    let z = 0;
+    for (const p of poly) {
+      x += p.x;
+      z += p.z;
+    }
+    const n = Math.max(1, poly.length);
+    return { x: x / n, z: z / n };
+  }
+  return { x: ax / (3 * area2), z: az / (3 * area2) };
+}
+
+/** Round polygon points to 0.01 cm for stable verdict payloads. */
+function cleanPoly(poly: PlanPoint[]): PlanPoint[] {
+  return poly.map((p) => ({ x: Math.round(p.x * 100) / 100, z: Math.round(p.z * 100) / 100 }));
+}
+
+/** Quarter-disc fan of a door sector (convex: hinge plus the arc). */
+function swingFan(s: DoorSector, steps = 24): PlanPoint[] {
+  const pts: PlanPoint[] = [{ x: s.hx, z: s.hz }];
+  for (let i = 0; i <= steps; i += 1) {
+    const phi = (i / steps) * (Math.PI / 2);
+    const dx = s.ax * Math.cos(phi) + s.nx * Math.sin(phi);
+    const dz = s.az * Math.cos(phi) + s.nz * Math.sin(phi);
+    pts.push({ x: s.hx + dx * s.radius, z: s.hz + dz * s.radius });
+  }
+  return pts;
+}
+
+/** Closest point on a polygon (vertices and edges) to (px, pz). */
+function closestOnPoly(poly: PlanPoint[], px: number, pz: number): PlanPoint {
+  let best: PlanPoint = poly[0] ?? { x: px, z: pz };
+  let bestD = Infinity;
+  for (let i = 0; i < poly.length; i += 1) {
+    const cur = poly[i] as PlanPoint;
+    const nxt = poly[(i + 1) % poly.length] as PlanPoint;
+    const dx = nxt.x - cur.x;
+    const dz = nxt.z - cur.z;
+    const lenSq = dx * dx + dz * dz || 1;
+    const t = Math.min(1, Math.max(0, ((px - cur.x) * dx + (pz - cur.z) * dz) / lenSq));
+    const qx = cur.x + dx * t;
+    const qz = cur.z + dz * t;
+    const d = Math.hypot(px - qx, pz - qz);
+    if (d < bestD) {
+      bestD = d;
+      best = { x: qx, z: qz };
+    }
+  }
+  return best;
+}
+
+/**
+ * Deepest footprint point inside a door sector: the quadrant-clipped point
+ * closest to the hinge, and its depth from the swing edge (the arc).
+ */
+function swingDepth(r: OrientedRect, s: DoorSector): { depth: number; point: PlanPoint } {
+  let poly = clipHalfPlane(r.corners, s.hx, s.hz, s.ax, s.az);
+  poly = clipHalfPlane(poly, s.hx, s.hz, s.nx, s.nz);
+  if (poly.length === 0) return { depth: 0, point: { x: r.cx, z: r.cz } };
+  const q = closestOnPoly(poly, s.hx, s.hz);
+  const dist = Math.hypot(q.x - s.hx, q.z - s.hz);
+  return { depth: Math.max(0, s.radius - dist), point: q };
+}
+
+/** True when a plan point lies inside the room polygon. */
+function pointInRoom(walls: Wall[], x: number, z: number): boolean {
+  let crossings = 0;
+  for (const wall of walls) {
+    const ax = wall.start.x;
+    const az = wall.start.z;
+    const bx = wall.end.x;
+    const bz = wall.end.z;
+    if (az > z !== bz > z) {
+      const t = (z - az) / (bz - az);
+      if (ax + t * (bx - ax) > x) crossings += 1;
+    }
+  }
+  return crossings % 2 === 1;
+}
+
+/** Closest point on an oriented rectangle to (px, pz) (inside → itself). */
+function closestOnRect(r: OrientedRect, px: number, pz: number): PlanPoint {
+  const dx = px - r.cx;
+  const dz = pz - r.cz;
+  const lx = Math.min(r.hx, Math.max(-r.hx, dx * r.cos - dz * r.sin));
+  const lz = Math.min(r.hz, Math.max(-r.hz, dx * r.sin + dz * r.cos));
+  return { x: r.cx + lx * r.cos + lz * r.sin, z: r.cz - lx * r.sin + lz * r.cos };
+}
+
+/** Closest point on a wall segment to (px, pz). */
+function closestOnWall(wall: Wall, px: number, pz: number): PlanPoint {
+  const dx = wall.end.x - wall.start.x;
+  const dz = wall.end.z - wall.start.z;
+  const lenSq = dx * dx + dz * dz || 1;
+  const t = Math.min(1, Math.max(0, ((px - wall.start.x) * dx + (pz - wall.start.z) * dz) / lenSq));
+  return { x: wall.start.x + dx * t, z: wall.start.z + dz * t };
+}
+
+/**
+ * Open distance from a plan point to the nearest circulation-blocking
+ * shape (footprints, fixtures, walls); 0 outside the room or inside a
+ * shape. The narrowest clear width through a point is twice this.
+ */
+function clearanceAt(
+  px: number,
+  pz: number,
+  walls: Wall[],
+  rects: OrientedRect[],
+  fixtures: OrientedRect[],
+): number {
+  if (!pointInRoom(walls, px, pz)) return 0;
+  let best = Infinity;
+  for (const wall of walls) {
+    const q = closestOnWall(wall, px, pz);
+    const d = Math.hypot(px - q.x, pz - q.z);
+    if (d < best) best = d;
+  }
+  for (const r of rects) {
+    const d = distPointOriented(px, pz, r);
+    if (d < best) best = d;
+  }
+  for (const f of fixtures) {
+    const d = distPointOriented(px, pz, f);
+    if (d < best) best = d;
+  }
+  return best;
+}
+
+/** Closest blocking point to (px, pz) (for the entrance dimension line). */
+function nearestBlockPoint(
+  px: number,
+  pz: number,
+  walls: Wall[],
+  rects: OrientedRect[],
+  fixtures: OrientedRect[],
+): PlanPoint {
+  let best: PlanPoint = { x: px, z: pz };
+  let bestD = Infinity;
+  const consider = (q: PlanPoint): void => {
+    const d = Math.hypot(px - q.x, pz - q.z);
+    if (d < bestD) {
+      bestD = d;
+      best = q;
+    }
+  };
+  for (const wall of walls) consider(closestOnWall(wall, px, pz));
+  for (const r of rects) consider(closestOnRect(r, px, pz));
+  for (const f of fixtures) consider(closestOnRect(f, px, pz));
+  return best;
+}
+
+/**
+ * Widest route (maximin clearance) from a start cell to any target cell on
+ * the 1 cm grid: the bottleneck is the narrowest clear half-width along the
+ * best route, so twice it is the narrowest clear width the walkway found.
+ * Deterministic: a max-heap ordered by (bottleneck, index).
+ */
+function widestRoute(
+  nx: number,
+  clear: Float64Array,
+  startIdx: number,
+  isTarget: Uint8Array,
+): { halfWidth: number; atX: number; atZ: number; dirX: number; dirZ: number } {
+  const n = clear.length;
+  const best = new Float64Array(n).fill(-1);
+  const parent = new Int32Array(n).fill(-1);
+  // Max-heap of [value, index] as parallel arrays (ties: smaller index first).
+  const hv: number[] = [clear[startIdx] ?? 0];
+  const hi: number[] = [startIdx];
+  best[startIdx] = clear[startIdx] ?? 0;
+  const less = (a: number, b: number): boolean => {
+    const va = hv[a] as number;
+    const vb = hv[b] as number;
+    if (va !== vb) return va < vb;
+    return (hi[a] as number) > (hi[b] as number);
+  };
+  const swap = (a: number, b: number): void => {
+    const tv = hv[a] as number;
+    hv[a] = hv[b] as number;
+    hv[b] = tv;
+    const ti = hi[a] as number;
+    hi[a] = hi[b] as number;
+    hi[b] = ti;
+  };
+  const push = (value: number, idx: number): void => {
+    hv.push(value);
+    hi.push(idx);
+    let c = hv.length - 1;
+    while (c > 0) {
+      const p = (c - 1) >> 1;
+      if (!less(p, c)) break;
+      swap(p, c);
+      c = p;
+    }
+  };
+  const pop = (): { value: number; idx: number } => {
+    const top = hi[0] as number;
+    const topV = hv[0] as number;
+    const lastV = hv.pop() as number;
+    const lastI = hi.pop() as number;
+    if (hv.length > 0) {
+      hv[0] = lastV;
+      hi[0] = lastI;
+      let p = 0;
+      for (;;) {
+        const l = p * 2 + 1;
+        const r = l + 1;
+        let m = p;
+        if (l < hv.length && less(m, l)) m = l;
+        if (r < hv.length && less(m, r)) m = r;
+        if (m === p) break;
+        swap(p, m);
+        p = m;
+      }
+    }
+    return { value: topV, idx: top };
+  };
+  const at = (idx: number): { x: number; z: number } => ({
+    x: idx % nx,
+    z: (idx - (idx % nx)) / nx,
+  });
+  while (hv.length > 0) {
+    const popped = pop();
+    const cur = popped.idx;
+    const value = popped.value;
+    // Stale entry (a better route to cur was already queued): skip.
+    if (value < (best[cur] as number)) continue;
+    if ((isTarget[cur] ?? 0) === 1) {
+      const c = at(cur);
+      const p = parent[cur] ?? -1;
+      let dx = 1;
+      let dz = 0;
+      if (p >= 0) {
+        const pc = at(p);
+        const vx = c.x - pc.x;
+        const vz = c.z - pc.z;
+        const len = Math.hypot(vx, vz);
+        if (len > 0) {
+          dx = vx / len;
+          dz = vz / len;
+        }
+      }
+      return { halfWidth: value, atX: cur % nx, atZ: (cur - (cur % nx)) / nx, dirX: dx, dirZ: dz };
+    }
+    const c = at(cur);
+    const neighbours: number[] = [];
+    if (c.x > 0) neighbours.push(cur - 1);
+    if (c.x < nx - 1) neighbours.push(cur + 1);
+    if (c.z > 0) neighbours.push(cur - nx);
+    if (c.z < n / nx - 1) neighbours.push(cur + nx);
+    for (const nxt of neighbours) {
+      const nv = Math.min(value, clear[nxt] ?? 0);
+      if (nv > (best[nxt] as number)) {
+        best[nxt] = nv;
+        parent[nxt] = cur;
+        push(nv, nxt);
+      }
+    }
+  }
+  return { halfWidth: 0, atX: startIdx % nx, atZ: 0, dirX: 1, dirZ: 0 };
+}
+
+/**
+ * Window trigger test for one opening: nearest footprint corner within
+ * reach of the wall plus span overlap. Null when the window stays quiet.
+ */
+function windowTrigger(
+  wall: Wall,
+  opening: Opening,
+  rect: OrientedRect,
+): { reach: number; near: PlanPoint } | null {
+  const { ux, uz } = wallUnit(wall);
+  let reach = Infinity;
+  let near: PlanPoint = rect.corners[0] ?? { x: rect.cx, z: rect.cz };
+  for (const c of rect.corners) {
+    const d = distPointSegment(c.x, c.z, wall.start.x, wall.start.z, wall.end.x, wall.end.z);
+    if (d < reach) {
+      reach = d;
+      near = c;
+    }
+  }
+  if (reach > WINDOW_REACH_CM + SLACK) return null;
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const c of rect.corners) {
+    const t = (c.x - wall.start.x) * ux + (c.z - wall.start.z) * uz;
+    if (t < lo) lo = t;
+    if (t > hi) hi = t;
+  }
+  const spanLo = opening.offset;
+  const spanHi = opening.offset + opening.width;
+  if (Math.min(hi, spanHi) - Math.max(lo, spanLo) <= SLACK) return null;
+  return { reach, near };
+}
+
+/** Axis-aligned square marker polygon around a plan point. */
+function markerSquare(x: number, z: number, side: number): PlanPoint[] {
+  const h = side / 2;
+  return [
+    { x: x - h, z: z - h },
+    { x: x + h, z: z - h },
+    { x: x + h, z: z + h },
+    { x: x - h, z: z + h },
+  ];
+}
+
 export interface FitAnalysis {
   issues: FitIssue[];
   /** Combined (static + scene) circulation-blocked cells, row-major nz rows. */
@@ -471,6 +893,8 @@ export interface FitAnalysis {
   originX: number;
   originZ: number;
   doors: DoorSector[];
+  /** Oriented footprint per scene item id (for floor outlines). */
+  footprints: ReadonlyMap<string, OrientedRect>;
 }
 
 /**
@@ -486,6 +910,8 @@ export class FitEngine {
   private readonly products: FitProducts;
   private readonly centroid: PlanPoint;
   private readonly fixtures: OrientedRect[];
+  /** Fixture definitions parallel to `fixtures` (for verdict names). */
+  private readonly fixtureDefs: Fixture[];
   private readonly doors: DoorSector[];
   readonly nx: number;
   readonly nz: number;
@@ -510,9 +936,13 @@ export class FitEngine {
     this.nx = Math.max(1, Math.round(bounds.x1 - bounds.x0));
     this.nz = Math.max(1, Math.round(bounds.z1 - bounds.z0));
     this.fixtures = [];
+    this.fixtureDefs = [];
     for (const fx of room.fixtures) {
       const r = fixtureOriented(fx, room, this.centroid);
-      if (r !== null) this.fixtures.push(r);
+      if (r !== null) {
+        this.fixtures.push(r);
+        this.fixtureDefs.push(fx);
+      }
     }
     this.doors = doorSectors(room, this.centroid);
     this.staticCirc = new Uint8Array(this.nx * this.nz);
@@ -705,87 +1135,145 @@ export class FitEngine {
       return isRug(item.productId, this.products.get(item.productId)?.category ?? "");
     };
 
-    // ---- overlap (pairs, then fixtures) ----
+    const productName = (productId: string): string =>
+      this.products.get(productId)?.name ?? "other piece";
+
+    // ---- overlap (pairs, then fixtures): depth = smallest separating move ----
     for (let i = 0; i < order.length; i += 1) {
       const aId = order[i] as string;
       const a = rects.get(aId);
       if (a === undefined || rug(aId)) continue;
-      const aItem = items.find((it) => it.instanceId === aId);
       for (let j = i + 1; j < order.length; j += 1) {
         const bId = order[j] as string;
         const b = rects.get(bId);
         if (b === undefined || rug(bId)) continue;
-        const bItem = items.find((it) => it.instanceId === bId);
         if (rectsOverlap(a, b)) {
           const pair = [aId, bId].sort();
           const first = pair[0] as string;
           const second = pair[1] as string;
+          const otherItem = items.find((it) => it.instanceId === second);
+          const other = otherItem === undefined ? "other piece" : productName(otherItem.productId);
+          const { depth, nx, nz } = separatingDepth(a, b);
+          const amount = depthCm(depth);
+          const area = cleanPoly(intersectOriented(a.corners, b));
+          const centre = polygonCentroid(area.length >= 3 ? area : [...a.corners, ...b.corners]);
           issues.push({
             type: "overlap",
             severity: "error",
             itemIds: [first, second],
-            message: "Pieces overlap",
-            location: {
-              x: ((aItem?.position.x ?? 0) + (bItem?.position.x ?? 0)) / 2,
-              z: ((aItem?.position.z ?? 0) + (bItem?.position.z ?? 0)) / 2,
-            },
+            message: `Overlaps the ${other} by ${String(amount)} cm`,
+            location: { x: centre.x, z: centre.z },
+            amountCm: amount,
+            otherLabel: other,
+            area,
+            dimension: [
+              { x: centre.x - (nx * depth) / 2, z: centre.z - (nz * depth) / 2 },
+              { x: centre.x + (nx * depth) / 2, z: centre.z + (nz * depth) / 2 },
+            ],
           });
         }
       }
+      const aItem = items.find((it) => it.instanceId === aId);
       if (aItem === undefined) continue;
-      for (const fx of this.fixtures) {
+      for (let f = 0; f < this.fixtures.length; f += 1) {
+        const fx = this.fixtures[f] as OrientedRect;
         if (rectsOverlap(a, fx)) {
+          const def = this.fixtureDefs[f];
+          const kind = def?.type === "other" || def === undefined ? "fixture" : def.type;
+          const { depth, nx, nz } = separatingDepth(a, fx);
+          const amount = depthCm(depth);
+          const area = cleanPoly(intersectOriented(a.corners, fx));
+          const centre = polygonCentroid(area.length >= 3 ? area : [...a.corners]);
           issues.push({
             type: "overlap",
             severity: "error",
             itemIds: [aId],
-            message: "Piece overlaps a fixed fixture",
-            location: { ...aItem.position },
+            message: `Overlaps the ${kind} by ${String(amount)} cm`,
+            location: { x: centre.x, z: centre.z },
+            amountCm: amount,
+            otherLabel: kind,
+            area,
+            dimension: [
+              { x: centre.x - (nx * depth) / 2, z: centre.z - (nz * depth) / 2 },
+              { x: centre.x + (nx * depth) / 2, z: centre.z + (nz * depth) / 2 },
+            ],
           });
           break;
         }
       }
     }
 
-    // ---- outside: any corner past a wall's inner face by more than 1 cm ----
+    // ---- outside: deepest footprint corner past a wall's inner face ----
     for (const item of items) {
       const r = rects.get(item.instanceId);
       if (r === undefined) continue;
-      let outside = false;
+      let worst = 0;
+      let corner: PlanPoint = r.corners[0] ?? { ...item.position };
+      let face: Wall | null = null;
       for (const wall of this.room.walls) {
         const { nx, nz } = inwardNormal(wall, this.centroid);
         for (const c of r.corners) {
           const past = (wall.start.x - c.x) * nx + (wall.start.z - c.z) * nz;
-          if (past > OUTSIDE_TOL_CM + SLACK) {
-            outside = true;
-            break;
+          if (past > OUTSIDE_TOL_CM + SLACK && past > worst) {
+            worst = past;
+            corner = c;
+            face = wall;
           }
         }
-        if (outside) break;
       }
-      if (outside) {
+      if (face !== null) {
+        const amount = Math.round(worst);
+        const { nx, nz } = inwardNormal(face, this.centroid);
+        const along = (corner.x - face.start.x) * nx + (corner.z - face.start.z) * nz;
+        const foot: PlanPoint = {
+          x: corner.x - nx * along,
+          z: corner.z - nz * along,
+        };
+        const area = cleanPoly(clipHalfPlane(r.corners, face.start.x, face.start.z, -nx, -nz));
         issues.push({
           type: "outside",
           severity: "error",
           itemIds: [item.instanceId],
-          message: "Piece extends outside the room",
+          message: `${String(amount)} cm through the wall`,
           location: { ...item.position },
+          amountCm: amount,
+          otherLabel: "the wall",
+          area,
+          dimension: [foot, { ...corner }],
         });
       }
     }
 
-    // ---- door-swing ----
+    // ---- door-swing: deepest footprint point inside the swing sector ----
     for (const item of items) {
       const r = rects.get(item.instanceId);
       if (r === undefined) continue;
       for (const sector of this.doors) {
         if (orientedHitsSector(r, sector)) {
+          const { depth, point } = swingDepth(r, sector);
+          const amount = depthCm(depth);
+          const label = doorLabel(this.room, sector.doorId, this.doors.length);
+          const area = cleanPoly(intersectOriented(swingFan(sector), r));
+          const dx = point.x - sector.hx;
+          const dz = point.z - sector.hz;
+          const len = Math.hypot(dx, dz);
+          // Radial dimension: from the deepest point out to the swing edge.
+          const ux = len > 1e-9 ? dx / len : sector.nx;
+          const uz = len > 1e-9 ? dz / len : sector.nz;
+          const edge: PlanPoint = {
+            x: sector.hx + ux * sector.radius,
+            z: sector.hz + uz * sector.radius,
+          };
           issues.push({
             type: "door-swing",
             severity: "error",
             itemIds: [item.instanceId],
-            message: `Inside the swing of ${sector.doorId}`,
+            message: `${String(amount)} cm inside the door's swing`,
             location: { ...item.position },
+            amountCm: amount,
+            otherLabel: label,
+            area,
+            dimension: [{ ...point }, edge],
           });
           break;
         }
@@ -832,7 +1320,8 @@ export class FitEngine {
       const startIdx = sizC * this.nx + sixC;
       const startCentre = this.cellCentre(sixC, sizC);
       if (circBlocked(startIdx)) {
-        // Entrance blocked: one error naming the blocking items.
+        // Entrance blocked: one error naming the blocking items, with the
+        // narrowest clear width at the entrance against the 80 cm rule.
         const blockers = order.filter((id) => {
           const r = rects.get(id);
           return (
@@ -840,12 +1329,36 @@ export class FitEngine {
             distPointOriented(startCentre.x, startCentre.z, r) < CIRC_GROWTH_CM - SLACK
           );
         });
+        const sortedBlockers = [...blockers].sort();
+        const firstBlocker = items.find((it) => it.instanceId === sortedBlockers[0]);
+        const width = Math.round(
+          2 * clearanceAt(startCentre.x, startCentre.z, this.room.walls, footprints, this.fixtures),
+        );
+        const bp = nearestBlockPoint(
+          startCentre.x,
+          startCentre.z,
+          this.room.walls,
+          footprints,
+          this.fixtures,
+        );
+        let ex = startCentre.x - bp.x;
+        let ez = startCentre.z - bp.z;
+        const elen = Math.hypot(ex, ez) || 1;
+        ex /= elen;
+        ez /= elen;
+        const far: PlanPoint = { x: bp.x + ex * width, z: bp.z + ez * width };
+        const side = Math.min(40, Math.max(8, width));
         issues.push({
           type: "walkway-entrance",
           severity: "error",
-          itemIds: [...blockers].sort(),
-          message: "Entrance is blocked",
+          itemIds: sortedBlockers,
+          message: `Entrance blocked: ${String(width)} cm clear, needs ${String(WALKWAY_MIN_CM)} cm`,
           location: { x: startDoor.startX, z: startDoor.startZ },
+          amountCm: width,
+          limitCm: WALKWAY_MIN_CM,
+          otherLabel: firstBlocker === undefined ? undefined : productName(firstBlocker.productId),
+          area: cleanPoly(markerSquare(startCentre.x, startCentre.z, side)),
+          dimension: [{ ...bp }, far],
         });
       } else {
         // Circulation flood from the start.
@@ -920,6 +1433,8 @@ export class FitEngine {
           if (cz < this.nz - 1) push(cur + this.nx, d);
         }
         // Seats: one error per seat with no approach cell in any strip.
+        const stranded: Array<{ instanceId: string; position: PlanPoint; strips: OrientedRect[] }> =
+          [];
         for (const item of items) {
           const category = this.products.get(item.productId)?.category ?? "";
           if (!isSeatCategory(category)) continue;
@@ -943,13 +1458,61 @@ export class FitEngine {
             }
             if (ok) break;
           }
-          if (!ok) {
+          if (!ok) stranded.push({ instanceId: item.instanceId, position: item.position, strips });
+        }
+        // The narrowest clear width on the widest route to each stranded
+        // seat, against the 44 cm approach rule (computed only when seats
+        // fail).
+        if (stranded.length > 0) {
+          const clear = new Float64Array(this.nx * this.nz);
+          for (let iz = 0; iz < this.nz; iz += 1) {
+            for (let ix = 0; ix < this.nx; ix += 1) {
+              const c = this.cellCentre(ix, iz);
+              clear[iz * this.nx + ix] = clearanceAt(
+                c.x,
+                c.z,
+                this.room.walls,
+                footprints,
+                this.fixtures,
+              );
+            }
+          }
+          for (const seat of stranded) {
+            const isTarget = new Uint8Array(this.nx * this.nz);
+            for (let iz = 0; iz < this.nz; iz += 1) {
+              for (let ix = 0; ix < this.nx; ix += 1) {
+                const c = this.cellCentre(ix, iz);
+                if (seat.strips.some((strip) => containsStrict(strip, c.x, c.z))) {
+                  isTarget[iz * this.nx + ix] = 1;
+                }
+              }
+            }
+            const route = widestRoute(this.nx, clear, startIdx, isTarget);
+            const rawWidth = route.halfWidth * 2;
+            const width = Math.round(rawWidth);
+            const pinch = this.cellCentre(route.atX, route.atZ);
+            const side = Math.min(40, Math.max(8, width));
             issues.push({
               type: "walkway",
               severity: "error",
-              itemIds: [item.instanceId],
-              message: "No walkway access to this seat",
-              location: { ...item.position },
+              itemIds: [seat.instanceId],
+              message:
+                `Seat can't be reached: ${String(width)} cm clear, ` +
+                `needs ${String(APPROACH_MIN_CM)} cm within ${String(APPROACH_STEPS)} steps of the walkway`,
+              location: { ...seat.position },
+              amountCm: width,
+              limitCm: APPROACH_MIN_CM,
+              area: cleanPoly(markerSquare(pinch.x, pinch.z, side)),
+              dimension: [
+                {
+                  x: pinch.x - (route.dirX * rawWidth) / 2,
+                  z: pinch.z - (route.dirZ * rawWidth) / 2,
+                },
+                {
+                  x: pinch.x + (route.dirX * rawWidth) / 2,
+                  z: pinch.z + (route.dirZ * rawWidth) / 2,
+                },
+              ],
             });
           }
         }
@@ -966,29 +1529,50 @@ export class FitEngine {
         if (height <= opening.sillHeight) continue;
         const wall = this.room.walls.find((w) => w.id === opening.wallId);
         if (wall === undefined) continue;
+        const hit = windowTrigger(wall, opening, r);
+        if (hit === null) continue;
+        const { reach, near } = hit;
         const { ux, uz } = wallUnit(wall);
-        let reach = Infinity;
-        for (const c of r.corners) {
-          const d = distPointSegment(c.x, c.z, wall.start.x, wall.start.z, wall.end.x, wall.end.z);
-          if (d < reach) reach = d;
-        }
-        if (reach > WINDOW_REACH_CM + SLACK) continue;
-        let lo = Infinity;
-        let hi = -Infinity;
-        for (const c of r.corners) {
-          const t = (c.x - wall.start.x) * ux + (c.z - wall.start.z) * uz;
-          if (t < lo) lo = t;
-          if (t > hi) hi = t;
-        }
+        const amount = Math.round(reach);
+        const label = windowLabel(this.room, opening, windows.length);
         const spanLo = opening.offset;
         const spanHi = opening.offset + opening.width;
-        if (Math.min(hi, spanHi) - Math.max(lo, spanLo) <= SLACK) continue;
+        const { nx, nz } = inwardNormal(wall, this.centroid);
+        // Conflict band: within reach of the wall line, over the opening span.
+        let band = clipHalfPlane(
+          r.corners,
+          wall.start.x - nx * WINDOW_REACH_CM,
+          wall.start.z - nz * WINDOW_REACH_CM,
+          nx,
+          nz,
+        );
+        band = clipHalfPlane(
+          band,
+          wall.start.x + nx * WINDOW_REACH_CM,
+          wall.start.z + nz * WINDOW_REACH_CM,
+          -nx,
+          -nz,
+        );
+        band = clipHalfPlane(band, wall.start.x + ux * spanLo, wall.start.z + uz * spanLo, ux, uz);
+        band = clipHalfPlane(
+          band,
+          wall.start.x + ux * spanHi,
+          wall.start.z + uz * spanHi,
+          -ux,
+          -uz,
+        );
+        const wallPoint = closestOnWall(wall, near.x, near.z);
         issues.push({
           type: "window",
           severity: "warning",
           itemIds: [item.instanceId],
-          message: `Too close to ${opening.id}`,
+          message: `${String(amount)} cm from the window, needs ${String(WINDOW_REACH_CM)} cm`,
           location: { ...item.position },
+          amountCm: amount,
+          limitCm: WINDOW_REACH_CM,
+          otherLabel: label,
+          area: cleanPoly(band),
+          dimension: [{ ...wallPoint }, { ...near }],
         });
         break;
       }
@@ -1006,6 +1590,7 @@ export class FitEngine {
       originX: this.originX,
       originZ: this.originZ,
       doors: this.doors,
+      footprints: new Map(rects),
     };
   }
 
@@ -1018,4 +1603,33 @@ export class FitEngine {
 /** One-shot check without managing an engine instance. */
 export function checkFit(room: RoomLayout, scene: SceneState, products: FitProducts): FitIssue[] {
   return new FitEngine(room, products).check(scene);
+}
+
+/**
+ * Ids of the in-swing doors whose sector a footprint meets (room order).
+ * Lets callers name the door's wall without reading ids from verdict text.
+ */
+export function swingDoorIds(room: RoomLayout, rect: OrientedRect): string[] {
+  return doorSectors(room, roomCentroid(room))
+    .filter((s) => orientedHitsSector(rect, s))
+    .map((s) => s.doorId);
+}
+
+/**
+ * Id of the first window a footprint triggers (room order), or null.
+ * Mirrors the engine's window loop, including the sill-height rule.
+ */
+export function triggeredWindowId(
+  room: RoomLayout,
+  rect: OrientedRect,
+  heightCm: number,
+): string | null {
+  for (const opening of room.openings) {
+    if (opening.type !== "window") continue;
+    if (heightCm <= opening.sillHeight) continue;
+    const wall = room.walls.find((w) => w.id === opening.wallId);
+    if (wall === undefined) continue;
+    if (windowTrigger(wall, opening, rect) !== null) return opening.id;
+  }
+  return null;
 }
