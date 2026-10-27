@@ -53,6 +53,9 @@ import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } f
 import { EditorStore } from "./editor/editor-store";
 import { RoomEditor } from "./editor/editor";
 import { RoomMenu } from "./editor/room-menu";
+import { PhotoFlow, type PhotoFlowDone } from "./photo-room/flow";
+import { clearAllPhotos } from "./photo-room/photo-store";
+import "./photo-room/photo-room.css";
 import "./editor/editor.css";
 import {
   catalogProducts,
@@ -209,6 +212,8 @@ class FitRoomApp {
   private roomMenu: RoomMenu | null = null;
   private editing = false;
   private menuChoice = "sample";
+  private menuBeforePhotos = "sample";
+  private photoFlow: PhotoFlow | null = null;
   /** Edited room layouts stashed by room id, so each room keeps its own walls, openings and own blocks. */
   private savedRoomLayouts = new Map<string, RoomLayout>();
   private drag: { id: string; offsetX: number; offsetZ: number } | null = null;
@@ -657,15 +662,21 @@ class FitRoomApp {
         this.select(null);
         this.rebuildRoom();
         this.editorStore?.load(ROOM);
+        this.editor?.setPhotoDraft(null);
         this.openEditor();
         this.menuChoice = "manual";
       } else {
         this.editorStore?.load(ROOM);
+        this.editor?.setPhotoDraft(null);
         this.openEditor();
       }
     } else if (id === "edit") {
       this.editorStore?.load(ROOM);
       this.openEditor();
+    } else if (id === "photos") {
+      if (this.menuChoice !== "photos") this.menuBeforePhotos = this.menuChoice;
+      this.menuChoice = "photos";
+      this.openPhotoFlow();
     } else {
       if (ROOM.id !== SAMPLE_ROOM.id) {
         this.stashRoomLayout();
@@ -680,6 +691,7 @@ class FitRoomApp {
         fallback.roomId = ROOM.id;
         this.store.switchRoom(ROOM.id, fallback);
         this.select(null);
+        this.editor?.setPhotoDraft(null);
         this.closeEditor();
         this.rebuildRoom();
         this.menuChoice = "sample";
@@ -707,9 +719,52 @@ class FitRoomApp {
           hint: "Draw your own 400 × 350 cm room in the plan editor",
         },
         { id: "edit", label: "Edit plan", hint: "Reopen the plan editor for the current room" },
+        {
+          id: "photos",
+          label: "From photos",
+          hint: "Photograph four walls and confirm the draft plan",
+        },
       ],
       current,
     );
+  }
+
+  /** "From photos": the capture flow floats above everything. */
+  private openPhotoFlow(): void {
+    this.closePhotoFlow();
+    const flow = new PhotoFlow({
+      onDone: (result) => this.openPhotoDraft(result),
+      onClose: () => {
+        this.closePhotoFlow();
+        this.menuChoice = this.menuBeforePhotos;
+        this.refreshMenu();
+      },
+    });
+    this.photoFlow = flow;
+    document.body.appendChild(flow.element);
+    this.refreshMenu();
+  }
+
+  private closePhotoFlow(): void {
+    this.photoFlow?.element.remove();
+    this.photoFlow = null;
+  }
+
+  /** A solved photo draft becomes the live room, confirmed in the plan editor. */
+  private openPhotoDraft(result: PhotoFlowDone): void {
+    this.closePhotoFlow();
+    this.stashRoomLayout();
+    applyRoomLayout(ROOM, result.draft.layout);
+    this.store.switchRoom(ROOM.id, emptyScene(ROOM.id));
+    this.select(null);
+    this.closeEditor();
+    this.rebuildRoom();
+    this.editorStore?.load(ROOM);
+    this.editor?.setPhotoDraft(result.meta);
+    this.openEditor();
+    this.menuChoice = "photos";
+    this.refreshMenu();
+    void clearAllPhotos();
   }
 
   private openEditor(): void {

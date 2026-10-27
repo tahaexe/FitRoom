@@ -492,6 +492,39 @@
   color: var(--coral);
 }
 
+/* ---- photo draft band: one pale amber line when walls are estimated ---- */
+
+.photo-draft-band {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  background: #fdf0d5;
+  border: 1px solid var(--amber);
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.photo-draft-band[hidden] {
+  display: none;
+}
+
+.photo-draft-tape {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--amber);
+  border-radius: 999px;
+  padding: 8px 16px;
+  min-height: 44px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 /* ---- phone viewport: same blocks stacked, 44px targets kept ---- */
 
 @media (max-width: 900px) {

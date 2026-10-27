@@ -11,6 +11,7 @@ import { setRectangleWallLength, validateRoomLayout, wallDisplayName } from "@fi
 import { EditorPlanView } from "./plan-view";
 import { sourceMark } from "./source-mark";
 import { EditorStore } from "./editor-store";
+import type { PhotoDraftMeta, WallSourceMark } from "../photo-room/flow";
 
 export interface RoomEditorCallbacks {
   onBuild: () => void;
@@ -62,6 +63,8 @@ export class RoomEditor {
   private readonly buildBtn: HTMLButtonElement;
   private readonly noteEl: HTMLElement;
   private readonly summaryEl: HTMLElement;
+  private readonly bandEl: HTMLElement;
+  private draft: PhotoDraftMeta | null = null;
   private plan: EditorPlanView | null = null;
   private planHost: HTMLElement;
   private unsubscribe: (() => void) | null = null;
@@ -73,6 +76,11 @@ export class RoomEditor {
     this.element = document.createElement("div");
     this.element.className = "room-editor";
     this.element.setAttribute("hidden", "");
+
+    this.bandEl = document.createElement("div");
+    this.bandEl.className = "photo-draft-band";
+    this.bandEl.setAttribute("hidden", "");
+    this.element.appendChild(this.bandEl);
 
     const actions = document.createElement("div");
     actions.className = "editor-actions";
@@ -167,6 +175,39 @@ export class RoomEditor {
     this.element.remove();
   }
 
+  /** Photo draft sources: every value renders its measured/estimated mark. */
+  setPhotoDraft(draft: PhotoDraftMeta | null): void {
+    this.draft = draft;
+    this.renderPanels();
+  }
+
+  private markFor(mark: WallSourceMark | undefined): HTMLElement {
+    if (mark === undefined || mark.source === "measured") return sourceMark("measured");
+    return sourceMark("estimated", mark.plusMinus);
+  }
+
+  private renderBand(): void {
+    this.bandEl.innerHTML = "";
+    const count = this.draft?.estimatedWallCount ?? 0;
+    if (this.draft === null || count <= 0) {
+      this.bandEl.setAttribute("hidden", "");
+      return;
+    }
+    this.bandEl.removeAttribute("hidden");
+    const pm = Math.round(this.draft.estimatedWallPm);
+    const text = document.createElement("span");
+    text.textContent =
+      count === 1
+        ? `1 wall is estimated (± ${String(pm)} cm). Tape it to make it exact.`
+        : `${String(count)} walls are estimated (± ${String(pm)} cm). Tape one to make it exact.`;
+    const tape = document.createElement("button");
+    tape.type = "button";
+    tape.className = "photo-draft-tape";
+    tape.textContent = "Tape wall A";
+    tape.addEventListener("click", () => this.store.select({ kind: "wall", id: "wall-1" }));
+    this.bandEl.append(text, tape);
+  }
+
   private pill(label: string, onClick: () => void): HTMLButtonElement {
     const button = document.createElement("button");
     button.type = "button";
@@ -179,6 +220,14 @@ export class RoomEditor {
   private setWallLength(wallId: string, lengthCm: number): void {
     if (!Number.isFinite(lengthCm)) return;
     this.store.commit(setRectangleWallLength(this.store.room, wallId, lengthCm));
+  }
+
+  private setCeilingHeight(heightCm: number): void {
+    if (!Number.isFinite(heightCm)) return;
+    const next = cloneRoom(this.store.room);
+    const height = Math.min(320, Math.max(200, Math.round(heightCm)));
+    for (const wall of next.walls) wall.height = height;
+    this.store.commit(next);
   }
 
   private addOpening(type: "door" | "window"): void {
@@ -273,6 +322,7 @@ export class RoomEditor {
     const active = document.activeElement;
     const focusKey = active instanceof HTMLInputElement ? active.dataset["key"] : undefined;
     const focusValue = active instanceof HTMLInputElement ? active.value : undefined;
+    this.renderBand();
     this.renderWalls(room);
     this.renderFields(room);
     this.undoBtn.disabled = !this.store.canUndo;
@@ -331,9 +381,39 @@ export class RoomEditor {
       unit.textContent = "cm";
       label.append(input, unit);
       row.appendChild(label);
-      card.append(head, row, sourceMark("measured"));
+      card.append(head, row, this.markFor(this.draft?.walls[wall.id]));
       this.wallsEl.appendChild(card);
     });
+    if (this.draft !== null) this.renderCeiling(room);
+  }
+
+  /** Ceiling height with its source mark (photo drafts only). */
+  private renderCeiling(room: RoomLayout): void {
+    const height = room.walls[0]?.height ?? 250;
+    const card = document.createElement("div");
+    card.className = "editor-wall-card";
+    const head = document.createElement("div");
+    head.className = "editor-wall-head";
+    head.textContent = "Ceiling height";
+    const row = document.createElement("div");
+    row.className = "editor-field-row";
+    const label = document.createElement("label");
+    label.textContent = "Height ";
+    const input = document.createElement("input");
+    input.type = "number";
+    input.min = "200";
+    input.max = "320";
+    input.step = "1";
+    input.value = String(Math.round(height));
+    input.dataset["key"] = "ceiling-height";
+    input.setAttribute("aria-label", "Ceiling height in centimetres");
+    input.addEventListener("change", () => this.setCeilingHeight(Number(input.value)));
+    const unit = document.createElement("span");
+    unit.textContent = "cm";
+    label.append(input, unit);
+    row.appendChild(label);
+    card.append(head, row, this.markFor(this.draft?.ceiling));
+    this.wallsEl.appendChild(card);
   }
 
   private renderFields(room: RoomLayout): void {
@@ -363,7 +443,7 @@ export class RoomEditor {
         2000,
         (value) => this.setWallLength(wall.id, value),
       );
-      this.fieldsEl.appendChild(sourceMark("measured"));
+      this.fieldsEl.appendChild(this.markFor(this.draft?.walls[wall.id]));
       return;
     }
     if (selection.kind === "opening") {
@@ -374,6 +454,7 @@ export class RoomEditor {
         `${opening.type === "door" ? "Door" : "Window"} · wall ${String(wallIndex)}`,
       );
       const wallLen = wallLengthOf(room, opening.wallId);
+      const marks = this.draft?.openings[opening.id];
       this.numberField(
         this.fieldsEl,
         `offset-${opening.id}`,
@@ -384,6 +465,7 @@ export class RoomEditor {
         (value) =>
           this.commitOpening(opening.id, { offset: clampOffset(value, opening.width, wallLen) }),
       );
+      if (marks !== undefined) this.fieldsEl.appendChild(this.markFor(marks.offset));
       this.numberField(
         this.fieldsEl,
         `width-${opening.id}`,
@@ -394,6 +476,7 @@ export class RoomEditor {
         (value) =>
           this.commitOpening(opening.id, this.clampedSpan(opening, wallLen, value, opening.offset)),
       );
+      if (marks !== undefined) this.fieldsEl.appendChild(this.markFor(marks.width));
       this.numberField(
         this.fieldsEl,
         `height-${opening.id}`,
@@ -403,6 +486,7 @@ export class RoomEditor {
         250,
         (value) => this.commitOpeningHeight(opening.id, value),
       );
+      if (marks !== undefined) this.fieldsEl.appendChild(this.markFor(marks.height));
       this.numberField(
         this.fieldsEl,
         `sill-${opening.id}`,
@@ -412,7 +496,8 @@ export class RoomEditor {
         250,
         (value) => this.commitOpeningHeight(opening.id, undefined, value),
       );
-      this.fieldsEl.appendChild(sourceMark("measured"));
+      if (marks !== undefined) this.fieldsEl.appendChild(this.markFor(marks.sill));
+      else this.fieldsEl.appendChild(sourceMark("measured"));
       if (opening.type === "door") {
         this.toggleRow("Hinge", ["left", "right"], opening.hinge, (hinge) =>
           this.commitOpening(opening.id, { hinge: hinge as DoorOpening["hinge"] }),

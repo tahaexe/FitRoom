@@ -1193,6 +1193,40 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     // glass strip inside a door's leaf is the door glazing, not a window.
     const windows = mergePanes(byConcept(photo.instances, "window").filter((w) => inRange(w.box)));
     const uncMul = photoWide[pi] === true ? 2.5 : 1;
+    // Shopper-tapped door point for this wall, when the solver would
+    // otherwise flag `tap-the-door`: it anchors a default-width opening.
+    const tap =
+      input.doorTap?.wall === photo.wall &&
+      Number.isFinite(input.doorTap.x) &&
+      Number.isFinite(input.doorTap.y) &&
+      input.doorTap.x >= 0 &&
+      input.doorTap.x < photo.width &&
+      input.doorTap.y >= 0 &&
+      input.doorTap.y < photo.height
+        ? input.doorTap
+        : undefined;
+    const tapDoor = (): boolean => {
+      if (tap === undefined) return false;
+      const TAP_DOOR_WIDTH = 90;
+      const [u] = toWall(tap.x, tap.y);
+      if (!Number.isFinite(u)) return false;
+      const width = Math.min(TAP_DOOR_WIDTH, wallLen);
+      const off = Math.max(0, Math.min(wallLen - width, u - width / 2));
+      doorN += 1;
+      openings.push({
+        id: `door-${String(doorN)}`,
+        wall: photo.wall,
+        wallId: LETTER_TO_WALL_ID[photo.wall],
+        type: "door",
+        offset: unc(off, 12 * uncMul, "photo"),
+        width: unc(width, 12 * uncMul, "photo"),
+        height: unc(210, 8, "photo"),
+        sillHeight: unc(0, 1, "photo"),
+        hinge: "left",
+        swing: "in",
+      });
+      return true;
+    };
 
     // Door gap in the wall mask (the doorway); the door instance is often
     // just the open leaf beside it and never joins the span (an ajar leaf
@@ -1283,7 +1317,7 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
         Number.isFinite(imgHi) &&
         doors.some((d) => d.box[0] <= imgHi + 12 && d.box[2] >= imgLo - 12);
       if (tallShare < 0.4 || !leafConfirms) {
-        if (doors.length > 0) {
+        if (doors.length > 0 && !tapDoor()) {
           flags.push({
             code: "tap-the-door",
             message: `Wall ${photo.wall}: a door leaf is visible but no opening was found — tap the door.`,
@@ -1356,7 +1390,7 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
           });
         }
       }
-    } else if (doors.length > 0) {
+    } else if (doors.length > 0 && !tapDoor()) {
       flags.push({
         code: "tap-the-door",
         message: `Wall ${photo.wall}: a door leaf is visible but no opening was found — tap the door.`,

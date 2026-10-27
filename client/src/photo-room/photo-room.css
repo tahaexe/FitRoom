@@ -1,0 +1,470 @@
+/* ---- "From photos" flow: same tokens as the app ---- */
+
+.photo-flow {
+  position: fixed;
+  top: var(--top-bar-height);
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: var(--bg);
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.photo-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 12px 16px;
+  background: #ffffff;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.photo-steps {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+  overflow-x: auto;
+}
+
+.photo-step {
+  font-weight: 700;
+  font-size: 14px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.photo-step[data-state="current"] {
+  color: var(--coral);
+}
+
+.photo-step[data-state="done"] {
+  color: var(--ink);
+}
+
+.photo-step-check {
+  color: var(--green);
+  margin-right: 4px;
+}
+
+.photo-step-arrow {
+  color: var(--muted);
+}
+
+.photo-leave {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 8px 16px;
+  min-height: 44px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.photo-body {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  align-items: center;
+  padding: 16px;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  box-sizing: border-box;
+}
+
+.photo-card {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.photo-mini-plan {
+  width: 120px;
+  height: 96px;
+  flex: 0 0 120px;
+}
+
+.photo-mini-letter {
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.photo-card-meta {
+  min-width: 0;
+}
+
+.photo-count {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.photo-blurb {
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.photo-framing {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--ink);
+  text-align: center;
+}
+
+.photo-lens {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+
+.photo-title {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--ink);
+}
+
+.photo-note {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+  max-width: 480px;
+}
+
+.photo-drop {
+  width: 100%;
+  box-sizing: border-box;
+  border: 2px dashed var(--border-color);
+  border-radius: var(--radius);
+  background: var(--card);
+  padding: 24px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+}
+
+.photo-drop[data-over="true"] {
+  border-color: var(--coral);
+  background: #fff5f4;
+}
+
+.photo-file {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+
+.photo-pick {
+  display: inline-flex;
+  align-items: center;
+  background: var(--coral);
+  color: var(--on-coral);
+  border-radius: 999px;
+  padding: 8px 24px;
+  min-height: 44px;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.photo-pick:hover {
+  background: var(--coral-hover);
+}
+
+.photo-drop-hint {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+
+.photo-preview {
+  position: relative;
+  width: 100%;
+  border-radius: var(--radius);
+  overflow: hidden;
+  border: 1px solid var(--border-color);
+  background: #000;
+}
+
+.photo-img {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.photo-img.tapping {
+  cursor: crosshair;
+}
+
+.photo-dots {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.photo-dot {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border-radius: 50%;
+  background: var(--green);
+  border: 2px solid #ffffff;
+  box-shadow: var(--shadow);
+}
+
+.photo-tap {
+  position: absolute;
+  width: 22px;
+  height: 22px;
+  margin: -11px 0 0 -11px;
+  border-radius: 50%;
+  background: var(--coral);
+  border: 3px solid #ffffff;
+  box-shadow: var(--shadow);
+}
+
+.photo-progress {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 8px 12px;
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.photo-progress-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--coral);
+  transition: width 0.2s;
+  max-width: 100%;
+}
+
+.photo-progress-text {
+  margin: 4px 0 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+}
+
+.photo-sheet {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.photo-check-good {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--green);
+}
+
+.photo-check-amber {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--amber);
+}
+
+.photo-check-bad {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--red);
+}
+
+.photo-sheet-note {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.photo-row {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.photo-primary {
+  background: var(--coral);
+  color: var(--on-coral);
+  border: 0;
+  border-radius: 999px;
+  padding: 8px 24px;
+  min-height: 44px;
+  font-weight: 700;
+  font-size: 15px;
+  cursor: pointer;
+  flex: 1;
+  white-space: nowrap;
+}
+
+.photo-primary:hover {
+  background: var(--coral-hover);
+}
+
+.photo-primary:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.photo-quiet {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 8px 16px;
+  min-height: 44px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.photo-back {
+  background: transparent;
+  color: var(--muted);
+  border: 0;
+  min-height: 44px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  text-decoration: underline;
+}
+
+.photo-tap-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  border-top: 1px solid var(--border-color);
+  padding-top: 8px;
+}
+
+.photo-tape-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.photo-tape-field {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  background: var(--card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  padding: 8px 16px;
+  min-height: 44px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.photo-tape-field input {
+  margin-left: auto;
+  width: 110px;
+  min-height: 44px;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 8px;
+  padding: 8px;
+  background: #ffffff;
+}
+
+.photo-tape-drawing {
+  width: 100%;
+  max-width: 360px;
+  height: auto;
+}
+
+.photo-tape-room {
+  fill: #ffffff;
+  stroke: var(--ink);
+  stroke-width: 2;
+}
+
+.photo-tape-line {
+  stroke: var(--coral);
+  stroke-width: 3;
+  stroke-linecap: round;
+}
+
+.photo-tape-label {
+  font-size: 11px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+
+/* ---- phone viewport: same blocks stacked, 44px targets kept ---- */
+
+@media (max-width: 480px) {
+  .photo-body {
+    padding: 12px;
+  }
+
+  .photo-card {
+    padding: 8px 12px;
+  }
+
+  .photo-mini-plan {
+    width: 96px;
+    height: 78px;
+    flex-basis: 96px;
+  }
+
+  .photo-row .photo-primary,
+  .photo-row .photo-quiet {
+    flex: 1 1 100%;
+  }
+
+  .photo-tape-field input {
+    width: 96px;
+  }
+}

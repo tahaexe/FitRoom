@@ -48,6 +48,18 @@ export interface SolverInput {
   tapeA: number;
   /** Wall B length in cm (taped). */
   tapeB: number;
+  /**
+   * Shopper-tapped door point for one wall, in that photo's pixel frame.
+   * Used only when the solver would otherwise flag `tap-the-door` there:
+   * the tap anchors a default-width door opening instead of the flag.
+   */
+  doorTap?: DoorTap;
+}
+
+export interface DoorTap {
+  wall: WallLetter;
+  x: number;
+  y: number;
 }
 
 export interface Uncertain {
