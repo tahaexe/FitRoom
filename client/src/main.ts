@@ -63,6 +63,7 @@ import "./editor/editor.css";
 import {
   catalogProducts,
   clampFootprintToRoom,
+  clearRoomLayout,
   cornersOverlap,
   distanceToWallM,
   emptyScene,
@@ -261,6 +262,14 @@ class FitRoomApp {
       if (camroom === "manual" && ROOM.id !== "manual-room") {
         applyRoomLayout(ROOM, loadRoomLayout("manual-room") ?? createManualRoom());
       }
+    }
+    // A saved photo-built room reopens with its pieces; the sample room
+    // opens only when no built room is saved. Runs before the store so the
+    // scene id already matches the room.
+    const storedPhotosRoom = ROOM.id === "photos-room" ? null : loadRoomLayout("photos-room");
+    if (storedPhotosRoom !== null) {
+      applyRoomLayout(ROOM, storedPhotosRoom);
+      this.menuChoice = "photos";
     }
     // First visit (no autosave) opens the furnished demo room — the scene
     // the chips reset to — while returning visits restore the autosave.
@@ -526,9 +535,9 @@ class FitRoomApp {
     this.editorStore = new EditorStore(ROOM);
     this.editorStore.onCommitted((room) => {
       applyRoomLayout(ROOM, room);
-      // Every committed plan edit saves the manual room beside the scene
+      // Every committed plan edit saves a built room beside the scene
       // autosave, so the built room survives a reload.
-      if (ROOM.id === "manual-room") saveRoomLayout(ROOM);
+      if (ROOM.id === "manual-room" || ROOM.id === "photos-room") saveRoomLayout(ROOM);
       this.syncRoomId();
       this.rebuildRoom();
     });
@@ -721,15 +730,15 @@ class FitRoomApp {
   /** Stash the live room layout so switching rooms keeps each room's own walls, openings and blocks. */
   private stashRoomLayout(): void {
     this.savedRoomLayouts.set(ROOM.id, JSON.parse(JSON.stringify(ROOM)) as RoomLayout);
-    // The plan-editor room survives a reload: its layout is saved beside
-    // the scene autosave whenever the live room is stashed.
-    if (ROOM.id === "manual-room") saveRoomLayout(ROOM);
+    // A built room survives a reload: its layout is saved beside the scene
+    // autosave whenever the live room is stashed.
+    if (ROOM.id === "manual-room" || ROOM.id === "photos-room") saveRoomLayout(ROOM);
   }
 
   /** Stashed layout for a room id, or a fresh layout the first time the room opens. */
   private roomLayoutFor(id: string, fresh: () => RoomLayout): RoomLayout {
-    if (id === "manual-room") {
-      // A reloaded visit restores the plan-editor room from storage.
+    if (id === "manual-room" || id === "photos-room") {
+      // A reloaded visit restores the built room from storage.
       const stored = loadRoomLayout(id);
       if (stored !== null) {
         this.savedRoomLayouts.set(id, JSON.parse(JSON.stringify(stored)) as RoomLayout);
@@ -769,6 +778,7 @@ class FitRoomApp {
       // A reset that always exists: restores the sample layout as one
       // undoable step, even from another room.
       if (ROOM.id !== SAMPLE_ROOM.id) {
+        const leavingPhotos = ROOM.id === "photos-room";
         this.stashRoomLayout();
         applyRoomLayout(
           ROOM,
@@ -777,6 +787,9 @@ class FitRoomApp {
             () => JSON.parse(JSON.stringify(SAMPLE_ROOM)) as RoomLayout,
           ),
         );
+        // Leaving the photo-built room drops its saved layout so the
+        // sample room opens again on reload.
+        if (leavingPhotos) clearRoomLayout("photos-room");
         this.editor?.setPhotoDraft(null);
         this.closeEditor();
         this.rebuildRoom();
@@ -789,6 +802,7 @@ class FitRoomApp {
       this.openPhotoFlow();
     } else {
       if (ROOM.id !== SAMPLE_ROOM.id) {
+        const leavingPhotos = ROOM.id === "photos-room";
         this.stashRoomLayout();
         applyRoomLayout(
           ROOM,
@@ -797,6 +811,9 @@ class FitRoomApp {
             () => JSON.parse(JSON.stringify(SAMPLE_ROOM)) as RoomLayout,
           ),
         );
+        // Leaving the photo-built room drops its saved layout so the
+        // sample room opens again on reload.
+        if (leavingPhotos) clearRoomLayout("photos-room");
         const fallback = JSON.parse(JSON.stringify(validScene)) as SceneState;
         fallback.roomId = ROOM.id;
         this.store.switchRoom(ROOM.id, fallback);
@@ -818,7 +835,9 @@ class FitRoomApp {
       this.menuChoice === "edit"
         ? ROOM.source === "manual"
           ? "manual"
-          : "sample"
+          : ROOM.source === "photos"
+            ? "photos"
+            : "sample"
         : this.menuChoice;
     this.roomMenu?.setItems(
       [
@@ -879,9 +898,11 @@ class FitRoomApp {
     // The shopper's photos and what the solver found on them stay available
     // while the editor is open for this photo-built room; they are deleted
     // on Build ("finishBuild") or Cancel ("cancelEditor"), never sent
-    // anywhere else.
+    // anywhere else. The layout itself is saved like a built room, so a
+    // reload reopens it with its pieces.
     this.photoDraft = result.draft;
     this.photoMeta = result.meta;
+    if (ROOM.id === "photos-room") saveRoomLayout(ROOM);
     this.openEditor();
     this.menuChoice = "photos";
     this.refreshMenu();
@@ -904,7 +925,11 @@ class FitRoomApp {
 
   /** Leave the editor for the 3D room view with catalogue and fit checks. */
   private finishBuild(): void {
-    this.menuChoice = ROOM.source === "manual" ? "manual" : "sample";
+    this.menuChoice =
+      ROOM.source === "manual" ? "manual" : ROOM.source === "photos" ? "photos" : "sample";
+    // A photo-built room is saved like a built room, so a reload reopens
+    // it with its pieces; the sample room opens only when none is saved.
+    if (ROOM.id === "photos-room") saveRoomLayout(ROOM);
     this.editorBase = null;
     // Building consumes the photo session: drop the stored photos now that
     // the room is confirmed, as before.

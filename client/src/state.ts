@@ -87,8 +87,9 @@ export function saveAutosave(state: SceneState): void {
 
 /**
  * Plan-editor room layouts, saved beside the scene autosave so a room built
- * in the editor survives a reload. Only the manual room (`manual-room`) is
- * persisted; the sample room always starts pristine.
+ * in the editor survives a reload. Built rooms (`manual-room` and the
+ * photo-built `photos-room`) persist; the sample room always starts
+ * pristine and opens only when no built room is saved.
  */
 function roomLayoutKey(roomId: string): string {
   return `fitroom.room.v1.${roomId}`;
@@ -117,6 +118,15 @@ export function loadRoomLayout(roomId: string): RoomLayout | null {
 export function saveRoomLayout(room: RoomLayout): void {
   try {
     window.localStorage.setItem(roomLayoutKey(room.id), JSON.stringify(room));
+  } catch {
+    // Storage may be unavailable; the app keeps working in memory.
+  }
+}
+
+/** Drop a persisted built-room layout so the sample room opens again. */
+export function clearRoomLayout(roomId: string): void {
+  try {
+    window.localStorage.removeItem(roomLayoutKey(roomId));
   } catch {
     // Storage may be unavailable; the app keeps working in memory.
   }
