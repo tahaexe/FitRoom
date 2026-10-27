@@ -5,7 +5,7 @@
 
 /* global console, process */
 import { isDemoStoreFile } from "@fitroom/shared";
-import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { loadGatewayConfig } from "../src/config.js";
 
@@ -33,7 +33,15 @@ function main(): void {
         continue;
       }
       mkdirSync(join(demoDir, route), { recursive: true });
-      cpSync(join(from, name), join(demoDir, route, name));
+      const source = join(from, name);
+      const dest = join(demoDir, route, name);
+      // Only touch the demo file when its content changes: on a Windows
+      // checkout an identical rewrite still shows as modified, so compare
+      // with line endings normalized and skip the copy when they match.
+      const next = readFileSync(source, "utf8").replace(/\r\n/g, "\n");
+      const current = existsSync(dest) ? readFileSync(dest, "utf8").replace(/\r\n/g, "\n") : null;
+      if (current === next) continue;
+      copyFileSync(source, dest);
       copied.push(`${route}/${name}`);
     }
   }
