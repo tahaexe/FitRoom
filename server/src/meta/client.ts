@@ -46,6 +46,8 @@ export interface SparkCallOptions {
   jsonSchema?: { name: string; schema: Record<string, unknown> };
   tools?: unknown[];
   maxTokens?: number;
+  /** Reasoning effort (`low` for the label call: fewer billed output tokens). */
+  reasoningEffort?: string;
   /** JPEG data URLs, sent as `image_url` parts on the last user message. */
   images?: string[];
 }
@@ -127,6 +129,9 @@ export async function callSpark(
     messages,
     max_tokens: Math.max(options.maxTokens ?? 0, SPARK_MIN_MAX_TOKENS),
   };
+  if (options.reasoningEffort !== undefined) {
+    body["reasoning_effort"] = options.reasoningEffort;
+  }
   if (options.jsonSchema !== undefined) {
     body["response_format"] = {
       type: "json_schema",
@@ -309,13 +314,14 @@ export function extractSamOutputText(raw: string): string {
   const chunks: string[] = [];
   let completed = false;
   for (const block of raw.split(/\r?\n\r?\n/)) {
+    // The `event:` line first: every other event carries full copies of the
+    // same text, so its `data:` line is never touched — only
+    // `response.output_text.delta` payloads are read and JSON-parsed.
+    const lines = block.split(/\r?\n/);
     let event: string | null = null;
-    const dataLines: string[] = [];
-    for (const line of block.split(/\r?\n/)) {
+    for (const line of lines) {
       if (line.startsWith("event:")) {
         event = line.slice("event:".length).trim();
-      } else if (line.startsWith("data:")) {
-        dataLines.push(line.slice("data:".length).replace(/^ /, ""));
       }
     }
     if (event === null) continue;
@@ -327,6 +333,12 @@ export function extractSamOutputText(raw: string): string {
       fail();
     }
     if (event !== "response.output_text.delta") continue;
+    const dataLines: string[] = [];
+    for (const line of lines) {
+      if (line.startsWith("data:")) {
+        dataLines.push(line.slice("data:".length).replace(/^ /, ""));
+      }
+    }
     let parsed: unknown;
     try {
       parsed = JSON.parse(dataLines.join("\n")) as unknown;

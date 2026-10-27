@@ -6,7 +6,9 @@
  *
  * The hash is a small dependency-free SHA-256 (same digests as
  * `node:crypto`'s `createHash("sha256")`) so the same code runs on Node
- * and in the Worker.
+ * and in the Worker. Large image strings instead hash with Web Crypto
+ * (`sha256HexAsync`, same hex): native on both runtimes, so a cold first
+ * request stays inside the Worker's CPU limit.
  */
 
 import { utf8Bytes } from "./base64.js";
@@ -118,6 +120,26 @@ function sha256HexBytes(input: Uint8Array): string {
  */
 export function sha256Hex(text: string): string {
   return sha256HexBytes(utf8Bytes(text));
+}
+
+function bytesToHex(bytes: Uint8Array): string {
+  let out = "";
+  for (let i = 0; i < bytes.length; i += 1) {
+    out += (bytes[i] ?? 0).toString(16).padStart(2, "0");
+  }
+  return out;
+}
+
+/**
+ * SHA-256 hex of a string via Web Crypto (native on Node and in the Worker,
+ * so large image strings hash without burning Worker CPU on a cold start).
+ * Byte-identical to `sha256Hex`, so existing keys stay valid.
+ */
+export async function sha256HexAsync(text: string): Promise<string> {
+  // `TextEncoder` never backs its output with a `SharedArrayBuffer`.
+  const bytes = utf8Bytes(text) as Uint8Array<ArrayBuffer>;
+  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  return bytesToHex(new Uint8Array(digest));
 }
 
 export function gatewayKey(route: string, model: string, keyInput: unknown): string {

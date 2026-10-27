@@ -11,6 +11,8 @@
  * - a non-JPEG or oversize image gives 400;
  * - a failed or incomplete stream gives the route's friendly error
  *   (extraction unit tests, no live call).
+ * - a live label answer with word colours and an empty `uncertain`
+ *   normalizes to a valid answer (normalization fixture, no live call).
  * On dedicated servers it checks:
  * - a text over 512 KB is returned but not cached (two `mock` lines);
  * - the 0.2 call weight against the session call cap (ten segments make
@@ -28,7 +30,7 @@ import { spawn } from "node:child_process";
 import { cpSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { isRoomLabelAnswer } from "@fitroom/shared";
+import { isRoomLabelAnswer, normalizeRoomLabelAnswer } from "@fitroom/shared";
 import { SAM_FRIENDLY_ERROR, extractSamOutputText } from "../src/meta/client.js";
 import { UpstreamFriendlyError } from "../src/meta/errors.js";
 import { DEMO_REQUESTS } from "../src/demo-requests.js";
@@ -444,6 +446,52 @@ async function main(): Promise<void> {
       "a recorded stream extracts its output text",
       doorText.startsWith("<0f>") && doorText.includes("|>"),
       doorText.slice(0, 60),
+    );
+  }
+
+  // 6b. A live label answer with word colours and an empty uncertain
+  // normalizes to a valid answer instead of failing the validator.
+  {
+    const liveAnswer = {
+      floor: {
+        description: "herringbone parquet hardwood floor in warm medium honey tone",
+        family: "wood",
+      },
+      photos: [
+        {
+          doors: 0,
+          glassDoors: 0,
+          lookalikes: 1,
+          openDoorways: 0,
+          wall: "A",
+          windows: 1,
+        },
+      ],
+      style: {
+        dominantColors: ["white", "medium wood brown", "navy blue", "green"],
+        tags: ["scandinavian", "mid-century modern", "bright", "minimalist"],
+      },
+      uncertain: "",
+      walls: {
+        description: "white painted walls with simple white trim",
+        family: "paint",
+      },
+    };
+    const normalized = normalizeRoomLabelAnswer(liveAnswer, ["A"]);
+    check("a live label answer normalizes instead of failing", normalized !== null);
+    check(
+      "the normalized live answer is a valid room label",
+      normalized !== null && isRoomLabelAnswer(normalized, ["A"]),
+      normalized === null ? "null" : JSON.stringify(normalized)?.slice(0, 200),
+    );
+    check(
+      "normalizing keeps word tags, drops word colours, fills uncertain",
+      normalized !== null &&
+        JSON.stringify(normalized.style.tags) ===
+          JSON.stringify(["scandinavian", "mid-century modern", "bright", "minimalist"]) &&
+        normalized.style.dominantColors.length === 0 &&
+        normalized.uncertain === "Nothing.",
+      normalized === null ? "null" : JSON.stringify(normalized.style),
     );
   }
 

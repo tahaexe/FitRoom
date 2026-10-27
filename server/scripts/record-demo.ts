@@ -73,7 +73,7 @@ async function recordSingle(
   if ("error" in parsed) {
     fail(`invalid demo request for ${def.route}: ${parsed.error}`);
   }
-  const keyInput = def.keyInput(parsed.input);
+  const keyInput = await def.keyInput(parsed.input);
   const key = gatewayKey(def.route, def.model, keyInput);
   const result = await def.upstream(apiKey, parsed.input);
   writeRecorded(dataDir, def.route, def.model, key, keyInput, result.data);
@@ -124,7 +124,7 @@ async function recordAssistantTurn(
     if ("error" in parsed) {
       fail(`invalid assistant round input: ${parsed.error}`);
     }
-    const keyInput = assistantDef.keyInput(parsed.input);
+    const keyInput = await assistantDef.keyInput(parsed.input);
     const key = gatewayKey(assistantDef.route, assistantDef.model, keyInput);
     const result = await assistantDef.upstream(apiKey, parsed.input);
     writeRecorded(dataDir, assistantDef.route, assistantDef.model, key, keyInput, result.data);

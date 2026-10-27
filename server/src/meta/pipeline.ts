@@ -59,8 +59,11 @@ export interface RouteDef {
    * (without the `live` flag, so demo/live share one key).
    */
   parseBody(body: unknown): ParsedBody | { error: string };
-  /** Route-specific key input (never image bytes). */
-  keyInput(input: unknown): unknown;
+  /**
+   * Route-specific key input (never image bytes). May be async: the room
+   * routes hash image strings with Web Crypto.
+   */
+  keyInput(input: unknown): unknown | Promise<unknown>;
   /** Real upstream call (never used in mock mode). */
   upstream(apiKey: string, input: unknown): Promise<UpstreamResult>;
 }
@@ -164,7 +167,7 @@ export async function serveGatewayRequest(
   if ("error" in parsed) {
     return c.json({ status: "error", message: parsed.error } satisfies GatewayResponse, 400);
   }
-  const keyInput = def.keyInput(parsed.input);
+  const keyInput = await def.keyInput(parsed.input);
   const key = gatewayKey(def.route, def.model, keyInput);
 
   // 1. Demo store (free in both modes).

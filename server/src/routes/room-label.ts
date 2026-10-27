@@ -10,10 +10,13 @@
  *
  * Answer: `{ style: { tags, dominantColors }, floor: { family, description
  * }, walls: { family, description }, photos: [{ wall, doors, openDoorways,
- * windows, glassDoors, lookalikes }], uncertain }`. The answer is validated
- * like the other routes' answers; on failure the route returns its friendly
- * error (the client then uses defaults: no tags or colours, families
- * `other`, counts unknown).
+ * windows, glassDoors, lookalikes }], uncertain }`. The answer is normalized
+ * (tag case, `#rgb` colours, long descriptions, an empty `uncertain`) and
+ * only fails on a missing or wrong-typed field, a family outside its list,
+ * or photos that don't match the request's letters; on failure the route
+ * returns its friendly error (the client then uses defaults: no tags or
+ * colours, families `other`, counts unknown). Retried only when cut off
+ * (`finish_reason: "length"`) or not JSON; every attempt is metered.
  *
  * Key input: the photos' SHA-256s (Web Crypto digests of the image strings)
  * with their letters, never image bytes. Demo store, `demo:record` and
@@ -22,17 +25,16 @@
 
 import {
   ROOM_LABEL_OUTPUT_SCHEMA,
+  normalizeRoomLabelAnswer,
   parseModelJson,
-  roomLabelAnswerError,
-  type RoomLabelAnswer,
 } from "@fitroom/shared";
 import { Hono } from "hono";
 import { callSpark, type ChatMessage, type UpstreamResult } from "../meta/client.js";
 import { UpstreamFriendlyError } from "../meta/errors.js";
-import { decodeJpegDataUrl } from "../meta/images.js";
-import { sha256Hex } from "../meta/keys.js";
+import { jpegDataUrlSize } from "../meta/images.js";
+import { sha256HexAsync } from "../meta/keys.js";
 import { META_MODELS } from "../meta/models.js";
-import { emptyUsage } from "../meta/pricing.js";
+import { emptyUsage, type TokenUsage } from "../meta/pricing.js";
 import {
   serveGatewayRequest,
   type ParsedBody,
@@ -46,6 +48,9 @@ export const LABEL_MAX_PHOTOS = 4;
 
 /** Rejected when the JSON body is bigger than this (bytes). */
 export const LABEL_MAX_BODY_BYTES = 1024 * 1024;
+
+/** Rejected when a photo decodes to more than this (bytes). */
+export const LABEL_MAX_IMAGE_BYTES = 1024 * 1024;
 
 export const LABEL_WALLS = ["A", "B", "C", "D"] as const;
 
@@ -84,8 +89,12 @@ function parseRoomLabelBody(body: unknown): ParsedBody | { error: string } {
       return { error: "Each wall letter appears once." };
     }
     seen.add(wall);
-    if (decodeJpegDataUrl(record["image"]) === null) {
+    const size = jpegDataUrlSize(record["image"]);
+    if (size === null) {
       return { error: "Each photo must be a JPEG data URL." };
+    }
+    if (size > LABEL_MAX_IMAGE_BYTES) {
+      return { error: "Each photo must decode to at most 1 MB." };
     }
     input.photos.push({ wall, image: record["image"] as string });
   }
@@ -98,13 +107,15 @@ function parseRoomLabelBody(body: unknown): ParsedBody | { error: string } {
  * order never changes the key. Exported so `check:room-api` can name the
  * same keys the pipeline reads.
  */
-export function roomLabelKeyInput(input: unknown): unknown {
+export async function roomLabelKeyInput(input: unknown): Promise<unknown> {
   const record = input as Partial<RoomLabelRouteInput>;
   const photos = Array.isArray(record["photos"]) ? record["photos"] : [];
-  const hashed = photos.map((photo) => ({
-    wall: typeof photo["wall"] === "string" ? photo["wall"] : "",
-    image: typeof photo["image"] === "string" ? sha256Hex(photo["image"]) : "",
-  }));
+  const hashed = await Promise.all(
+    photos.map(async (photo) => ({
+      wall: typeof photo["wall"] === "string" ? photo["wall"] : "",
+      image: typeof photo["image"] === "string" ? await sha256HexAsync(photo["image"]) : "",
+    })),
+  );
   hashed.sort((a, b) => (a.wall < b.wall ? -1 : a.wall > b.wall ? 1 : 0));
   return { photos: hashed };
 }
@@ -115,6 +126,10 @@ const LABEL_SYSTEM_PROMPT = [
   "Label only what the photos show: overall style, the floor and wall families, and per photo",
   "how many doors, open doorways, windows, glass doors and lookalikes are visible",
   "(lookalikes: mirrors, pictures or screens that could pass for an opening).",
+  "Write each style tag as one to three lowercase words of at most 30 characters.",
+  "Write each dominant colour as a 6-digit hex colour like #c8a27a.",
+  "Keep the floor and wall descriptions each to one short phrase of at most 120 characters.",
+  "End with one plain uncertain sentence, or Nothing. when nothing was uncertain.",
   "Never locate or measure anything: no positions, sizes, distances or coordinates.",
   "Answer with exactly the requested JSON object and nothing else.",
 ].join(" ");
@@ -128,13 +143,23 @@ function userText(photos: RoomLabelPhotoInput[]): string {
   );
 }
 
+/** Sum of token usage over every attempt: every billed call is metered. */
+function addUsage(first: TokenUsage, second: TokenUsage): TokenUsage {
+  return {
+    inputTokens: first.inputTokens + second.inputTokens,
+    cachedInputTokens: first.cachedInputTokens + second.cachedInputTokens,
+    outputTokens: first.outputTokens + second.outputTokens,
+    images: first.images + second.images,
+  };
+}
+
 async function callLabeller(apiKey: string, input: RoomLabelRouteInput): Promise<UpstreamResult> {
   const messages: ChatMessage[] = [
     { role: "system", content: LABEL_SYSTEM_PROMPT },
     { role: "user", content: userText(input.photos) },
   ];
   const walls = input.photos.map((photo) => photo.wall);
-  let lastUsage: UpstreamResult["usage"] | null = null;
+  let billed = emptyUsage();
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const result = await callSpark(apiKey, {
       messages,
@@ -144,18 +169,28 @@ async function callLabeller(apiKey: string, input: RoomLabelRouteInput): Promise
         schema: ROOM_LABEL_OUTPUT_SCHEMA as unknown as Record<string, unknown>,
       },
       maxTokens: 8000,
+      reasoningEffort: "low",
     });
-    lastUsage = result.usage;
+    billed = addUsage(billed, result.usage);
     const text =
       typeof result.data === "object" && result.data !== null
         ? String((result.data as Record<string, unknown>)["text"] ?? "")
         : "";
     const parsed = parseModelJson(text);
-    if (parsed !== null && roomLabelAnswerError(parsed, walls) === null) {
-      return { data: parsed as RoomLabelAnswer, usage: result.usage };
+    if (parsed === null) {
+      // Not JSON: retry once, then fail.
+      if (attempt === 0) continue;
+      break;
     }
+    const normalized = normalizeRoomLabelAnswer(parsed, walls);
+    if (normalized !== null) {
+      return { data: normalized, usage: billed };
+    }
+    // Valid JSON but unusable: retry only when cut off by `max_tokens`.
+    if (result.finishReason === "length" && attempt === 0) continue;
+    break;
   }
-  throw new UpstreamFriendlyError(LABEL_FRIENDLY_ERROR, lastUsage ?? emptyUsage());
+  throw new UpstreamFriendlyError(LABEL_FRIENDLY_ERROR, billed);
 }
 
 export const labelDef: RouteDef = {

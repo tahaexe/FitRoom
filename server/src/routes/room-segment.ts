@@ -22,8 +22,8 @@
 import { Hono } from "hono";
 import { callSam, extractSamOutputText, type UpstreamResult } from "../meta/client.js";
 import { UpstreamFriendlyError } from "../meta/errors.js";
-import { decodeJpegDataUrl } from "../meta/images.js";
-import { sha256Hex } from "../meta/keys.js";
+import { jpegDataUrlSize } from "../meta/images.js";
+import { sha256HexAsync } from "../meta/keys.js";
 import { META_MODELS } from "../meta/models.js";
 import {
   serveGatewayRequest,
@@ -67,11 +67,11 @@ function parseRoomSegmentBody(body: unknown): ParsedBody | { error: string } {
   ) {
     return { error: "The concept is wall, floor, ceiling, door or window." };
   }
-  const bytes = decodeJpegDataUrl(record["image"]);
-  if (bytes === null) {
+  const size = jpegDataUrlSize(record["image"]);
+  if (size === null) {
     return { error: "The image must be a JPEG data URL." };
   }
-  if (bytes.length > SEGMENT_MAX_IMAGE_BYTES) {
+  if (size > SEGMENT_MAX_IMAGE_BYTES) {
     return { error: "The image must decode to at most 1 MB." };
   }
   const input: RoomSegmentInput = {
@@ -86,11 +86,14 @@ function parseRoomSegmentBody(body: unknown): ParsedBody | { error: string } {
  * SHA-256 hex of the image string (Web Crypto digest), never image bytes.
  * Exported so `check:room-api` can name the same keys the pipeline reads.
  */
-export function roomSegmentKeyInput(input: unknown): unknown {
+export async function roomSegmentKeyInput(input: unknown): Promise<unknown> {
   const record = input as Partial<RoomSegmentInput>;
   return {
     concept: typeof record["concept"] === "string" ? record["concept"] : "",
-    image: typeof record["imageDataUrl"] === "string" ? sha256Hex(record["imageDataUrl"]) : "",
+    image:
+      typeof record["imageDataUrl"] === "string"
+        ? await sha256HexAsync(record["imageDataUrl"])
+        : "",
   };
 }
 
