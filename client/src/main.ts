@@ -50,6 +50,7 @@ import { captureView } from "./render/capture";
 import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
 import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
+import { OrbitResolutionController } from "./orbit-resolution";
 import { EditorStore } from "./editor/editor-store";
 import { RoomEditor } from "./editor/editor";
 import { RoomMenu } from "./editor/room-menu";
@@ -118,13 +119,6 @@ const CATALOG_MAP = new Map<string, CatalogItem>(CATALOG.map((c) => [c.id, c]));
 const MAX_PIXEL_RATIO = 2;
 const MIN_POLAR = 0.12;
 const MAX_POLAR = Math.PI / 2 - 0.03;
-// Reduced-resolution orbit on fill-rate-limited GPUs: while the camera moves,
-// render at baseRatio * orbitScale, starting at 0.75 and adapting between
-// 0.5 and 1.0 so frames stay under budget. Settles with one full-res frame.
-const ORBIT_START_SCALE = 0.75;
-const ORBIT_MIN_SCALE = 0.5;
-const ORBIT_MAX_SCALE = 1.0;
-const ORBIT_FRAME_BUDGET_MS = 16;
 
 function apiPill(): HTMLElement | null {
   return document.getElementById("api-status");
@@ -224,11 +218,11 @@ class FitRoomApp {
   /** Render-on-demand: a queued rAF id (0 = none) plus a shadow refresh flag. */
   private rafId = 0;
   private shadowNeedsUpdate = true;
-  /** Adaptive orbit resolution: full pixel ratio, current scale, motion flag. */
+  /** Adaptive orbit resolution: full pixel ratio, hysteresis controller, last cost. */
   private basePixelRatio = 1;
-  private orbitScale = ORBIT_MAX_SCALE;
-  private orbiting = false;
-  private orbitEmaMs = 0;
+  private orbitResolution = new OrbitResolutionController();
+  private lastFrameCostMs = 0;
+  private pendingResize = false;
 
   constructor(container: HTMLElement) {
     this.container = container;
@@ -1602,6 +1596,15 @@ class FitRoomApp {
       this.requestRender();
       return;
     }
+    // Defer every size change to the start of the next frame: frame()
+    // applies it before rendering, so no resize ever lands between a draw
+    // and the browser showing that frame.
+    this.pendingResize = true;
+    this.requestRender();
+  }
+
+  /** Apply a pending window resize before drawing (frame start only). */
+  private applyResize(): void {
     const w = Math.max(1, this.container.clientWidth);
     const h = Math.max(1, this.container.clientHeight);
     this.orbitCam.aspect = w / h;
@@ -1610,29 +1613,8 @@ class FitRoomApp {
     this.planCam.right = this.planCam.top * (w / h);
     this.planCam.updateProjectionMatrix();
     this.basePixelRatio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
-    this.renderer.setPixelRatio(this.basePixelRatio * this.orbitScale);
+    this.renderer.setPixelRatio(this.basePixelRatio * this.orbitResolution.scale);
     this.renderer.setSize(w, h);
-    this.requestRender();
-  }
-
-  /** Apply a clamped orbit scale (no-op when unchanged). */
-  private setOrbitScale(scale: number): void {
-    if (this.devCam) return;
-    const clamped = Math.min(ORBIT_MAX_SCALE, Math.max(ORBIT_MIN_SCALE, scale));
-    if (clamped === this.orbitScale) return;
-    this.orbitScale = clamped;
-    this.renderer.setPixelRatio(this.basePixelRatio * this.orbitScale);
-  }
-
-  /** Nudge the orbit scale so the frame cost stays under budget. */
-  private adaptOrbitScale(costMs: number): void {
-    if (this.devCam) return;
-    this.orbitEmaMs = this.orbitEmaMs === 0 ? costMs : this.orbitEmaMs * 0.8 + costMs * 0.2;
-    if (this.orbitEmaMs > ORBIT_FRAME_BUDGET_MS + 0.5) {
-      this.setOrbitScale(this.orbitScale - 0.1);
-    } else if (this.orbitEmaMs < ORBIT_FRAME_BUDGET_MS - 4) {
-      this.setOrbitScale(this.orbitScale + 0.05);
-    }
   }
 
   /** Dollhouse: hide the 2 walls nearest the camera (orbit mode only). */
@@ -1697,16 +1679,22 @@ class FitRoomApp {
       return;
     }
     const t0 = performance.now();
+    // Every resize (pixel-ratio or window size) lands here, before the
+    // draw: nothing changes the drawing buffer after render() below.
+    if (this.pendingResize) {
+      this.pendingResize = false;
+      this.applyResize();
+    }
     // Never below the floor.
     if (this.orbitCam.position.y < 0.1) this.orbitCam.position.y = 0.1;
     // OrbitControls.update() returns true while the camera is still moving
     // (including damping glide): keep drawing until it settles, then stop.
     const moved = this.controls.update();
-    if (moved && !this.orbiting) {
-      // Camera in motion: drop to a reduced pixel ratio first, then adapt.
-      this.orbiting = true;
-      this.orbitEmaMs = 0;
-      this.setOrbitScale(ORBIT_START_SCALE);
+    // Decide this frame's resolution first and apply it before drawing.
+    const scale = this.orbitResolution.update(moved, this.lastFrameCostMs, t0);
+    const pixelRatio = this.basePixelRatio * scale;
+    if (pixelRatio !== this.renderer.getPixelRatio()) {
+      this.renderer.setPixelRatio(pixelRatio);
     }
     this.updateDollhouse();
     if (this.liveDirty !== null) {
@@ -1744,13 +1732,12 @@ class FitRoomApp {
       this.shadowNeedsUpdate = false;
     }
     this.renderer.render(this.scene, this.activeCamera());
-    if (this.orbiting) this.adaptOrbitScale(performance.now() - t0);
+    this.lastFrameCostMs = performance.now() - t0;
     if (moved) {
       this.requestRender();
-    } else if (this.orbiting) {
-      // Camera settled: one full-resolution frame, then idle draws nothing.
-      this.orbiting = false;
-      this.setOrbitScale(ORBIT_MAX_SCALE);
+    } else if (this.orbitResolution.inMotion) {
+      // Still settling: keep drawing until the controller restores full
+      // resolution after 200 ms still; that exit frame already draws full-res.
       this.requestRender();
     }
   }
