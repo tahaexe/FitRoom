@@ -39,6 +39,7 @@ export const FLOOR_TEXTURE_IDS = [
   "WoodFloor051",
   "WoodFloor064",
   "WoodFloor071",
+  "WoodFloor039",
   "Tiles107",
   "Tiles139",
   "Carpet012",
@@ -46,6 +47,11 @@ export const FLOOR_TEXTURE_IDS = [
   "Carpet016",
   "Concrete034",
 ] as const;
+
+/** Real tile size in metres per on-disk finish (WoodFloor039 is 190 cm). */
+export const FLOOR_TILE_M: Readonly<Record<string, number>> = {
+  WoodFloor039: 1.9,
+};
 
 /** Resolve a layout floor id to an on-disk finish (legacy ids fall back). */
 export function floorTextureIdFor(surfaceId: string | null | undefined): string {
@@ -55,17 +61,18 @@ export function floorTextureIdFor(surfaceId: string | null | undefined): string 
   ) {
     return surfaceId;
   }
-  // The sample room's legacy floor id renders as the new look's light oak
-  // (WoodFloor071, the example room's finish): a rendering choice keyed by
-  // the surface id, never a change to the room data the requests carry.
-  if (surfaceId === "oak-light") return "WoodFloor071";
+  // The sample room's legacy floor id renders as light oak planks
+  // (WoodFloor039): a rendering choice keyed by the surface id, never a
+  // change to the room data the requests carry.
+  if (surfaceId === "oak-light") return "WoodFloor039";
   return "WoodFloor070";
 }
 
 /**
- * Tiled ambientCG PBR floor, repeat derived from room metres. One texture
- * tile spans about 1 m, so the plank rows read at a real board scale
- * (about 20 cm wide on the light oak finishes).
+ * Tiled ambientCG PBR floor, repeat derived from room metres. Each texture
+ * tile spans its real size (1 m, except WoodFloor039 at 1.9 m), so the
+ * plank rows read at a real board scale (about 13 cm wide on the light oak
+ * planks).
  */
 export function makeFloorMaterial(
   roomWM: number,
@@ -73,8 +80,8 @@ export function makeFloorMaterial(
   onLoad: () => void = () => {},
   floorId?: string,
 ): THREE.MeshStandardMaterial {
-  const tileM = 1;
   const finish = floorTextureIdFor(floorId);
+  const tileM = FLOOR_TILE_M[finish] ?? 1;
   const sets = pbrSet(
     `assets/textures/ambientcg/${finish}/${finish}_1K-JPG`,
     Math.max(1, roomWM / tileM),

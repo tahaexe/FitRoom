@@ -385,6 +385,20 @@ function main(): void {
       recordedReset.includes("frameDollhouse"),
   );
 
+  // "Use the sample room" returns to Orbit and the first view, like the
+  // first visit, so Visualise replays the recorded view.
+  const resetDemo = region(appSource, "private resetDemoRoom", "True when live in the sample room");
+  check(
+    "the sample-room reset returns to Orbit",
+    resetDemo.includes('this.mode !== "orbit"') && resetDemo.includes("this.setMode("),
+    "resetDemoRoom must set Orbit mode",
+  );
+  check(
+    "the sample-room reset reframes the first view",
+    resetDemo.includes("this.resetView()"),
+    "resetDemoRoom must call resetView (the first-view framing)",
+  );
+
   // The demo store holds assistant, recommend and render answers.
   const storeCount = (route: string): number => {
     try {

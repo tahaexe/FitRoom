@@ -20,6 +20,7 @@ import {
   createManualRoom,
   describeRun,
   dollhouseWallView,
+  facingDirForRoom,
   isHealthResponse,
   orientedFootprint,
   setRectangleWallLength,
@@ -50,7 +51,7 @@ import { applyVariant, loadModel } from "./models";
 import { PlanOverlay } from "./plan";
 import { FitOverlay } from "./fit-overlay";
 import { Inspector } from "./inspector";
-import { captureView, facingDirForRoom } from "./render/capture";
+import { captureView } from "./render/capture";
 import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
 import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
@@ -885,9 +886,11 @@ class FitRoomApp {
   }
 
   /**
-   * Reset to the demo room scene, as one undo step. From any other room this
-   * first switches to the sample room itself (room and layout, stashing the
-   * live room so it stays saved in the room menu), then resets the layout.
+   * Reset to the demo room scene, as one undo step, back in Orbit at the
+   * first view (the same window-aware framing as the first visit). From any
+   * other room this first switches to the sample room itself (room and
+   * layout, stashing the live room so it stays saved in the room menu),
+   * then resets the layout.
    */
   private resetDemoRoom(): void {
     if (ROOM.id !== SAMPLE_ROOM.id) {
@@ -914,6 +917,10 @@ class FitRoomApp {
       draft.items = clone.items;
     });
     this.syncRoomId();
+    // "Use the sample room" returns to Orbit and the first view, like the
+    // first visit, so Visualise replays the recorded view.
+    if (this.mode !== "orbit") this.setMode("orbit");
+    this.resetView();
   }
 
   /** True when live in the sample room with the sample layout. */

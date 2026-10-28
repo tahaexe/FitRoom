@@ -1,16 +1,16 @@
 /**
  * Demo render requests: the sample room's recorded views (the valid demo
- * scene, the moved-sofa view and the navy-swap view, all from the default
- * first dollhouse view) plus one photoreal visualisation of the example
- * room after the recorded Furnish, from the same default view.
+ * scene, the moved-sofa view and the navy-swap view, all from the first
+ * dollhouse view) plus one photoreal visualisation of the example room
+ * after the recorded Furnish, from the same first view.
  *
  * Built with the shared code: each prompt comes from `buildRenderPrompt`
  * over its scene, its room and the catalog, with the first-view wall
- * cutaway (`dollhouseWallView` from the default corner, the same vectors
- * the render check uses). The key input carries the normalised scene (room
- * id + items, no camera) beside `camera: { preset }`, exactly like the
- * committed renders, so each recorded answer replays from the demo store
- * with no upstream call.
+ * cutaway (`dollhouseWallView` from the client's own first-view framing
+ * `firstViewVectors`, the same vectors the render check uses). The key
+ * input carries the normalised scene (room id + items, no camera) beside
+ * `camera: { preset }`, exactly like the committed renders, so each
+ * recorded answer replays from the demo store with no upstream call.
  *
  * The sample scenes are the committed demo views (never by hand): the
  * valid demo scene (`shared/samples/fit-tests/valid.json`), the same room
@@ -26,6 +26,7 @@ import { fileURLToPath } from "node:url";
 import {
   buildRenderPrompt,
   dollhouseWallView,
+  firstViewVectors,
   type CatalogItem,
   type RoomLayout,
   type SceneState,
@@ -40,9 +41,13 @@ function readJson(file: string): unknown {
   return JSON.parse(readFileSync(file, "utf8")) as unknown;
 }
 
-/** First-view camera vectors (default dollhouse corner, like the render check). */
-const FIRST_TO_CAM = { x: 0.85 / Math.hypot(0.85, 1), z: 1 / Math.hypot(0.85, 1) };
-const FIRST_RIGHT = { x: 1 / Math.hypot(1, 0.85), z: -0.85 / Math.hypot(1, 0.85) };
+/** First-view camera vectors (the client's own first-view framing). */
+function firstViewFor(room: RoomLayout): {
+  toCam: { x: number; z: number };
+  right: { x: number; z: number };
+} {
+  return firstViewVectors(room);
+}
 
 export interface RenderDemoRequest {
   prompt: string;
@@ -56,7 +61,8 @@ export function buildSampleRenderDemoRequests(): RenderDemoRequest[] {
   const room = readJson(resolve(sharedDir, "samples", "living-420x360.json")) as RoomLayout;
   const valid = readJson(resolve(sharedDir, "samples", "fit-tests", "valid.json")) as SceneState;
   const catalog = readJson(resolve(sharedDir, "catalog", "catalog.json")) as CatalogItem[];
-  const view = dollhouseWallView(room, FIRST_TO_CAM, FIRST_RIGHT);
+  const first = firstViewFor(room);
+  const view = dollhouseWallView(room, first.toCam, first.right);
   const baseItems = JSON.parse(JSON.stringify(valid.items)) as SceneState["items"];
   const movedItems = JSON.parse(JSON.stringify(valid.items)) as SceneState["items"];
   for (const item of movedItems) {
@@ -109,11 +115,12 @@ export function buildRenderDemoRequests(): RenderDemoRequest[] {
   const furnished = readJson(furnishedFile) as SceneState;
   if (!Array.isArray(furnished.items)) return out;
   const catalog = readJson(resolve(sharedDir, "catalog", "catalog.json")) as CatalogItem[];
+  const first = firstViewFor(room);
   const prompt = buildRenderPrompt(
     furnished,
     room,
     catalog,
-    dollhouseWallView(room, FIRST_TO_CAM, FIRST_RIGHT),
+    dollhouseWallView(room, first.toCam, first.right),
   );
   out.push({
     prompt,

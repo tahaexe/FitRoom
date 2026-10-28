@@ -20,6 +20,7 @@ import {
   buildRenderKeyInput,
   buildRenderPrompt,
   dollhouseWallView,
+  firstViewVectors,
   type CatalogItem,
   type RoomLayout,
   type SceneState,
@@ -188,33 +189,36 @@ async function main(): Promise<void> {
         prompt.includes("Left wall"),
       prompt.slice(0, 200),
     );
-    // First view: the dollhouse capture cuts away both window walls, so
-    // the prompt names the walls it shows by their place in the image and
-    // puts the windows behind the camera instead of on named walls.
-    const firstToCam = { x: 0.85 / Math.hypot(0.85, 1), z: 1 / Math.hypot(0.85, 1) };
-    const firstRight = { x: 1 / Math.hypot(1, 0.85), z: -0.85 / Math.hypot(1, 0.85) };
+    // First view: the client's own window-aware framing faces the window
+    // walls, so the prompt names them by their place in the image and the
+    // cut-away Door wall and Left wall sit behind the camera.
+    const firstView = firstViewVectors(room);
+    check(
+      `${name}: first-view right vector is (z, -x)`,
+      firstView.right.x === firstView.toCam.z && firstView.right.z === -firstView.toCam.x,
+      JSON.stringify(firstView),
+    );
     const firstPrompt = buildRenderPrompt(
       scene,
       room,
       catalog,
-      dollhouseWallView(room, firstToCam, firstRight),
+      dollhouseWallView(room, firstView.toCam, firstView.right),
     );
     check(
       `${name}: first-view prompt names the visible walls by image place`,
-      firstPrompt.includes("left wall in the image: Left wall") &&
-        firstPrompt.includes("right wall in the image: Door wall"),
-      firstPrompt.slice(0, 200),
+      firstPrompt.includes("left wall in the image: Right wall (window)") &&
+        firstPrompt.includes("right wall in the image: Back wall (window)"),
+      firstPrompt.slice(0, 300),
     );
     check(
-      `${name}: first-view prompt marks the shown plain wall`,
-      firstPrompt.includes("Left wall — plain wall, no openings"),
-      firstPrompt.slice(0, 200),
+      `${name}: first-view prompt names the windows on their walls`,
+      firstPrompt.includes("window-1 (160 cm wide, sill 90 cm)") &&
+        firstPrompt.includes("window-2 (120 cm wide, sill 90 cm)"),
+      firstPrompt.slice(0, 300),
     );
     check(
-      `${name}: first-view prompt puts the windows behind the camera`,
-      firstPrompt.includes("are behind the camera") &&
-        firstPrompt.includes("light the room from there") &&
-        !/^- (Back|Right) wall/m.test(firstPrompt),
+      `${name}: first-view prompt puts the door walls behind the camera`,
+      firstPrompt.includes("The cut-away Door wall and Left wall are behind the camera"),
       firstPrompt.slice(0, 300),
     );
     check(
@@ -250,6 +254,67 @@ async function main(): Promise<void> {
     check(`${name}: moving one item by 5 cm changes the key`, keyC !== keyA);
     const keyJson = JSON.stringify(buildRenderKeyInput(scene, prompt, "dollhouse"));
     check(`${name}: key input holds no image bytes`, !/base64|data:image/i.test(keyJson));
+  }
+
+  // Demo replay: rebuild every Visualise request from the client's own
+  // first-view framing and find each key in the committed demo store. The
+  // sample request part (prompt, scene items, preset) equals the captured
+  // `.inbox/demo-keys/sample-visualise-request.json` request.
+  const { buildRenderDemoRequests } = await import("../src/render-demo.js");
+  const demoRequests = buildRenderDemoRequests();
+  check(
+    "demo render requests cover three sample views plus the example",
+    demoRequests.length === 4,
+    String(demoRequests.length),
+  );
+  for (const [index, demo] of demoRequests.entries()) {
+    const sceneForKey = {
+      roomId: demo.scene.roomId,
+      items: demo.scene.items,
+      camera: { mode: "orbit", position: { x: 0, y: 0, z: 0 }, target: { x: 0, y: 0, z: 0 } },
+    } as unknown as SceneState;
+    const key = gatewayKey(
+      "render",
+      META_MODELS.image,
+      buildRenderKeyInput(sceneForKey, demo.prompt, demo.camera.preset),
+    );
+    const stored = join(serverDir, "data", "demo", "render", `${key}.json`);
+    check(
+      `demo render request ${String(index + 1)} replays from the demo store`,
+      existsSync(stored),
+      key.slice(0, 12),
+    );
+  }
+  const inboxFile = join(repoRoot, ".inbox", "demo-keys", "sample-visualise-request.json");
+  if (existsSync(inboxFile) && demoRequests[0] !== undefined) {
+    const inbox = JSON.parse(readFileSync(inboxFile, "utf8")) as {
+      prompt: string;
+      scene: { items: unknown; roomId: string };
+      cameraPreset: string;
+    };
+    const firstDemo = demoRequests[0];
+    check(
+      "sample Visualise prompt equals the captured request",
+      firstDemo.prompt === inbox.prompt,
+      `${String(firstDemo.prompt.length)} vs ${String(inbox.prompt.length)}`,
+    );
+    check(
+      "sample Visualise items equal the captured request",
+      JSON.stringify(firstDemo.scene.items) === JSON.stringify(inbox.scene.items),
+      JSON.stringify(firstDemo.scene.items).slice(0, 120),
+    );
+    check(
+      "sample Visualise preset equals the captured request",
+      firstDemo.camera.preset === inbox.cameraPreset,
+      `${firstDemo.camera.preset} vs ${inbox.cameraPreset}`,
+    );
+    check(
+      "sample Visualise room equals the captured request",
+      firstDemo.scene.roomId === inbox.scene.roomId,
+      `${firstDemo.scene.roomId} vs ${inbox.scene.roomId}`,
+    );
+  } else {
+    check("sample Visualise captured request present (.inbox)", false, inboxFile);
   }
 
   // One request through the gateway pipeline in mock mode.

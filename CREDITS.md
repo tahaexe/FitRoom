@@ -496,6 +496,16 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
   - assets/textures/ambientcg/WoodFloor071/WoodFloor071_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/WoodFloor071/WoodFloor071_1K-JPG_Roughness.jpg
 
+### WoodFloor039
+
+- Credit: WoodFloor039, ambientCG (CC0)
+- Source: ambientCG (https://ambientcg.com/view?id=WoodFloor039)
+- License: CC0-1.0
+- Files:
+  - assets/textures/ambientcg/WoodFloor039/WoodFloor039_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/WoodFloor039/WoodFloor039_1K-JPG_NormalGL.jpg
+  - assets/textures/ambientcg/WoodFloor039/WoodFloor039_1K-JPG_Roughness.jpg
+
 ### Tiles139
 
 - Credit: Tiles139, ambientCG (CC0)

@@ -240,10 +240,17 @@ function main(): void {
 
   // Rendering look, rendering only.
   check("walls render warm-white matte", roomSrc.includes("0xf3efe8"));
-  check("floor tiles at board scale", stageSrc.includes("tileM = 1"));
+  check(
+    "floor tiles at board scale",
+    stageSrc.includes("FLOOR_TILE_M") && stageSrc.includes("WoodFloor039: 1.9"),
+  );
   check(
     "sample floor renders as the new look's light oak",
-    stageSrc.includes('if (surfaceId === "oak-light") return "WoodFloor071"'),
+    stageSrc.includes('if (surfaceId === "oak-light") return "WoodFloor039"'),
+  );
+  check(
+    "light oak planks use the real 190 cm tile",
+    stageSrc.includes("WoodFloor039: 1.9") && stageSrc.includes("FLOOR_TILE_M[finish]"),
   );
   check("daylight is warm and bright", stageSrc.includes("1.35") && stageSrc.includes("2.6"));
   check("contact shadows read under every piece", stageSrc.includes("0.38"));

@@ -56,7 +56,7 @@ import {
 } from "../src/phone-sheet.js";
 import { Guide, type GuideScreen } from "../src/guide.js";
 import { measuredMarkText, photoBandText, tapeWallLabel } from "../src/editor/source-mark.js";
-import { floorTextureIdFor } from "../src/stage.js";
+import { FLOOR_TILE_M, floorTextureIdFor } from "../src/stage.js";
 import {
   editorPlanRoomShare,
   editorPlanViewBox,
@@ -429,11 +429,16 @@ check(
   photoBandText(2, 9) === "2 walls are estimated (± 9 cm). Tape one to make it exact.",
   photoBandText(2, 9),
 );
-// The sample room's legacy floor id renders as the new look's light oak.
+// The sample room's legacy floor id renders as light oak planks.
 check(
   "floor:sample-is-light-oak",
-  floorTextureIdFor("oak-light") === "WoodFloor071",
+  floorTextureIdFor("oak-light") === "WoodFloor039",
   floorTextureIdFor("oak-light"),
+);
+check(
+  "floor:light-oak-tile-is-190cm",
+  FLOOR_TILE_M["WoodFloor039"] === 1.9,
+  String(FLOOR_TILE_M["WoodFloor039"]),
 );
 check(
   "floor:example-keeps-its-finish",
