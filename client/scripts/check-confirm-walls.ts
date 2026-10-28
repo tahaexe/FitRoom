@@ -11,6 +11,12 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { wallChipFound, wallFoundSummary } from "../src/copy.js";
+import {
+  MINI_PLAN_FRAME_MARGIN,
+  miniPlanData,
+} from "../src/editor/photo-confirm.js";
+import { createRectangleRoom } from "@fitroom/shared";
+import { LETTER_TO_WALL_ID } from "@fitroom/shared";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const src = (rel: string): string => readFileSync(join(root, "src", rel), "utf8");
@@ -162,6 +168,122 @@ check(
   topAt >= 0 && photoAt > topAt && wallsAt > photoAt && planAt > wallsAt,
   "editor.css",
 );
+
+// ---- Item 1: the small plan's labels fit inside its frame ----
+{
+  // The example room at its own wall lengths (A/C 420, B/D 360), with a
+  // window on a side wall so a side name runs long ("Wall B · left wall").
+  const room = createRectangleRoom({
+    widthCm: 420,
+    depthCm: 360,
+    heightCm: 250,
+    id: "photos-room",
+    name: "Example room (generated photos)",
+  });
+  room.openings.push({
+    id: "door-1",
+    wallId: "wall-1",
+    type: "door",
+    offset: 40,
+    width: 90,
+    height: 210,
+    sillHeight: 0,
+    hinge: "left",
+    swing: "in",
+  });
+  room.openings.push({
+    id: "window-1",
+    wallId: "wall-4",
+    type: "window",
+    offset: 100,
+    width: 120,
+    height: 140,
+    sillHeight: 90,
+  });
+  const session = {
+    draft: { letterToWallId: { ...LETTER_TO_WALL_ID }, photos: [] },
+    sizes: {
+      A: { width: 1280, height: 960 },
+      B: { width: 1280, height: 960 },
+      C: { width: 1280, height: 960 },
+      D: { width: 1280, height: 960 },
+    },
+    activeWall: "A",
+    seen: ["A"],
+  } as unknown as Parameters<typeof miniPlanData>[1];
+  const data = miniPlanData(room, session);
+  check("the example small plan builds", data !== null);
+  if (data !== null) {
+    const [vx, vy, vw, vh] = data.viewBox;
+    // Side labels stack on two lines (name over length), never one long line.
+    for (const edge of data.edges) {
+      check(
+        `wall ${edge.letter} labels the name over its length`,
+        edge.lines.length === 2 &&
+          edge.lines[1] === `${String(edge.lengthCm)} cm` &&
+          edge.label === `${edge.lines[0]} · ${edge.lines[1]}`,
+        edge.label,
+      );
+      // Label type runs no larger than the walls list's text (14 px): the
+      // svg units over the fitted frame stay at or under 14 px at the
+      // desktop (~540 px plan) and phone (~326 px plan) widths.
+      for (const displayWidth of [540, 326]) {
+        const px = (edge.fontSize / vw) * displayWidth;
+        check(
+          `wall ${edge.letter} label fits 14 px at ${String(displayWidth)} px wide`,
+          px <= 14,
+          `${px.toFixed(2)} px`,
+        );
+      }
+      // Each label's box (font size × about 0.6 em a character, per line)
+      // lies inside the plan's frame (the frame carries a small margin).
+      const charW = edge.fontSize * 0.6;
+      const textW = Math.max(edge.lines[0].length, edge.lines[1].length) * charW;
+      const textH = edge.lineHeight * edge.lines.length;
+      const [bx0, by0, bx1, by1] = edge.labelBox;
+      const boxW = bx1 - bx0;
+      const boxH = by1 - by0;
+      check(
+        `wall ${edge.letter} label box matches its text size`,
+        Math.abs(boxW - textW) < 0.01 && Math.abs(boxH - textH) < 0.01,
+        `${boxW.toFixed(2)}×${boxH.toFixed(2)} vs ${textW.toFixed(2)}×${textH.toFixed(2)}`,
+      );
+      const inside =
+        bx0 >= vx - 1e-9 &&
+        by0 >= vy - 1e-9 &&
+        bx1 <= vx + vw + 1e-9 &&
+        by1 <= vy + vh + 1e-9;
+      check(`wall ${edge.letter} label sits inside the plan frame`, inside, edge.label);
+    }
+    // The frame fits the room plus its labels with a small margin: every
+    // room corner and every label box keeps at least the margin inside,
+    // and the frame is no more than a second margin larger than needed.
+    const need = { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity };
+    for (const edge of data.edges) {
+      for (const [px, py] of [
+        [edge.x1, edge.y1],
+        [edge.x2, edge.y2],
+      ] as Array<[number, number]>) {
+        if (px < need.x0) need.x0 = px;
+        if (py < need.y0) need.y0 = py;
+        if (px > need.x1) need.x1 = px;
+        if (py > need.y1) need.y1 = py;
+      }
+      const [bx0, by0, bx1, by1] = edge.labelBox;
+      if (bx0 < need.x0) need.x0 = bx0;
+      if (by0 < need.y0) need.y0 = by0;
+      if (bx1 > need.x1) need.x1 = bx1;
+      if (by1 > need.y1) need.y1 = by1;
+    }
+    const m = MINI_PLAN_FRAME_MARGIN;
+    const tight =
+      Math.abs(vx - (need.x0 - m)) < 0.01 &&
+      Math.abs(vy - (need.y0 - m)) < 0.01 &&
+      Math.abs(vx + vw - (need.x1 + m)) < 0.01 &&
+      Math.abs(vy + vh - (need.y1 + m)) < 0.01;
+    check("the plan frame fits the room plus its labels with a margin", tight, data.viewBox.join(","));
+  }
+}
 
 if (failures > 0) process.exit(1);
 console.log("confirm walls ok");

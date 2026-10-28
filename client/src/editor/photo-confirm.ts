@@ -264,6 +264,17 @@ function fmt(n: number): string {
   return String(Math.round(n * 10) / 10);
 }
 
+/**
+ * Small-plan label metrics: the rendered label never runs larger than the
+ * walls list's text (14 px). The svg font size below, over the fitted frame
+ * width, stays at or under 14 px at both the desktop and phone widths.
+ */
+export const MINI_PLAN_FONT_SIZE = 5;
+export const MINI_PLAN_LINE_HEIGHT = 6;
+export const MINI_PLAN_CHAR_WIDTH = MINI_PLAN_FONT_SIZE * 0.6;
+export const MINI_PLAN_LABEL_GAP = 3;
+export const MINI_PLAN_FRAME_MARGIN = 4;
+
 export interface MiniPlanEdgeDatum {
   letter: WallLetter;
   x1: number;
@@ -273,8 +284,15 @@ export interface MiniPlanEdgeDatum {
   active: boolean;
   lengthCm: number;
   label: string;
+  /** Two lines: the wall name over its length (side labels stacked too). */
+  lines: [string, string];
+  fontSize: number;
+  lineHeight: number;
+  /** First-line text position (the second line sits one line height below). */
   labelX: number;
   labelY: number;
+  /** Outer box of both lines (frame-fitted, margin included outside). */
+  labelBox: [number, number, number, number];
   anchor: "start" | "middle" | "end";
   side: "top" | "right" | "bottom" | "left";
 }
@@ -346,16 +364,51 @@ export function miniPlanData(
     { letter: "D", x1: x0 + rw, y1: y0, x2: x0 + rw, y2: y0 + rh, side: "right" },
     { letter: "B", x1: x0, y1: y0 + rh, x2: x0, y2: y0, side: "left" },
   ];
+  // Two-line labels: the wall name over its length, so no single line
+  // runs long ("Wall B · left wall · 362 cm" becomes two short lines).
+  // Each label box sits clear of its edge; the frame below fits the room
+  // plus every label box with a small margin, so nothing is cut.
   const edges: MiniPlanEdgeDatum[] = raw.map((e) => {
     const lengthCm = lenOf(e.letter);
     // Letter plus the rest of the app's words for the wall, from the one
     // naming function in `shared/src/fit.ts`.
-    const label = `${wallLetterLabel(room, e.letter)} · ${String(lengthCm)} cm`;
+    const name = wallLetterLabel(room, e.letter);
+    const label = `${name} · ${String(lengthCm)} cm`;
+    const lines: [string, string] = [name, `${String(lengthCm)} cm`];
+    const fontSize = MINI_PLAN_FONT_SIZE;
+    const lineHeight = MINI_PLAN_LINE_HEIGHT;
+    const charW = MINI_PLAN_CHAR_WIDTH;
+    const gap = MINI_PLAN_LABEL_GAP;
+    const blockW = Math.max(lines[0].length, lines[1].length) * charW;
+    const blockH = lineHeight * 2;
     const midX = (e.x1 + e.x2) / 2;
     const midY = (e.y1 + e.y2) / 2;
-    const labelX = e.side === "right" ? midX + 3 : e.side === "left" ? midX - 3 : midX;
-    const labelY = e.side === "top" ? midY - 5 : e.side === "bottom" ? midY + 7 : midY;
     const anchor = e.side === "right" ? "start" : e.side === "left" ? "end" : "middle";
+    let boxX0: number;
+    let boxY0: number;
+    let labelX: number;
+    let labelY: number;
+    if (e.side === "top") {
+      boxX0 = midX - blockW / 2;
+      boxY0 = y0 - gap - blockH;
+      labelX = midX;
+      labelY = boxY0 + lineHeight * 0.75;
+    } else if (e.side === "bottom") {
+      boxX0 = midX - blockW / 2;
+      boxY0 = y0 + rh + gap;
+      labelX = midX;
+      labelY = boxY0 + lineHeight * 0.75;
+    } else if (e.side === "right") {
+      boxX0 = x0 + rw + gap;
+      boxY0 = midY - blockH / 2;
+      labelX = boxX0;
+      labelY = boxY0 + lineHeight * 0.75;
+    } else {
+      boxX0 = x0 - gap - blockW;
+      boxY0 = midY - blockH / 2;
+      labelX = boxX0 + blockW;
+      labelY = boxY0 + lineHeight * 0.75;
+    }
     return {
       letter: e.letter,
       x1: e.x1,
@@ -365,8 +418,12 @@ export function miniPlanData(
       active: e.letter === session.activeWall,
       lengthCm,
       label,
+      lines,
+      fontSize,
+      lineHeight,
       labelX,
       labelY,
+      labelBox: [boxX0, boxY0, boxX0 + blockW, boxY0 + blockH],
       anchor,
       side: e.side,
     };
@@ -465,7 +522,25 @@ export function miniPlanData(
   const aEdge = raw.find((e) => e.letter === "A");
   const aSide: "top" | "right" | "bottom" | "left" =
     aEdge !== undefined && aEdge.y1 <= cy ? "top" : "bottom";
-  return { viewBox: [0, 0, VB_W, VB_H], edges, openings, aSide };
+  // The frame fits the room plus every two-line label box with a small
+  // margin, so no label is cut at any width.
+  const margin = MINI_PLAN_FRAME_MARGIN;
+  let minX = x0;
+  let minY = y0;
+  let maxX = x0 + rw;
+  let maxY = y0 + rh;
+  for (const edge of edges) {
+    const [bx0, by0, bx1, by1] = edge.labelBox;
+    if (bx0 < minX) minX = bx0;
+    if (by0 < minY) minY = by0;
+    if (bx1 > maxX) maxX = bx1;
+    if (by1 > maxY) maxY = by1;
+  }
+  minX -= margin;
+  minY -= margin;
+  maxX += margin;
+  maxY += margin;
+  return { viewBox: [minX, minY, maxX - minX, maxY - minY], edges, openings, aSide };
 }
 
 export class PhotoConfirmView {
@@ -1412,16 +1487,20 @@ export class PhotoConfirmView {
       }
     }
     for (const edge of data.edges) {
-      const label = document.createElementNS(svgNS, "text");
-      label.setAttribute("x", fmt(edge.labelX));
-      label.setAttribute("y", fmt(edge.labelY));
-      label.setAttribute("text-anchor", edge.anchor);
-      label.setAttribute("dominant-baseline", "middle");
-      label.setAttribute("font-size", "5.5");
-      label.setAttribute("font-weight", "700");
-      label.setAttribute("fill", "#2b2c30");
-      label.textContent = edge.label;
-      svg.appendChild(label);
+      // Two lines: the wall name over its length, no larger than the
+      // walls list's text.
+      edge.lines.forEach((line, index) => {
+        const label = document.createElementNS(svgNS, "text");
+        label.setAttribute("x", fmt(edge.labelX));
+        label.setAttribute("y", fmt(edge.labelY + index * edge.lineHeight));
+        label.setAttribute("text-anchor", edge.anchor);
+        label.setAttribute("dominant-baseline", "middle");
+        label.setAttribute("font-size", String(edge.fontSize));
+        label.setAttribute("font-weight", "700");
+        label.setAttribute("fill", "#2b2c30");
+        label.textContent = line;
+        svg.appendChild(label);
+      });
     }
     this.planEl.appendChild(svg);
     const legend = document.createElement("div");
