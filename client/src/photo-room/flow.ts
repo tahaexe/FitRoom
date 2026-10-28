@@ -738,20 +738,27 @@ export class PhotoFlow {
   }
 
   private preview(letter: WallLetter, state: WallState): HTMLElement {
+    // The "Generated example" credit reads as a caption line just above the
+    // photo — never on the image, so it stays visible at any size.
+    const host = document.createElement("div");
+    host.className = "photo-preview-host";
     const wrap = document.createElement("div");
     wrap.className = "photo-preview";
     const intake = state.intake;
-    if (intake === null) return wrap;
+    if (intake === null) {
+      host.appendChild(wrap);
+      return host;
+    }
+    if (state.example) {
+      const caption = document.createElement("p");
+      caption.className = "photo-example-caption";
+      caption.textContent = exampleBadge(letter);
+      host.appendChild(caption);
+    }
     const img = document.createElement("img");
     img.className = "photo-img";
     img.src = this.exampleDisplay.get(letter) ?? intake.labelUrl;
     img.alt = state.example ? `Wall ${letter} generated example photo` : `Wall ${letter} photo`;
-    if (state.example) {
-      const badge = document.createElement("span");
-      badge.className = "photo-example-badge";
-      badge.textContent = exampleBadge(letter);
-      wrap.appendChild(badge);
-    }
     if (state.tapping) {
       img.classList.add("tapping");
       img.tabIndex = 0;
@@ -825,7 +832,8 @@ export class PhotoFlow {
       progress.append(bar, text);
       wrap.appendChild(progress);
     }
-    return wrap;
+    host.appendChild(wrap);
+    return host;
   }
 
   private sheet(letter: WallLetter, state: WallState): HTMLElement {

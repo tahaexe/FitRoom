@@ -937,12 +937,13 @@
   cursor: ns-resize;
 }
 
-/* The generated-example badge sits at the photo's bottom-left corner, clear
-   of the top corner handles. It stays visible. */
-.photo-stage .photo-example-badge {
-  top: auto;
-  bottom: 8px;
-  left: 8px;
+/* The generated-example credit reads as a caption line just above the
+   photo — never on the image, so no corner handle or grip sits under it. */
+.photo-example-caption {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
 }
 
 .photo-magnifier {

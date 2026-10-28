@@ -785,6 +785,14 @@ export class PhotoConfirmView {
       this.stageEl.dataset["wall"] = letter;
     }
     this.stageEl.innerHTML = "";
+    // The "Generated example" credit reads as a caption line just above the
+    // photo — never on the image, so no corner handle or grip sits under it.
+    if (isExampleRoom(this.store.room.name)) {
+      const caption = document.createElement("p");
+      caption.className = "photo-example-caption";
+      caption.textContent = exampleBadge(session.activeWall);
+      this.stageEl.appendChild(caption);
+    }
     const corners = this.activeCorners();
     if (this.photo === null || corners === null) {
       const missing = document.createElement("p");
@@ -803,12 +811,6 @@ export class PhotoConfirmView {
       : `Wall ${letter} photo`;
     img.draggable = false;
     wrap.appendChild(img);
-    if (isExampleRoom(this.store.room.name)) {
-      const badge = document.createElement("span");
-      badge.className = "photo-example-badge";
-      badge.textContent = exampleBadge(session.activeWall);
-      wrap.appendChild(badge);
-    }
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("class", "photo-stage-svg");
     svg.setAttribute("viewBox", `0 0 ${String(this.photo.width)} ${String(this.photo.height)}`);

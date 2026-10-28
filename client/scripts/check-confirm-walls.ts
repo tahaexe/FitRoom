@@ -133,12 +133,54 @@ check(
 // ---- Item 3 (structural): badge, labels and handle hit areas ----
 const confirmCss = css;
 check(
-  "badge sits at the photo's bottom-left corner",
-  /\.photo-stage\s+\.photo-example-badge\s*\{[^}]*bottom\s*:\s*8px[^}]*left\s*:\s*8px/s.test(
-    confirmCss,
-  ),
+  "the example credit reads as a caption line above the photo",
+  /\.photo-example-caption\s*\{[^}]*margin\s*:\s*0 0 8px/s.test(confirmCss),
   "editor.css",
 );
+check(
+  "the caption is not positioned over the photo",
+  !/\.photo-example-caption\s*\{[^}]*position\s*:\s*absolute/s.test(confirmCss) &&
+    !/\.photo-stage\s+\.photo-example-badge/s.test(confirmCss),
+  "editor.css",
+);
+{
+  // Bar: the badge leaves the image — no example badge element is created
+  // inside the photo's positioned box (confirm stage or flow preview);
+  // the caption sits in normal flow just above it.
+  const stageAt = confirm.indexOf("private async renderStage");
+  const stageBlock =
+    stageAt >= 0 ? confirm.slice(stageAt, stageAt + 2500) : "";
+  const captionAbove =
+    stageBlock.includes("photo-example-caption") &&
+    stageBlock.indexOf("photo-example-caption") < stageBlock.indexOf("className = \"photo-stage\"") &&
+    !stageBlock.includes("photo-example-badge");
+  check(
+    "the confirm badge is not inside the photo's positioned box",
+    captionAbove,
+    "photo-confirm.ts renderStage",
+  );
+  const flowSrc = src("photo-room/flow.ts");
+  const previewAt = flowSrc.indexOf("private preview(");
+  const previewBlock =
+    previewAt >= 0 ? flowSrc.slice(previewAt, previewAt + 2500) : "";
+  const flowCaptionAbove =
+    previewBlock.includes("photo-example-caption") &&
+    previewBlock.includes("host.appendChild(caption)") &&
+    previewBlock.includes("host.appendChild(wrap)") &&
+    !previewBlock.includes("photo-example-badge");
+  check(
+    "the flow badge is not inside the photo's positioned box",
+    flowCaptionAbove,
+    "flow.ts preview",
+  );
+  check(
+    "the flow caption has a static caption style",
+    /\.photo-example-caption\s*\{[^}]*margin\s*:\s*0 0 8px/s.test(
+      src("photo-room/photo-room.css").replace(/\/\*[\s\S]*?\*\//g, ""),
+    ),
+    "photo-room.css",
+  );
+}
 check(
   "box labels sit above the top edge",
   /\.photo-opening-tag\s*\{[^}]*bottom\s*:\s*calc\(100% \+ 14px\)/s.test(confirmCss),

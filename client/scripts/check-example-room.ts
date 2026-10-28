@@ -237,8 +237,10 @@ function main(): void {
     "missing example helpers",
   );
   check(
-    "the confirm view badges every example photo",
-    confirmSource.includes("exampleBadge") && confirmSource.includes("photo-example-badge"),
+    "the confirm view captions every example photo above the image",
+    confirmSource.includes("exampleBadge") &&
+      confirmSource.includes("photo-example-caption") &&
+      !confirmSource.includes("photo-example-badge"),
   );
 
   let segmentFiles: string[] = [];

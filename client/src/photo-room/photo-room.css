@@ -209,6 +209,19 @@
   text-align: center;
 }
 
+.photo-preview-host {
+  width: 100%;
+}
+
+/* The generated-example credit reads as a caption line just above the
+   photo — never on the image, so it stays visible at any size. */
+.photo-example-caption {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
 .photo-preview {
   position: relative;
   width: 100%;
