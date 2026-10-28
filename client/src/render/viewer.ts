@@ -78,9 +78,9 @@ export class RenderViewer {
     // camera back first so the capture matches the stored visualisation.
     let recordedView = false;
     try {
-      recordedView = this.deps.resetToRecordedView?.() ?? false;
+      if (this.deps.resetToRecordedView?.() === true) recordedView = true;
     } catch {
-      recordedView = false;
+      // Keep rendering the live view.
     }
     let capture: { dataUrl: string; base64: string; width: number; height: number };
     try {
@@ -179,9 +179,9 @@ export class RenderViewer {
   }
 
   /**
-   * Demo miss: the message plus a way out in the same card — reset the demo
-   * room (one undo step) and, where it applies, Live AI. No "Try again"
-   * that would repeat the same miss.
+   * Demo miss: the message plus a way out in the same card — use the
+   * sample room (one undo step) and, where it applies, Live AI. No "Try
+   * again" that would repeat the same miss.
    */
   private showDemoMiss(message: string): void {
     this.clearTimer();
@@ -209,7 +209,7 @@ export class RenderViewer {
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "render-go";
-    reset.textContent = "Reset demo room";
+    reset.textContent = "Use the sample room";
     reset.addEventListener("click", () => this.deps.resetDemoRoom());
     row.appendChild(reset);
     if (!isLive()) {
@@ -267,7 +267,7 @@ export class RenderViewer {
     data: unknown,
     width: number,
     height: number,
-    _recordedView = false,
+    recordedView = false,
   ): void {
     this.clearTimer();
     this.root.innerHTML = "";
@@ -293,6 +293,12 @@ export class RenderViewer {
     head.className = "render-head";
     head.append(title, close);
     wrap.appendChild(head);
+    if (recordedView) {
+      const recorded = document.createElement("p");
+      recorded.className = "render-recorded";
+      recorded.textContent = RECORDED_VIEW_LINE;
+      wrap.appendChild(recorded);
+    }
 
     const slider = document.createElement("div");
     slider.className = "render-compare";

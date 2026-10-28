@@ -40,7 +40,7 @@ import shallowBoxedScene from "../../shared/samples/fit-tests/shallow-boxed.json
 import rotatedOverlapScene from "../../shared/samples/fit-tests/rotated-overlap.json";
 import rotatedOutsideScene from "../../shared/samples/fit-tests/rotated-outside.json";
 import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.json";
-import { initLiveSwitch } from "./api";
+import { initLiveSwitch, isLive } from "./api";
 import { EMPTY_HINT_TEXT, needsDoorTip } from "./hints";
 import { Guide, GuideView, queryGuideTarget, type GuideScreen } from "./guide";
 import { CatalogPanel, formatMeasure, formatTopBar } from "./catalog-ui";
@@ -602,6 +602,7 @@ class FitRoomApp {
         catalog: CATALOG,
         getScene: () => this.store.state,
         resetDemoRoom: () => this.resetDemoRoom(),
+        resetToRecordedView: () => this.resetToRecordedView(),
         getCapture: () => {
           const shot = captureView(this.renderer, this.scene, this.activeCamera(), this.container);
           return {
@@ -1657,6 +1658,36 @@ class FitRoomApp {
     this.clampTarget();
     this.controls.update();
     this.requestRender();
+  }
+
+  /**
+   * After an orbit in the sample room, move the camera back to the
+   * recorded dollhouse view (the same default framing the demo
+   * visualisation was captured from) so Visualise renders the recorded
+   * view. Returns true when it moved. Demo mode only: never touch a live
+   * camera, another room, or the plan view.
+   */
+  private resetToRecordedView(): boolean {
+    if (isLive()) return false;
+    if (ROOM.id !== SAMPLE_ROOM.id) return false;
+    if (this.mode !== "orbit" || this.renderPreset() !== "dollhouse") return false;
+    const beforePos = this.orbitCam.position.clone();
+    const beforeTarget = this.controls.target.clone();
+    const bounds = roomBounds(ROOM);
+    const wM = cmToMeters(bounds.maxX - bounds.minX);
+    const dM = cmToMeters(bounds.maxZ - bounds.minZ);
+    const cxM = cmToMeters((bounds.minX + bounds.maxX) / 2);
+    const czM = cmToMeters((bounds.minZ + bounds.maxZ) / 2);
+    const aspect =
+      Math.max(1, this.container.clientWidth) / Math.max(1, this.container.clientHeight);
+    this.frameDollhouse(cxM, czM, wM, dM, aspect);
+    this.clampTarget();
+    this.controls.update();
+    const moved =
+      beforePos.distanceToSquared(this.orbitCam.position) > 1e-6 ||
+      beforeTarget.distanceToSquared(this.controls.target) > 1e-6;
+    if (moved) this.requestRender();
+    return moved;
   }
 
   /** Follow the selected piece every frame so the outline turns with it. */

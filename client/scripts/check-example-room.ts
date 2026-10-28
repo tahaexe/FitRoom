@@ -15,6 +15,16 @@
  *   shows each opening's width ±;
  * - the demo store holds segment and label answers for the replay, and the
  *   taped 420 cm wall sits within 5 % of 420 cm.
+ * - Demo mode in the example room's built layout: Arrange replays its own
+ *   recorded chips in place and Recommend asks in place (never the sample
+ *   room, never Live AI — demo mode sends no live header, so the answers
+ *   come from the demo store with zero upstream calls); Furnish and
+ *   Visualise, which have no recording yet, show one miss card each with
+ *   "Use the sample room" and "Turn on Live AI" (the same words in the
+ *   assistant, Recommend and Visualise);
+ * - the sample room's orbit case: Visualise moves the camera back to the
+ *   recorded view before capturing and the answer names it with "Showing
+ *   the recorded view".
  *
  * Prints PASS or FAIL per check and exits non-zero on any FAIL.
  */
@@ -255,6 +265,153 @@ function main(): void {
     "the demo store holds label answers for the replay",
     labelFiles.length >= 1,
     `${String(labelFiles.length)} label file(s)`,
+  );
+
+  // ---- Item 3: example-room demo replay, miss cards, orbit recorded view ----
+  const assistantSource = readFileSync(join(clientDir, "src", "assistant", "panel.ts"), "utf8");
+  const recommendSource = readFileSync(join(clientDir, "src", "recommend", "panel.ts"), "utf8");
+  const viewerSource = readFileSync(join(clientDir, "src", "render", "viewer.ts"), "utf8");
+  const appSource = readFileSync(join(clientDir, "src", "main.ts"), "utf8");
+  const apiSource = readFileSync(join(clientDir, "src", "api.ts"), "utf8");
+
+  const region = (source: string, start: string, end: string): string => {
+    const at = source.indexOf(start);
+    if (at < 0) return "";
+    const stop = source.indexOf(end, at + start.length);
+    return stop < 0 ? "" : source.slice(at, stop);
+  };
+
+  // Arrange replays its own recordings in place in the example room.
+  check(
+    "the example room has its own two arrange chips",
+    assistantSource.includes("EXAMPLE_ASSISTANT_DEMO_CHIPS") &&
+      assistantSource.includes("ASSISTANT_DEMO_CHIPS[0]") &&
+      assistantSource.includes("ASSISTANT_DEMO_CHIPS[5]"),
+  );
+  const sendDemo = region(assistantSource, "private async sendDemo", "private addSampleConfirm");
+  check(
+    "arrange replays in place in the example room",
+    sendDemo.includes("isExampleRoom()") && sendDemo.includes("await this.send(text)"),
+    sendDemo.slice(0, 120),
+  );
+  check(
+    "arrange in the example room never resets or asks for the sample room",
+    sendDemo.includes(
+      "if (this.isExampleRoom()) {\n      this.pendingDemo = null;\n      await this.send(text);",
+    ),
+  );
+  const sendFurnishDemo = region(
+    assistantSource,
+    "private async sendFurnishDemo",
+    "private addFurnishUserLine",
+  );
+  check(
+    "furnish runs in place in the example room",
+    sendFurnishDemo.includes("isExampleRoom()") &&
+      sendFurnishDemo.includes("await this.furnishTurn("),
+  );
+  check(
+    "furnish in the example room never resets or asks for the sample room",
+    sendFurnishDemo.includes(
+      "if (this.isExampleRoom()) {\n      this.pendingDemo = null;\n      await this.furnishTurn(brief, buildBriefRequest(brief, note));",
+    ),
+  );
+  check(
+    "demo mode sends no live header (the store answers, zero upstream calls)",
+    apiSource.includes("X-FitRoom-Live") && apiSource.includes("isLive()"),
+  );
+
+  // Recommend asks in place: the only reset is the miss card's way out.
+  const resetUses = recommendSource.split("resetDemoRoom").length - 1;
+  check(
+    "recommend asks in place (reset only on the miss card)",
+    resetUses === 2,
+    `${String(resetUses)} resetDemoRoom use(s)`,
+  );
+
+  // One miss card each for Furnish and Visualise, same words everywhere.
+  const arrangeMiss = region(assistantSource, "private addDemoMiss", "private addAnswer");
+  const furnishMiss = region(assistantSource, "private addFurnishDemoMiss", "private logEl");
+  const recommendMiss = recommendSource.slice(
+    recommendSource.indexOf("private showNotice(message"),
+  );
+  const visualiseMiss = region(viewerSource, "private showDemoMiss", "private showNotice");
+  for (const [name, card] of [
+    ["assistant arrange", arrangeMiss],
+    ["assistant furnish", furnishMiss],
+    ["recommend", recommendMiss],
+    ["visualise", visualiseMiss],
+  ] as const) {
+    check(
+      `the ${name} miss card offers the sample room and live AI`,
+      card.includes("Use the sample room") && card.includes("Turn on Live AI"),
+    );
+  }
+  check(
+    "no assistant/recommend/visualise card still says reset demo room",
+    !assistantSource.includes("Reset demo room") &&
+      !recommendSource.includes("Reset demo room") &&
+      !viewerSource.includes("Reset demo room"),
+  );
+
+  // Sample-room orbit case: back to the recorded view, then render it.
+  const recordedLine = /RECORDED_VIEW_LINE = "(.*)"/.exec(viewerSource)?.[1];
+  check(
+    "the recorded view line names the recorded view",
+    recordedLine === "Showing the recorded view",
+    recordedLine ?? "missing",
+  );
+  check(
+    "visualise resets to the recorded view before capturing",
+    viewerSource.includes("resetToRecordedView") &&
+      viewerSource.indexOf("resetToRecordedView") < viewerSource.indexOf("getCapture()"),
+  );
+  const showAnswer = viewerSource.slice(viewerSource.indexOf("private showAnswer("));
+  check("the answer names the recorded view it renders", showAnswer.includes("RECORDED_VIEW_LINE"));
+  check(
+    "the app hands visualise its recorded-view reset",
+    appSource.includes("resetToRecordedView: () => this.resetToRecordedView()"),
+  );
+  const recordedReset = region(
+    appSource,
+    "private resetToRecordedView",
+    "Follow the selected piece",
+  );
+  check(
+    "the recorded-view reset is demo-only, sample-room-only, dollhouse-only",
+    recordedReset.includes("isLive()") &&
+      recordedReset.includes("SAMPLE_ROOM") &&
+      recordedReset.includes("dollhouse") &&
+      recordedReset.includes("frameDollhouse"),
+  );
+
+  // The demo store holds assistant, recommend and render answers.
+  const storeCount = (route: string): number => {
+    try {
+      return readdirSync(join(repoRoot, "server", "data", "demo", route)).filter((n) =>
+        n.endsWith(".json"),
+      ).length;
+    } catch {
+      return 0;
+    }
+  };
+  const assistantFiles = storeCount("assistant");
+  const recommendFiles = storeCount("recommend");
+  const renderFiles = storeCount("render");
+  check(
+    "the demo store holds assistant answers for the replay",
+    assistantFiles >= 9,
+    `${String(assistantFiles)} assistant file(s)`,
+  );
+  check(
+    "the demo store holds recommend answers for the replay",
+    recommendFiles >= 3,
+    `${String(recommendFiles)} recommend file(s)`,
+  );
+  check(
+    "the demo store holds the recorded visualisation",
+    renderFiles >= 1,
+    `${String(renderFiles)} render file(s)`,
   );
 
   console.log(
