@@ -20,6 +20,7 @@
     "check:empty-fit": "tsx scripts/check-empty-fit.ts",
     "check:scene-sync": "tsx scripts/check-scene-sync.ts",
     "check:contrast": "tsx scripts/check-contrast.ts",
+    "check:toolbar": "tsx scripts/check-toolbar.ts",
     "check:footprints": "node scripts/check-model-footprints.mjs",
     "preview": "vite preview --port 5173 --strictPort",
     "typecheck": "tsc --noEmit -p tsconfig.json"

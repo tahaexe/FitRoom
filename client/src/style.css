@@ -786,13 +786,64 @@ button.danger {
   transform: translateX(-50%);
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 8px;
+  gap: 4px;
+  padding: 6px;
   background: transparent;
   z-index: 2;
-  max-width: calc(100% - 32px);
-  flex-wrap: wrap;
+  max-width: calc(100% - 16px);
+  flex-wrap: nowrap;
   justify-content: center;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.bottom-toolbar::-webkit-scrollbar {
+  display: none;
+}
+
+/* Toolbar groups: AI actions (tagged AI), the Orbit/Plan switch, the view
+ * tools, and the selection tools. Dividers name the group boundaries. */
+.toolbar-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 2px;
+  flex: 0 0 auto;
+}
+
+.toolbar-group + .toolbar-group {
+  border-left: 1px solid var(--border-color);
+  padding-left: 8px;
+  margin-left: 4px;
+}
+
+/* Small AI tag marking the AI action group (Recommend, Arrange, Visualise). */
+.toolbar-tag {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  background: var(--coral);
+  color: var(--on-coral);
+  border-radius: 999px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+/* Orbit and Plan as one two-way switch. */
+.toolbar-switch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--panel-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 2px;
+}
+
+.toolbar-switch button {
+  border-color: transparent;
+  box-shadow: none;
+  background: transparent;
 }
 
 .bottom-toolbar button {
@@ -801,11 +852,12 @@ button.danger {
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow);
   border-radius: 999px;
-  padding: 8px 16px;
+  padding: 8px 12px;
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
   white-space: nowrap;
+  flex: 0 0 auto;
 }
 
 .bottom-toolbar button:hover {
@@ -834,9 +886,9 @@ button.danger {
   padding: 8px 16px;
   white-space: nowrap;
   /* Fixed slot so the status text length never shifts the tool buttons. */
-  flex: 0 0 auto;
-  width: 340px;
-  max-width: 38vw;
+  flex: 0 1 auto;
+  width: 200px;
+  max-width: 22vw;
   overflow: hidden;
   text-overflow: ellipsis;
   text-align: center;

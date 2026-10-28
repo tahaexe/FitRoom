@@ -91,6 +91,27 @@ export function wallChipFound(doors: number, windows: number): string {
   return `${String(total)} openings found`;
 }
 
+/**
+ * Bottom toolbar: every label renders from here (`main.ts` sets each
+ * button's text from these constants; `check:toolbar` pins the markup,
+ * the AI tag, the Orbit/Plan switch and the one-row width from the CSS).
+ */
+export const TOOLBAR_RECOMMEND = "Recommend";
+export const TOOLBAR_ARRANGE = "Arrange";
+export const TOOLBAR_VISUALISE = "Visualise";
+export const TOOLBAR_AI_TAG = "AI";
+export const TOOLBAR_GROUP_AI = "AI tools";
+export const TOOLBAR_GROUP_VIEW = "View";
+export const TOOLBAR_GROUP_TOOLS = "View tools";
+export const TOOLBAR_GROUP_SELECTION = "Selection";
+export const TOOLBAR_ORBIT = "Orbit";
+export const TOOLBAR_PLAN = "Plan";
+export const TOOLBAR_CLEARANCE = "Clearance";
+export const TOOLBAR_RESET_VIEW = "Reset view";
+export const TOOLBAR_ROTATE_LEFT = "⟲ 15°";
+export const TOOLBAR_ROTATE_RIGHT = "⟳ 15°";
+export const TOOLBAR_DELETE = "Delete";
+
 export type WallLetter = "A" | "B" | "C" | "D";
 
 /** Accessible name always starts with the visible words. */

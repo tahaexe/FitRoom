@@ -87,24 +87,71 @@
       </button>
       <div id="fit-list" class="fit-list" hidden></div>
       <div class="bottom-toolbar" aria-label="View tools">
-        <button id="tool-recommend" type="button" data-active="true" aria-pressed="false">
-          Recommend
-        </button>
-        <button id="tool-assistant" type="button" data-active="false" aria-pressed="false">
-          Arrange
-        </button>
-        <button id="tool-render" type="button" data-active="false">Visualise</button>
-        <button id="tool-orbit" type="button" data-active="true" aria-pressed="true">Orbit</button>
-        <button id="tool-plan" type="button" data-active="false" aria-pressed="false">Plan</button>
-        <button
-          id="tool-clearance"
-          type="button"
-          data-active="false"
-          aria-pressed="false"
-          title="Shade the blocked walkway cells"
+        <div
+          class="toolbar-group"
+          data-group="ai"
+          data-label="AI tools"
+          role="group"
+          aria-label="AI tools"
         >
-          Clearance
-        </button>
+          <span class="toolbar-tag" aria-hidden="true">AI</span>
+          <button id="tool-recommend" type="button" data-active="true" aria-pressed="false">
+            Recommend
+          </button>
+          <button id="tool-assistant" type="button" data-active="false" aria-pressed="false">
+            Arrange
+          </button>
+          <button id="tool-render" type="button" data-active="false">Visualise</button>
+        </div>
+        <div
+          class="toolbar-group"
+          data-group="view"
+          data-label="View"
+          role="group"
+          aria-label="View"
+        >
+          <div class="toolbar-switch" role="group" aria-label="View">
+            <button id="tool-orbit" type="button" data-active="true" aria-pressed="true">
+              Orbit
+            </button>
+            <button id="tool-plan" type="button" data-active="false" aria-pressed="false">
+              Plan
+            </button>
+          </div>
+        </div>
+        <div
+          class="toolbar-group"
+          data-group="tools"
+          data-label="View tools"
+          role="group"
+          aria-label="View tools"
+        >
+          <button
+            id="tool-clearance"
+            type="button"
+            data-active="false"
+            aria-pressed="false"
+            title="Shade the blocked walkway cells"
+          >
+            Clearance
+          </button>
+          <button id="tool-reset-view" type="button" title="Reset view (Home)">Reset view</button>
+        </div>
+        <div
+          class="toolbar-group"
+          data-group="selection"
+          data-label="Selection"
+          role="group"
+          aria-label="Selection"
+        >
+          <button id="tool-rot-left" type="button" title="Rotate −15°" hidden>⟲ 15°</button>
+          <button id="tool-rot-right" type="button" title="Rotate +15° (Shift+R: 1°)" hidden>
+            ⟳ 15°
+          </button>
+          <button id="tool-delete" type="button" title="Delete selection (Del)" hidden>
+            Delete
+          </button>
+        </div>
         <select id="tool-scenes" class="dev-scenes" aria-label="Load a fit-test scene">
           <option value="">Dev scene…</option>
           <option value="empty">Start from an empty room</option>
@@ -118,10 +165,6 @@
           <option value="shallow-wall">shallow-wall</option>
           <option value="shallow-boxed">shallow-boxed</option>
         </select>
-        <button id="tool-reset-view" type="button" title="Reset view (Home)">Reset view</button>
-        <button id="tool-rot-left" type="button" title="Rotate −15°">⟲ 15°</button>
-        <button id="tool-rot-right" type="button" title="Rotate +15° (Shift+R: 1°)">⟳ 15°</button>
-        <button id="tool-delete" type="button" title="Delete selection (Del)">Delete</button>
         <span id="measure-readout" class="measure" aria-live="polite"></span>
       </div>
     </main>

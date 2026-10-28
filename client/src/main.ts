@@ -43,7 +43,22 @@ import rotatedOutsideScene from "../../shared/samples/fit-tests/rotated-outside.
 import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.json";
 import { initLiveSwitch, isLive } from "./api";
 import { EMPTY_HINT_TEXT, needsDoorTip } from "./hints";
-import { ADD_TO_CART, CART_DISABLED_REASON, CART_EMPTY, EMPTY_ROOM_ACTION } from "./copy";
+import {
+  ADD_TO_CART,
+  CART_DISABLED_REASON,
+  CART_EMPTY,
+  EMPTY_ROOM_ACTION,
+  TOOLBAR_ARRANGE,
+  TOOLBAR_CLEARANCE,
+  TOOLBAR_DELETE,
+  TOOLBAR_ORBIT,
+  TOOLBAR_PLAN,
+  TOOLBAR_RECOMMEND,
+  TOOLBAR_RESET_VIEW,
+  TOOLBAR_ROTATE_LEFT,
+  TOOLBAR_ROTATE_RIGHT,
+  TOOLBAR_VISUALISE,
+} from "./copy";
 import { Guide, GuideView, queryGuideTarget, type GuideScreen } from "./guide";
 import { CatalogPanel, formatMeasure, formatTopBar } from "./catalog-ui";
 import { RecommendPanel } from "./recommend/panel";
@@ -2863,6 +2878,21 @@ class FitRoomApp {
   }
 
   private bindToolbar(): void {
+    // Every toolbar label renders from `copy.ts` (single source of truth).
+    const label = (id: string, text: string): void => {
+      const el = document.getElementById(id);
+      if (el !== null) el.textContent = text;
+    };
+    label("tool-recommend", TOOLBAR_RECOMMEND);
+    label("tool-assistant", TOOLBAR_ARRANGE);
+    label("tool-render", TOOLBAR_VISUALISE);
+    label("tool-orbit", TOOLBAR_ORBIT);
+    label("tool-plan", TOOLBAR_PLAN);
+    label("tool-clearance", TOOLBAR_CLEARANCE);
+    label("tool-reset-view", TOOLBAR_RESET_VIEW);
+    label("tool-rot-left", TOOLBAR_ROTATE_LEFT);
+    label("tool-rot-right", TOOLBAR_ROTATE_RIGHT);
+    label("tool-delete", TOOLBAR_DELETE);
     const on = (id: string, fn: () => void): void => {
       document.getElementById(id)?.addEventListener("click", fn);
     };
