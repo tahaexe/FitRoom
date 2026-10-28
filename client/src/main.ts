@@ -70,18 +70,22 @@ import "./editor/editor.css";
 import {
   catalogProducts,
   clampFootprintToRoom,
+  clearPhotoBuiltRoom,
   clearRoomLayout,
   cornersOverlap,
   distanceToWallM,
   emptyScene,
   hasAutosave,
+  isPhotoBuiltRoom,
   itemCorners,
   loadRoomLayout,
   makeInstanceId,
+  markPhotoBuiltRoom,
   nearestFreeSpot,
   roomBounds,
   saveRoomLayout,
   SceneStore,
+  shouldResumePhotoConfirm,
   snapToGrid,
 } from "./state";
 import "./style.css";
@@ -298,6 +302,8 @@ class FitRoomApp {
   /** Current side panel (desktop visibility + phone sheet source of truth). */
   private sidePanel: "inspector" | "recommend" | "assistant" | "none" = "none";
   private wasPhone = false;
+  /** Resize coalescing: at most one breakpoint + guide pass per frame. */
+  private resizeQueued = false;
   /** Throttled live fit feedback while dragging (moved id, consumed once per frame). */
   private liveDirty: string | null = null;
   private container: HTMLElement;
@@ -662,11 +668,18 @@ class FitRoomApp {
     });
 
     window.addEventListener("resize", () => {
-      this.syncBreakpoint();
-      this.resize();
-      // A new window size re-seats the bubble by its target (it still flips
-      // side to stay inside the window).
-      this.guideView?.reposition();
+      // One pass per animation frame: crossing the phone/desktop breakpoint
+      // rebuilds the panel chrome, then every resize re-seats the bubble by
+      // the current layout's target (text and target follow the layout; a
+      // missing or zero-size target hides the bubble).
+      if (this.resizeQueued) return;
+      this.resizeQueued = true;
+      window.requestAnimationFrame(() => {
+        this.resizeQueued = false;
+        this.syncBreakpoint();
+        this.resize();
+        this.updateGuide();
+      });
     });
     this.applyDevGating();
     // Nothing open on first load: the side column starts empty.
@@ -709,12 +722,25 @@ class FitRoomApp {
     // First paint of the four-moment guide: moment 1 on the first-run
     // dialog, else the moment that fits the screen — or nothing seen.
     this.updateGuide();
-    // A reload that resumes a photo-built room reopens its confirm view
-    // with the catalog sheet closed, like every other way into the flow.
-    if (ROOM.id === "photos-room" && roomParam !== "sample") {
+    // A reload of a photo room that was never built resumes its confirm
+    // view with the catalog sheet closed, like every other way into the
+    // flow. A photo room that was already built opens as the built room
+    // with its pieces instead, so the shopper never presses "Build my room"
+    // twice — and Help then starts at the moment that fits the screen.
+    if (
+      ROOM.id === "photos-room" &&
+      roomParam !== "sample" &&
+      shouldResumePhotoConfirm(ROOM.id, {
+        built: isPhotoBuiltRoom(),
+        itemCount: this.store.state.items.length,
+      })
+    ) {
       this.menuChoice = "photos";
       this.editorStore?.load(ROOM);
       this.openEditor();
+      this.refreshMenu();
+    } else if (ROOM.id === "photos-room" && roomParam !== "sample") {
+      this.menuChoice = "photos";
       this.refreshMenu();
     }
     // Render on demand: frames only while the camera moves, after scene or
@@ -939,6 +965,7 @@ class FitRoomApp {
     this.photoDraft = null;
     this.photoMeta = null;
     this.editor?.setPhotoDraft(null);
+    clearPhotoBuiltRoom();
     void clearAllPhotos();
   }
 
@@ -1192,8 +1219,9 @@ class FitRoomApp {
     // The shopper's photos and what the solver found on them stay available
     // while the editor is open for this photo-built room; they are deleted
     // on Build ("finishBuild") or Cancel ("cancelEditor"), never sent
-    // anywhere else. The layout itself is saved like a built room, so a
-    // reload reopens it with its pieces.
+    // anywhere else. The layout itself is saved like a built room, but a
+    // reload only resumes this confirm view while the room was never built.
+    clearPhotoBuiltRoom();
     this.photoDraft = result.draft;
     this.photoMeta = result.meta;
     void (async (): Promise<void> => {
@@ -1257,7 +1285,11 @@ class FitRoomApp {
       ROOM.source === "manual" ? "manual" : ROOM.source === "photos" ? "photos" : "sample";
     // A photo-built room is saved like a built room, so a reload reopens
     // it with its pieces; the sample room opens only when none is saved.
-    if (ROOM.id === "photos-room") saveRoomLayout(ROOM);
+    // Mark it built so a reload opens the room, never the confirm view.
+    if (ROOM.id === "photos-room") {
+      saveRoomLayout(ROOM);
+      markPhotoBuiltRoom();
+    }
     this.editorBase = null;
     // Building consumes the photo session: drop the stored photos now that
     // the room is confirmed, as before.
@@ -1962,7 +1994,12 @@ class FitRoomApp {
     this.updateGuide();
   }
 
-  /** Crossing the phone/desktop breakpoint rebuilds the panel chrome. */
+  /**
+   * Crossing the phone/desktop breakpoint rebuilds the panel chrome and
+   * re-seats the guide on the current layout's text and target (both ways);
+   * a missing or zero-size target hides the bubble. Runs inside the
+   * resize's single animation frame.
+   */
   private syncBreakpoint(): void {
     const phone = isPhoneViewport();
     if (phone === this.wasPhone) return;
@@ -1989,7 +2026,9 @@ class FitRoomApp {
       this.syncPhoneBar();
       this.container.classList.toggle("has-side-panel", false);
     }
-    this.resize();
+    // Both crossings re-pick the text and target for the current layout;
+    // the desktop branch never called syncPhoneBar, so update here.
+    this.updateGuide();
   }
 
   /** Hide developer controls unless the address has `?dev=1`. */

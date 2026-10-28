@@ -43,6 +43,30 @@ export const GUIDE_TEXT_2_PHONE = "Open the catalog and add a piece.";
 export const GUIDE_TEXT_3 = "Drag it around. Its outline shows whether it fits.";
 export const GUIDE_TEXT_4 = "Let AI furnish the room for you.";
 
+/** Widest the bubble ever paints (mirrors the CSS `max-width`). */
+export const GUIDE_BUBBLE_MAX_W_PX = 340;
+/** Fallback bubble height when nothing is measurable (hidden bubble). */
+export const GUIDE_BUBBLE_FALLBACK_H_PX = 140;
+
+/**
+ * Measurable bubble size: a hidden bubble reports 0 × 0 (`display: none`),
+ * so fall back to the widest the bubble can paint — still clamped inside
+ * the window with the 8 px margin — instead of centring a 1 px box and
+ * overflowing the real bubble past the edge.
+ */
+export function bubbleMeasuredSize(
+  measuredW: number,
+  measuredH: number,
+  viewportW: number,
+  margin: number = GUIDE_MARGIN_PX,
+): { w: number; h: number } {
+  const vw = Math.max(1, viewportW);
+  const fallbackW = Math.min(GUIDE_BUBBLE_MAX_W_PX, Math.max(1, vw - margin * 2));
+  const w = measuredW > 0 ? measuredW : fallbackW;
+  const h = measuredH > 0 ? measuredH : GUIDE_BUBBLE_FALLBACK_H_PX;
+  return { w, h };
+}
+
 /** Bubble text for a moment (the catalog moment reads differently on phones). */
 export function guideText(moment: GuideMoment, isPhone: boolean): string {
   if (moment === 1) return GUIDE_TEXT_1;
@@ -406,9 +430,12 @@ export class GuideView {
     if (progress !== null && progress !== undefined) progress.textContent = content.progress;
     const action = this.bubble?.querySelector(".guide-next");
     if (action instanceof HTMLButtonElement) action.textContent = content.action;
-    this.place();
+    // Unhide before measuring: a hidden bubble reports 0 × 0 and the
+    // clamped position would belong to a 1 px box, overflowing the real
+    // bubble past the window edge once shown.
     this.bubble?.removeAttribute("hidden");
     this.ring?.removeAttribute("hidden");
+    this.place();
     // Two frames: the bubble paints at its spot, then fades + slides in.
     const bubble = this.bubble;
     const ring = this.ring;
@@ -479,14 +506,25 @@ export class GuideView {
   private place(): void {
     if (this.bubble === null || this.ring === null || this.target === null) return;
     const rect = this.target.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) {
+      // A missing or zero-size target hides the bubble: never a ring
+      // parked at the top-left corner.
+      this.hide();
+      return;
+    }
     const pad = 6;
     this.ring.style.left = `${String(Math.max(2, rect.left - pad))}px`;
     this.ring.style.top = `${String(Math.max(2, rect.top - pad))}px`;
     this.ring.style.width = `${String(Math.max(1, rect.width + pad * 2))}px`;
     this.ring.style.height = `${String(Math.max(1, rect.height + pad * 2))}px`;
+    const measured = bubbleMeasuredSize(
+      this.bubble.offsetWidth,
+      this.bubble.offsetHeight,
+      window.innerWidth,
+    );
     const placed = placeBubble(
       { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
-      { x: 0, y: 0, w: this.bubble.offsetWidth, h: this.bubble.offsetHeight },
+      { x: 0, y: 0, w: measured.w, h: measured.h },
       { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight },
     );
     this.bubble.style.left = `${String(placed.left)}px`;

@@ -137,6 +137,55 @@ export function hasAutosave(roomId: string): boolean {
   return loadAutosave(roomId) !== null;
 }
 
+/**
+ * Photo-built rooms remember whether the confirm view was ever built.
+ * A solved draft saves its layout before Build, so the layout alone cannot
+ * tell a half-built draft from a room the shopper already confirmed: the
+ * flag is set on Build and cleared on a fresh draft or when the photo room
+ * is left, and a reload only resumes the confirm view when it is absent.
+ */
+export const PHOTO_BUILT_KEY = "fitroom.photos.built.v1";
+
+export function isPhotoBuiltRoom(): boolean {
+  try {
+    return window.localStorage.getItem(PHOTO_BUILT_KEY) === "1";
+  } catch {
+    return false;
+  }
+}
+
+export function markPhotoBuiltRoom(): void {
+  try {
+    window.localStorage.setItem(PHOTO_BUILT_KEY, "1");
+  } catch {
+    // Storage may be unavailable; the app keeps working in memory.
+  }
+}
+
+export function clearPhotoBuiltRoom(): void {
+  try {
+    window.localStorage.removeItem(PHOTO_BUILT_KEY);
+  } catch {
+    // Storage may be unavailable; nothing stored, nothing to clear.
+  }
+}
+
+/**
+ * Startup decision for a saved photo room: resume the confirm view only for
+ * a photo room that was never built. A built room — flag set, or pieces
+ * already in its autosave from before the flag existed — opens as the built
+ * room with its pieces; any other room never resumes.
+ */
+export function shouldResumePhotoConfirm(
+  roomId: string,
+  opts: { built: boolean; itemCount: number },
+): boolean {
+  if (roomId !== "photos-room") return false;
+  if (opts.built) return false;
+  if (opts.itemCount > 0) return false;
+  return true;
+}
+
 /** Store with undo (Ctrl+Z) and autosave. Each room keeps its own placed pieces and its own undo stack. */
 export class SceneStore {
   state: SceneState;

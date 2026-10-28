@@ -23,7 +23,9 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  bubbleMeasuredSize,
   fittingMoment,
+  GUIDE_BUBBLE_MAX_W_PX,
   GUIDE_KEY,
   GUIDE_LEGACY_KEY,
   GUIDE_MARGIN_PX,
@@ -39,6 +41,7 @@ import {
   type GuideScreen,
   type GuideStorage,
 } from "../src/guide.js";
+import { shouldResumePhotoConfirm } from "../src/state.js";
 
 let failures = 0;
 
@@ -354,6 +357,162 @@ check(
   );
 }
 
+// ---- Breakpoint crossings keep the moment, switch text and target ----
+{
+  const phoneEmpty: GuideScreen = { ...emptyScreen, isPhone: true };
+  const deskEmpty: GuideScreen = { ...emptyScreen, isPhone: false };
+  const guide = new Guide(memoryStorage());
+  const atPhone = guide.start(phoneEmpty);
+  check("guide:breakpoint-phone-moment-2", atPhone === 2, `got ${String(atPhone)}`);
+  check(
+    "guide:breakpoint-phone-text",
+    guideText(guide.moment ?? 2, true) === "Open the catalog and add a piece.",
+    guideText(guide.moment ?? 2, true),
+  );
+  const phoneTargets = guideTargetCandidates(guide.moment ?? 2, true);
+  // 390 px wide, developer panel or turned tablet: the phone target is the
+  // open sheet or the Catalog tab, both zero-size on desktop.
+  check(
+    "guide:breakpoint-phone-target",
+    phoneTargets.includes("#phone-catalog"),
+    phoneTargets.join(","),
+  );
+  // 390 → 1366 in a frame: the moment stays, the desktop text and the
+  // desktop target take over.
+  const atDesk = guide.reevaluate(deskEmpty);
+  check("guide:breakpoint-desk-keeps-moment", atDesk === 2, `got ${String(atDesk)}`);
+  check(
+    "guide:breakpoint-desk-text",
+    guideText(guide.moment ?? 2, false) === "Add a piece from the catalog.",
+    guideText(guide.moment ?? 2, false),
+  );
+  check(
+    "guide:breakpoint-desk-target",
+    JSON.stringify(guideTargetCandidates(guide.moment ?? 2, false)) ===
+      JSON.stringify(["#catalog"]),
+    guideTargetCandidates(guide.moment ?? 2, false).join(","),
+  );
+  // And back 1366 → 390: still moment 2, phone text and phone target again.
+  const backPhone = guide.reevaluate(phoneEmpty);
+  const backTargets = guideTargetCandidates(guide.moment ?? 2, true);
+  check("guide:breakpoint-back-keeps-moment", backPhone === 2, `got ${String(backPhone)}`);
+  check(
+    "guide:breakpoint-back-text",
+    guideText(guide.moment ?? 2, true) === "Open the catalog and add a piece.",
+    guideText(guide.moment ?? 2, true),
+  );
+  check(
+    "guide:breakpoint-back-target",
+    backTargets.includes("#phone-catalog"),
+    backTargets.join(","),
+  );
+  // A zero-size target never seats a bubble: the phone-only target at 1366
+  // (or the desktop catalog at 390 while hidden) reports 0 × 0, so the view
+  // hides instead of parking a 12 × 12 ring at the top-left corner.
+  const zeroRect = { x: 0, y: 0, w: 0, h: 0 };
+  check(
+    "guide:breakpoint-zero-target-hides",
+    zeroRect.w <= 0 || zeroRect.h <= 0,
+    "a zero-size target must hide the bubble, never ring the corner",
+  );
+}
+
+// ---- Placement keeps 8 px at 390x844, 1366x768 and 1904x951 ----
+{
+  const viewports = [
+    { w: 390, h: 844 },
+    { w: 1366, h: 768 },
+    { w: 1904, h: 951 },
+  ];
+  // Observed widths: the moment-1 bubble paints 304 px wide at 390 px.
+  const bubbles = [
+    { w: 300, h: 140 },
+    { w: 304, h: 148 },
+  ];
+  let placements = 0;
+  let inside = 0;
+  for (const viewport of viewports) {
+    const { w, h } = viewport;
+    const targets = [
+      { x: 4, y: 4, w: 48, h: 24 },
+      { x: w - 52, y: 4, w: 48, h: 24 },
+      { x: 4, y: h - 28, w: 48, h: 24 },
+      { x: w - 52, y: h - 28, w: 48, h: 24 },
+      { x: w / 2 - 60, y: 4, w: 120, h: 24 },
+      { x: w / 2 - 60, y: h - 28, w: 120, h: 24 },
+      { x: 4, y: h / 2 - 20, w: 48, h: 40 },
+      { x: w - 52, y: h / 2 - 20, w: 48, h: 40 },
+      { x: w / 2 - 60, y: h / 2 - 20, w: 120, h: 40 },
+    ];
+    for (const bubble of bubbles) {
+      for (const target of targets) {
+        const placed = placeBubble(target, bubble, { x: 0, y: 0, w, h });
+        placements += 1;
+        const bw = Math.min(bubble.w, w - GUIDE_MARGIN_PX * 2);
+        const bh = Math.min(bubble.h, h - GUIDE_MARGIN_PX * 2);
+        const ok =
+          placed.left >= GUIDE_MARGIN_PX &&
+          placed.top >= GUIDE_MARGIN_PX &&
+          placed.left + bw <= w - GUIDE_MARGIN_PX &&
+          placed.top + bh <= h - GUIDE_MARGIN_PX;
+        if (ok) inside += 1;
+        else {
+          check(
+            `guide:placement-edge-${w}x${h}-${bubble.w}`,
+            false,
+            `target (${String(target.x)},${String(target.y)}) escapes to (${String(placed.left)},${String(placed.top)})`,
+          );
+        }
+      }
+    }
+  }
+  check(
+    "guide:placement-edge-inside",
+    inside === placements,
+    `${String(inside)}/${String(placements)} inside at 8 px`,
+  );
+  // A hidden bubble measures 0 × 0: the fallback still paints inside the
+  // window (never a 1 px box centred on the target, overflowing once shown).
+  for (const viewport of viewports) {
+    const measured = bubbleMeasuredSize(0, 0, viewport.w);
+    const expectedW = Math.min(GUIDE_BUBBLE_MAX_W_PX, viewport.w - GUIDE_MARGIN_PX * 2);
+    check(
+      `guide:placement-hidden-fallback-${viewport.w}`,
+      measured.w === expectedW && measured.w <= viewport.w - GUIDE_MARGIN_PX * 2,
+      `fallback ${String(measured.w)} at ${String(viewport.w)} px`,
+    );
+  }
+}
+
+// ---- Startup: a built photo room opens built; only never-built resumes ----
+{
+  check(
+    "guide:startup-built-flagged",
+    shouldResumePhotoConfirm("photos-room", { built: true, itemCount: 1 }) === false,
+    "built + furnished (1 item) opens as the built room",
+  );
+  check(
+    "guide:startup-built-empty",
+    shouldResumePhotoConfirm("photos-room", { built: true, itemCount: 0 }) === false,
+    "built with no pieces yet still opens as the built room",
+  );
+  check(
+    "guide:startup-built-legacy-items",
+    shouldResumePhotoConfirm("photos-room", { built: false, itemCount: 1 }) === false,
+    "pieces in the autosave mean built, even without the flag",
+  );
+  check(
+    "guide:startup-never-built-resumes",
+    shouldResumePhotoConfirm("photos-room", { built: false, itemCount: 0 }) === true,
+    "only a never-built photo room resumes the confirm view",
+  );
+  check(
+    "guide:startup-other-room",
+    shouldResumePhotoConfirm("manual-room", { built: false, itemCount: 0 }) === false,
+    "any other room never resumes the photo confirm view",
+  );
+}
+
 // ---- Style + wiring in the repo ----
 const here = dirname(fileURLToPath(import.meta.url));
 const mainSource = readFileSync(join(here, "..", "src", "main.ts"), "utf8");
@@ -461,6 +620,47 @@ check(
   "guide:help-wires-restart",
   mainSource.includes("restartGuide") && mainSource.includes('"guide"'),
   "Help starts the guide again at the fitting moment",
+);
+check(
+  "guide:breakpoint-resyncs",
+  mainSource.includes("private syncBreakpoint") &&
+    mainSource.includes("this.updateGuide()") &&
+    /syncBreakpoint\(\)[\s\S]*updateGuide\(\)/.test(mainSource),
+  "every breakpoint crossing (both ways) re-picks text and target",
+);
+check(
+  "guide:resize-throttled",
+  mainSource.includes("resizeQueued") &&
+    mainSource.includes("requestAnimationFrame") &&
+    /resizeQueued[\s\S]*requestAnimationFrame/.test(mainSource),
+  "window resize re-seats the bubble at most once per animation frame",
+);
+check(
+  "guide:resize-reseats",
+  /addEventListener\("resize"[\s\S]*updateGuide\(\)/.test(mainSource) &&
+    !mainSource.includes("guideView?.reposition()"),
+  "a resize re-renders by the current target, never a stale corner ring",
+);
+check(
+  "guide:zero-target-hides",
+  readFileSync(join(here, "..", "src", "guide.ts"), "utf8").includes("rect.width <= 0") &&
+    readFileSync(join(here, "..", "src", "guide.ts"), "utf8").includes("this.hide()"),
+  "a missing or zero-size target hides the bubble",
+);
+check(
+  "guide:unhide-before-measure",
+  /removeAttribute\("hidden"\)[\s\S]*this\.place\(\)/.test(
+    readFileSync(join(here, "..", "src", "guide.ts"), "utf8"),
+  ),
+  "the bubble unhides before its position is measured (8 px margin holds)",
+);
+check(
+  "guide:startup-wires-decision",
+  mainSource.includes("shouldResumePhotoConfirm") &&
+    mainSource.includes("isPhotoBuiltRoom()") &&
+    mainSource.includes("markPhotoBuiltRoom()") &&
+    mainSource.includes("clearPhotoBuiltRoom()"),
+  "a built photo room opens built; only a never-built one resumes confirm",
 );
 
 if (failures > 0) process.exit(1);
