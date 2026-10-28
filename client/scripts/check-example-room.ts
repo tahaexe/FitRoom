@@ -456,7 +456,7 @@ function main(): void {
     surfacesSource.includes("WoodFloor039") && surfacesSource.includes("WOOD_FLOORS"),
     "shared surfaces.ts",
   );
-  let means: Record<string, string> = {};
+  let means: Record<string, string>;
   try {
     means = JSON.parse(
       readFileSync(join(repoRoot, "shared", "src", "photo-room", "texture-means.json"), "utf8"),
@@ -466,7 +466,8 @@ function main(): void {
   }
   check(
     "WoodFloor039 has a measured mean colour",
-    typeof means["WoodFloor039"] === "string" && /^#[0-9A-F]{6}$/.test(means["WoodFloor039"] as string),
+    typeof means["WoodFloor039"] === "string" &&
+      /^#[0-9A-F]{6}$/.test(means["WoodFloor039"] as string),
     String(means["WoodFloor039"] ?? "missing"),
   );
   check(

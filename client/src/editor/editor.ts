@@ -682,7 +682,8 @@ export class RoomEditor {
     } else {
       const scroll = this.element.querySelector(".editor-scroll");
       if (scroll !== null) {
-        if (this.bandEl.parentElement !== scroll) scroll.insertBefore(this.bandEl, scroll.firstChild);
+        if (this.bandEl.parentElement !== scroll)
+          scroll.insertBefore(this.bandEl, scroll.firstChild);
         if (this.actionsEl.parentElement !== scroll)
           scroll.insertBefore(this.actionsEl, this.gridEl);
       }
