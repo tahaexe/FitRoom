@@ -54,6 +54,7 @@ import {
   PhoneSheets,
   type PhoneSheetName,
 } from "../src/phone-sheet.js";
+import { Guide, type GuideScreen } from "../src/guide.js";
 import { measuredMarkText, photoBandText, tapeWallLabel } from "../src/editor/source-mark.js";
 import { EMPTY_HINT_TEXT, needsDoorTip } from "../src/hints.js";
 import {
@@ -1125,6 +1126,135 @@ check(
     !phoneMain.includes("Add furniture from the catalog on the left") &&
     !phoneMain.includes("Add more from the catalog on the left"),
   "main.ts follows the hint rules, with no 'on the left' copy",
+);
+
+// ---- One hint at a time: the guide bubble, the empty-room hint and the
+// doors tip can never show together, for each of the guide's states ----
+{
+  const empty: GuideScreen = {
+    firstOpenVisible: false,
+    exampleActionVisible: false,
+    roomVisible: true,
+    itemCount: 0,
+    aiVisible: true,
+    isPhone: false,
+  };
+  const pieces: GuideScreen = { ...empty, itemCount: 2 };
+  const dialog: GuideScreen = {
+    firstOpenVisible: true,
+    exampleActionVisible: true,
+    roomVisible: false,
+    itemCount: 0,
+    aiVisible: false,
+    isPhone: false,
+  };
+  function freshGuide(): Guide {
+    const store = new Map<string, string>();
+    return new Guide({
+      get: (key: string) => store.get(key) ?? null,
+      set: (key: string, value: string) => {
+        store.set(key, value);
+      },
+      remove: (key: string) => {
+        store.delete(key);
+      },
+    });
+  }
+  // Visibility model mirroring main.ts: the bubble shows while the guide is
+  // showing; the empty-room hint shows for an empty room on screen only when
+  // no bubble shows; the doors tip shows with no door and no window only
+  // when no bubble shows.
+  function triple(
+    guide: Guide,
+    screen: GuideScreen,
+    noDoorOrWindow: boolean,
+  ): { bubble: boolean; emptyHint: boolean; doorTip: boolean } {
+    const bubble = guide.showing;
+    return {
+      bubble,
+      emptyHint: !bubble && screen.roomVisible && screen.itemCount === 0,
+      doorTip: !bubble && screen.roomVisible && noDoorOrWindow,
+    };
+  }
+  function checkTriple(
+    name: string,
+    guide: Guide,
+    screen: GuideScreen,
+    noDoorOrWindow: boolean,
+  ): void {
+    const seen = triple(guide, screen, noDoorOrWindow);
+    check(
+      `guidance:never-three-${name}`,
+      !(seen.bubble && seen.emptyHint && seen.doorTip),
+      `bubble=${String(seen.bubble)} hint=${String(seen.emptyHint)} tip=${String(seen.doorTip)}`,
+    );
+    check(
+      `guidance:bubble-alone-${name}`,
+      !seen.bubble || (!seen.emptyHint && !seen.doorTip),
+      "a bubble never shares the screen with a hint",
+    );
+  }
+  const moment1 = freshGuide();
+  moment1.start(dialog);
+  checkTriple("moment-1-dialog", moment1, dialog, true);
+  const moment2 = freshGuide();
+  moment2.start(empty);
+  checkTriple("moment-2-empty", moment2, empty, true);
+  const moment3 = freshGuide();
+  moment3.start(pieces);
+  moment3.advanceOnItemsAdded(pieces);
+  checkTriple("moment-3-pieces", moment3, pieces, true);
+  const moment4 = freshGuide();
+  moment4.start(pieces);
+  moment4.advanceOnItemsAdded(pieces);
+  moment4.advanceOnPieceMoved(pieces);
+  checkTriple("moment-4-pieces", moment4, pieces, true);
+  const skippedEmpty = freshGuide();
+  skippedEmpty.start(empty);
+  skippedEmpty.skip();
+  checkTriple("skipped-empty", skippedEmpty, empty, true);
+  const skippedPieces = freshGuide();
+  skippedPieces.start(pieces);
+  skippedPieces.skip();
+  checkTriple("skipped-pieces", skippedPieces, pieces, false);
+  const doneEmpty = freshGuide();
+  doneEmpty.start(empty);
+  doneEmpty.finish();
+  checkTriple("done-empty", doneEmpty, empty, true);
+  const donePieces = freshGuide();
+  donePieces.start(pieces);
+  donePieces.advanceOnItemsAdded(pieces);
+  donePieces.finish();
+  checkTriple("done-pieces", donePieces, pieces, true);
+}
+
+// The wiring that keeps them apart, in main.ts.
+check(
+  "guidance:empty-yields-to-guide",
+  phoneMain.includes("if (this.guide.showing)") &&
+    phoneMain.includes('document.getElementById("empty-hint")?.setAttribute("hidden", "")'),
+  "the empty-room hint hides while a bubble shows",
+);
+check(
+  "guidance:doors-yield-to-guide",
+  /private maybeShowDoorTip\(\): void \{\s*\/\/[^\n]*\n\s*\/\/[^\n]*\n\s*if \(this\.guide\.showing\) return;/.test(
+    phoneMain,
+  ),
+  "the doors tip never opens while a bubble shows",
+);
+check(
+  "guidance:bubble-hides-both",
+  phoneMain.includes('document.getElementById("door-tip")?.setAttribute("hidden", "")'),
+  "painting a bubble hides both hints first",
+);
+check(
+  "guidance:done-skipped-restore",
+  phoneMain.includes("this.guide.skip();") &&
+    phoneMain.includes("this.guide.finish();") &&
+    /private renderGuide\(\): void \{[\s\S]*?this\.updateEmptyHint\(this\.store\.state\.items\.length\);\s*this\.maybeShowDoorTip\(\);/.test(
+      phoneMain,
+    ),
+  "done/skipped run renderGuide, whose quiet path restores both hints",
 );
 
 if (failures > 0) process.exit(1);

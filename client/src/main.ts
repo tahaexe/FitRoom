@@ -1091,6 +1091,9 @@ class FitRoomApp {
 
   /** One dismissible tip after a build, shown once per room without a door or window. */
   private maybeShowDoorTip(): void {
+    // While a guide bubble shows, the doors tip does not: the three
+    // (bubble, empty hint, doors tip) can never show together.
+    if (this.guide.showing) return;
     const key = `fitroom.doors-tip-seen:${ROOM.id}`;
     const seen = ((): boolean => {
       try {
@@ -2192,6 +2195,12 @@ class FitRoomApp {
 
   /** Empty room hint: the 3D view never sits blank without a next step. */
   private updateEmptyHint(count: number): void {
+    // While a guide bubble shows, the empty-room hint does not: the three
+    // (bubble, empty hint, doors tip) can never show together.
+    if (this.guide.showing) {
+      document.getElementById("empty-hint")?.setAttribute("hidden", "");
+      return;
+    }
     let hint = document.getElementById("empty-hint");
     if (count > 0 || this.editing) {
       hint?.setAttribute("hidden", "");
@@ -2288,10 +2297,15 @@ class FitRoomApp {
   private renderGuide(): void {
     if (this.guideView === null) return;
     const screen = this.guideScreen();
+    // While a guide bubble shows, the empty-room hint and the doors tip do
+    // not: the three can never show together. When the guide is done or
+    // skipped they work as today.
     if (this.guide.showing && this.guide.moment !== null) {
       const target = queryGuideTarget(this.guide.moment, screen.isPhone);
       if (target !== null) {
         this.guideView.render(this.guide.moment, screen.isPhone);
+        document.getElementById("empty-hint")?.setAttribute("hidden", "");
+        document.getElementById("door-tip")?.setAttribute("hidden", "");
         return;
       }
     }
