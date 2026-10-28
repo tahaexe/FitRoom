@@ -2557,6 +2557,11 @@ button.danger {
     z-index: 20;
   }
 
+  /* The phone bar hides while the photo flow or the confirm view is open. */
+  body[data-flow-open="true"] #phone-bar {
+    display: none;
+  }
+
   #phone-bar > button {
     flex: 1 1 0;
     min-width: 0;

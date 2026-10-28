@@ -277,6 +277,56 @@ check(
   "main.ts showSidePanel",
 );
 
+// The phone bar hides while the photo flow or the confirm view is open.
+check(
+  "the phone bar hides in the flow and in the confirm view",
+  main.includes("private syncFlowChrome()") &&
+    main.includes('document.body.setAttribute("data-flow-open", "true")') &&
+    main.includes("this.photoFlow !== null || this.editing") &&
+    (main.match(/this\.syncFlowChrome\(\)/g) ?? []).length >= 4,
+  "main.ts syncFlowChrome",
+);
+check(
+  "the phone bar CSS hides on the flow flag",
+  /body\[data-flow-open="true"\]\s*#phone-bar\s*\{[^}]*display:\s*none/.test(css),
+  "style.css body[data-flow-open]",
+);
+// The cart summary never cuts at 390 px: the short "4 · $3,280" stays
+// visible, with the full "4 items · $3,280" as its accessible name.
+check(
+  "the phone cart keeps the full summary as its accessible name",
+  main.includes('phoneCart.setAttribute(') &&
+    main.includes('"aria-label"') &&
+    main.includes("in your cart"),
+  "main.ts phoneCart",
+);
+{
+  const short = "4 · $3,280";
+  const long = "4 items · $3,280";
+  const usesShort =
+    main.includes("`${String(count)} · $${") && main.includes("phoneCart.textContent = short");
+  const usesLongName =
+    main.includes("phoneCart.setAttribute(") && main.includes("formatTopBar(count, total)");
+  check(
+    `the phone cart reads "${short}" with "${long}" as its name`,
+    usesShort && usesLongName,
+    "main.ts phoneCart",
+  );
+  const barPad = 8 * 2;
+  const barGaps = 4 * 3;
+  const charW = 7.5;
+  const btnPad = 4 * 2 + 2;
+  const buttons = ["Catalog", "AI", "Visualise"];
+  const buttonsWidth = buttons.reduce((sum, text) => sum + text.length * charW + btnPad, 0);
+  const cartWidth = short.length * charW + 8;
+  const estimate = buttonsWidth + cartWidth + barGaps + barPad;
+  check(
+    `the phone bar fits 390px (${String(Math.round(estimate))}px of 390px)`,
+    estimate <= 390,
+    `buttons ${String(Math.round(buttonsWidth))}px, cart ${String(Math.round(cartWidth))}px`,
+  );
+}
+
 if (failures > 0) {
   console.log(`check:toolbar: ${String(failures)} check(s) failed`);
   process.exitCode = 1;

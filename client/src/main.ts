@@ -1201,10 +1201,18 @@ class FitRoomApp {
     }
   }
 
+  /** The phone bar hides while the photo flow or the confirm view is open. */
+  private syncFlowChrome(): void {
+    const inFlow = this.photoFlow !== null || this.editing;
+    if (inFlow) document.body.setAttribute("data-flow-open", "true");
+    else document.body.removeAttribute("data-flow-open");
+  }
+
   /** "From photos": the capture flow floats above everything. */
   private openPhotoFlow(): void {
     this.sheets?.close();
     this.syncPhoneBar();
+    this.syncFlowChrome();
     this.closePhotoFlow();
     const flow = new PhotoFlow({
       onDone: (result) => this.openPhotoDraft(result),
@@ -1232,6 +1240,7 @@ class FitRoomApp {
   private closePhotoFlow(): void {
     this.photoFlow?.element.remove();
     this.photoFlow = null;
+    this.syncFlowChrome();
     this.updateTopBar();
     this.updateUndoRedo();
     this.updateGuide();
@@ -1296,6 +1305,7 @@ class FitRoomApp {
     this.sheets?.close();
     this.syncPhoneBar();
     this.editing = true;
+    this.syncFlowChrome();
     this.updateGuide();
     this.editorBase = JSON.parse(JSON.stringify(ROOM)) as RoomLayout;
     this.select(null);
@@ -1309,6 +1319,7 @@ class FitRoomApp {
   private closeEditor(): void {
     this.editing = false;
     this.editor?.element.setAttribute("hidden", "");
+    this.syncFlowChrome();
     this.updateTopBar();
     this.updateUndoRedo();
     this.updateEmptyHint(this.store.state.items.length);
@@ -2375,8 +2386,20 @@ class FitRoomApp {
     }
     el.textContent = formatTopBar(count, total);
     el.title = count === 0 ? CART_EMPTY : `${formatTopBar(count, total)} in your cart`;
+    // The phone cart fits 390 px without clipping: the short "4 · $3,280"
+    // stays visible, with the full "4 items · $3,280" as its accessible name.
     const phoneCart = document.getElementById("phone-cart");
-    if (phoneCart !== null) phoneCart.textContent = formatTopBar(count, total);
+    if (phoneCart !== null) {
+      const short =
+        count === 0 && total === 0
+          ? formatTopBar(count, total)
+          : `${String(count)} · $${Math.round(total).toLocaleString("en-US")}`;
+      phoneCart.textContent = short;
+      phoneCart.setAttribute(
+        "aria-label",
+        count === 0 ? CART_EMPTY : `${formatTopBar(count, total)} in your cart`,
+      );
+    }
     const cart = document.getElementById("tool-cart");
     if (cart instanceof HTMLButtonElement) {
       // The header's Add to cart stays live only outside the photo flow
