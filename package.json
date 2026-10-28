@@ -42,6 +42,7 @@
     "check:orbit-resolution": "npm run check:orbit-resolution -w @fitroom/client",
     "check:pointer-ownership": "npm run check:pointer-ownership -w @fitroom/client",
     "check:scene-sync": "npm run check:scene-sync -w @fitroom/client",
+    "check:contrast": "npm run check:contrast -w @fitroom/client",
     "demo:record": "npm run demo:record -w @fitroom/server --",
     "demo:import": "npm run demo:import -w @fitroom/server",
     "start": "npm run start -w @fitroom/server"

@@ -13,12 +13,13 @@
   --card: #ffffff;
   --border-color: #e4e2e0;
   --ink: #2b2c30;
-  --muted: #6b7078;
-  --coral: #f54e49;
-  --coral-hover: #e0413c;
-  --coral-pressed: #c93732;
+  --muted: #646973;
+  --coral: #d63a35;
+  --coral-bright: #f54e49;
+  --coral-hover: #c93732;
+  --coral-pressed: #a92d28;
   --on-coral: #ffffff;
-  --green: #0e9f7e;
+  --green: #0a8167;
   --red: #b3261e;
   --amber: #e59500;
   --radius: 14px;
@@ -509,7 +510,7 @@ button {
 }
 
 .swatch[data-active="true"] {
-  border-color: var(--coral);
+  border-color: var(--coral-bright);
 }
 
 button.danger {
@@ -1425,7 +1426,7 @@ button.danger {
   height: 100%;
   width: 30%;
   border-radius: 999px;
-  background: var(--coral);
+  background: var(--coral-bright);
 }
 
 .render-progress-thumb {
@@ -1479,7 +1480,7 @@ button.danger {
 .guide-ring {
   position: fixed;
   z-index: 34;
-  border: 2px solid #f54e49;
+  border: 2px solid var(--coral-bright);
   border-radius: 12px;
   pointer-events: none;
   opacity: 0;
@@ -1533,7 +1534,7 @@ button.danger {
   margin-right: auto;
   font-size: 14px;
   font-weight: 700;
-  color: #f54e49;
+  color: var(--coral);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1970,7 +1971,7 @@ button.danger {
 }
 
 .setup-card-main {
-  border-color: var(--coral);
+  border-color: var(--coral-bright);
   border-width: 1.5px;
 }
 
@@ -2309,7 +2310,7 @@ button.danger {
 .door-tip-dismiss:focus-visible,
 .guide-next:focus-visible,
 .guide-skip:focus-visible {
-  outline: 2px solid var(--coral);
+  outline: 2px solid var(--coral-bright);
   outline-offset: 2px;
 }
 
