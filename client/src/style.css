@@ -300,6 +300,10 @@ button {
   gap: 16px;
 }
 
+#catalog[hidden] {
+  display: none;
+}
+
 #catalog input[type="search"] {
   width: 100%;
   padding: 8px;

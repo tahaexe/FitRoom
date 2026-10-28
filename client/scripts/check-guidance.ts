@@ -51,6 +51,8 @@ import {
   PHONE_BAR_LABELS,
   PHONE_MEDIA,
   PHONE_MENU_LABELS,
+  PhoneSheets,
+  type PhoneSheetName,
 } from "../src/phone-sheet.js";
 import { measuredMarkText, photoBandText, tapeWallLabel } from "../src/editor/source-mark.js";
 import { EMPTY_HINT_TEXT, coachMarksReady, needsDoorTip } from "../src/hints.js";
@@ -931,6 +933,163 @@ check(
   methodBody(phoneMain, "private finishBuild").includes('this.sheets.open("catalog")'),
   "the catalog sheet comes back on phones after the build",
 );
+check(
+  "confirm:sheet-back-after-cancel",
+  methodBody(phoneMain, "private cancelEditor").includes('this.sheets.open("catalog")'),
+  "the catalog sheet comes back on phones after cancel",
+);
+check(
+  "confirm:sheet-closed-reload",
+  phoneMain.includes('ROOM.id === "photos-room"') && phoneMain.includes("this.openEditor()"),
+  "a reload that resumes a photo room reopens the confirm view",
+);
+
+// The sheet state itself (not only the markup): drive the real
+// PhoneSheets transitions for every way in and read back the same state
+// the app renders from. Phone geometry: 390 x 844, peek sheet 40dvh
+// (~338 px, top ~506), full-width "Build my room" top at 727.
+class FakeSheetElement {
+  public dataset: Record<string, string> = {};
+  private attrs = new Set<string>();
+  public tag: string;
+  constructor(tag = "div") {
+    this.tag = tag;
+  }
+  setAttribute(name: string, value: string): void {
+    this.attrs.add(name);
+    void value;
+  }
+  removeAttribute(name: string): void {
+    this.attrs.delete(name);
+  }
+  hasAttribute(name: string): boolean {
+    return this.attrs.has(name);
+  }
+  querySelector(): null {
+    return null;
+  }
+  prepend(): void {}
+  appendChild(): void {}
+  addEventListener(): void {}
+}
+class FakeObserver {
+  observe(): void {}
+  disconnect(): void {}
+}
+const phoneScope = globalThis as unknown as Record<string, unknown>;
+const savedWindow = phoneScope["window"];
+const savedDocument = phoneScope["document"];
+const savedObserver = phoneScope["MutationObserver"];
+const fakeBody = new FakeSheetElement("body");
+phoneScope["window"] = {
+  matchMedia: () => ({ matches: true }),
+};
+phoneScope["document"] = {
+  body: fakeBody,
+  createElement: (tag: string) => new FakeSheetElement(tag),
+};
+phoneScope["MutationObserver"] = FakeObserver;
+function freshPhoneSheets(): {
+  sheets: PhoneSheets;
+  els: Record<PhoneSheetName, FakeSheetElement>;
+} {
+  const els = {
+    catalog: new FakeSheetElement("aside"),
+    inspector: new FakeSheetElement("aside"),
+    recommend: new FakeSheetElement("aside"),
+    assistant: new FakeSheetElement("aside"),
+    render: new FakeSheetElement("aside"),
+  };
+  const sheets = new PhoneSheets(els as unknown as Record<PhoneSheetName, HTMLElement | null>);
+  return { sheets, els };
+}
+function overlapOverBuild(sheetOpen: boolean): number {
+  const viewportH = 844;
+  const sheetPeek = Math.round(viewportH * 0.4);
+  const sheetTop = sheetOpen ? viewportH - sheetPeek : viewportH;
+  const buttonTop = 727;
+  const buttonBottom = 775;
+  return Math.max(0, Math.min(buttonBottom, viewportH) - Math.max(buttonTop, sheetTop));
+}
+function sheetClosedState(sheets: PhoneSheets, catalog: FakeSheetElement): boolean {
+  return (
+    !sheets.isOpen("catalog") && catalog.hasAttribute("hidden") && overlapOverBuild(false) === 0
+  );
+}
+const styleSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "style.css"),
+  "utf8",
+);
+check(
+  "confirm:sheet-hidden-css-hides",
+  styleSource.includes("#catalog[hidden]") &&
+    /#catalog\[hidden\][^{]*\{[^}]*display:\s*none/.test(styleSource),
+  "a closed catalog sheet renders nothing",
+);
+check(
+  "confirm:sheet-overlap-probe-sane",
+  overlapOverBuild(true) > 0,
+  "an open sheet covers the build button",
+);
+for (const entry of ["try-example", "use-photos", "from-photos"] as const) {
+  const { sheets, els } = freshPhoneSheets();
+  // The 3D view before the flow has the catalog open; every way in then
+  // runs the app's own close transitions (photo flow, then the confirm
+  // view for the example path which builds straight through).
+  sheets.open("catalog");
+  sheets.close();
+  if (entry === "try-example") sheets.close();
+  const closed = sheetClosedState(sheets, els["catalog"]);
+  check(
+    `confirm:sheet-state-${entry}`,
+    closed && !sheets.isOpen("catalog") && els["catalog"].hasAttribute("hidden"),
+    `${entry}: the sheet stays closed, not peeking`,
+  );
+  check(
+    `confirm:sheet-overlap-${entry}`,
+    closed && overlapOverBuild(sheets.isOpen("catalog")) === 0,
+    `${entry}: nothing of the sheet lies over "Build my room"`,
+  );
+}
+{
+  // Reload resuming a photo room: the phone starts with the catalog
+  // hidden, then the app reopens the confirm view (which closes the sheet).
+  const { sheets, els } = freshPhoneSheets();
+  els["catalog"].setAttribute("hidden", "");
+  sheets.close();
+  const closed = sheetClosedState(sheets, els["catalog"]);
+  check(
+    "confirm:sheet-state-reload",
+    closed && els["catalog"].hasAttribute("hidden"),
+    "reload: the resumed confirm view keeps the sheet closed",
+  );
+  check(
+    "confirm:sheet-overlap-reload",
+    closed && overlapOverBuild(sheets.isOpen("catalog")) === 0,
+    'reload: nothing of the sheet lies over "Build my room"',
+  );
+}
+{
+  // Leaving the confirm view brings the sheet back, like a build does.
+  const { sheets } = freshPhoneSheets();
+  sheets.close();
+  sheets.open("catalog");
+  check(
+    "confirm:sheet-state-back-after-build",
+    sheets.isOpen("catalog"),
+    "after Build my room the catalog sheet is back",
+  );
+  sheets.close();
+  sheets.open("catalog");
+  check(
+    "confirm:sheet-state-back-after-cancel",
+    sheets.isOpen("catalog"),
+    "after Cancel the catalog sheet is back",
+  );
+}
+phoneScope["window"] = savedWindow;
+phoneScope["document"] = savedDocument;
+phoneScope["MutationObserver"] = savedObserver;
 
 // ---- One hint after a build ----
 check(

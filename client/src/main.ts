@@ -695,6 +695,14 @@ class FitRoomApp {
     });
     document.body.appendChild(this.firstOpen.element);
     if (this.firstOpenSetup && roomParam !== "sample") this.firstOpen.showCards();
+    // A reload that resumes a photo-built room reopens its confirm view
+    // with the catalog sheet closed, like every other way into the flow.
+    if (ROOM.id === "photos-room" && roomParam !== "sample") {
+      this.menuChoice = "photos";
+      this.editorStore?.load(ROOM);
+      this.openEditor();
+      this.refreshMenu();
+    }
     // Render on demand: frames only while the camera moves, after scene or
     // selection changes, or when a texture finishes loading. No idle loop.
     this.requestRender();
@@ -1272,6 +1280,12 @@ class FitRoomApp {
     this.editorBase = null;
     this.closeEditor();
     this.refreshMenu();
+    // The catalog sheet stayed closed through the photo flow and the
+    // confirm view; cancelling brings it back on phones, like a build.
+    if (this.sheets !== null && isPhoneViewport()) {
+      this.sheets.open("catalog");
+    }
+    this.syncPhoneBar();
   }
 
   /** Keep the scene's room id with the live room (autosave coherence). */
@@ -1931,10 +1945,16 @@ class FitRoomApp {
       this.showSidePanel(name);
     } else {
       document.getElementById("catalog")?.setAttribute("hidden", "");
-      const renderHost = document.getElementById("render-viewer");
-      const renderOpen = renderHost !== null && !renderHost.hasAttribute("hidden");
-      if (this.sidePanel !== "none") this.sheets?.open(this.sidePanel);
-      else if (renderOpen) this.sheets?.open("render");
+      // A resize across the breakpoint never opens a sheet over the photo
+      // flow or the confirm view: both stay closed until Build or Cancel.
+      if (this.editing || this.photoFlow !== null) {
+        this.sheets?.close();
+      } else {
+        const renderHost = document.getElementById("render-viewer");
+        const renderOpen = renderHost !== null && !renderHost.hasAttribute("hidden");
+        if (this.sidePanel !== "none") this.sheets?.open(this.sidePanel);
+        else if (renderOpen) this.sheets?.open("render");
+      }
       this.syncPhoneBar();
       this.container.classList.toggle("has-side-panel", false);
     }
