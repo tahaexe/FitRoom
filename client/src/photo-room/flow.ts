@@ -183,7 +183,9 @@ export function draftMeta(
       ...toMark(draft.ceilingHeight.source, draft.ceilingHeight.plusMinus),
     },
     openings,
-    estimatedWallCount: estimatedLetters.length * 2 > 4 ? 4 : estimatedLetters.length * 2,
+    // One estimated tape means its wall pair (B/D or A/C) is estimated: the
+    // banner counts walls, not tapes, so the example (B estimated) reads 2.
+    estimatedWallCount: estimatedLetters.length,
     estimatedWallPm: pms.length > 0 ? Math.max(...pms) : 0,
   };
 }

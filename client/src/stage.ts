@@ -55,6 +55,10 @@ export function floorTextureIdFor(surfaceId: string | null | undefined): string 
   ) {
     return surfaceId;
   }
+  // The sample room's legacy floor id renders as the new look's light oak
+  // (WoodFloor071, the example room's finish): a rendering choice keyed by
+  // the surface id, never a change to the room data the requests carry.
+  if (surfaceId === "oak-light") return "WoodFloor071";
   return "WoodFloor070";
 }
 

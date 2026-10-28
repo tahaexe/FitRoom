@@ -56,6 +56,13 @@ import {
 } from "../src/phone-sheet.js";
 import { Guide, type GuideScreen } from "../src/guide.js";
 import { measuredMarkText, photoBandText, tapeWallLabel } from "../src/editor/source-mark.js";
+import { floorTextureIdFor } from "../src/stage.js";
+import {
+  editorPlanRoomShare,
+  editorPlanViewBox,
+  openingLabelOverlapsPill,
+  pillAnchorFor,
+} from "../src/editor/plan-view.js";
 import { EMPTY_HINT_TEXT, needsDoorTip } from "../src/hints.js";
 import {
   cornerHandleLabel,
@@ -416,6 +423,137 @@ check(
   photoBandText(3, 8) === "3 walls are estimated (± 8 cm). Tape one to make it exact.",
   photoBandText(3, 8),
 );
+// The example (B estimated, ± 9) counts walls, not tapes.
+check(
+  "band:two",
+  photoBandText(2, 9) === "2 walls are estimated (± 9 cm). Tape one to make it exact.",
+  photoBandText(2, 9),
+);
+// The sample room's legacy floor id renders as the new look's light oak.
+check(
+  "floor:sample-is-light-oak",
+  floorTextureIdFor("oak-light") === "WoodFloor071",
+  floorTextureIdFor("oak-light"),
+);
+check(
+  "floor:example-keeps-its-finish",
+  floorTextureIdFor("WoodFloor071") === "WoodFloor071",
+  floorTextureIdFor("WoodFloor071"),
+);
+// The banner counts walls: one missing tape (B/D) is 2, none missing is 0
+// (the band hides), never 4 for the example.
+{
+  const flowSource = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "photo-room", "flow.ts"),
+    "utf8",
+  );
+  check(
+    "band:counts-walls-not-tapes",
+    flowSource.includes("estimatedWallCount: estimatedLetters.length,") &&
+      !flowSource.includes("estimatedLetters.length * 2"),
+    "draftMeta must count estimated walls",
+  );
+  const editorSource = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "editor", "editor.ts"),
+    "utf8",
+  );
+  check(
+    "band:hidden-when-none-editor",
+    editorSource.includes("count <= 0") && editorSource.includes('setAttribute("hidden", "")'),
+    "editor band must hide with no estimated walls",
+  );
+  const confirmSource = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "editor", "photo-confirm.ts"),
+    "utf8",
+  );
+  check(
+    "band:hidden-when-none-confirm",
+    confirmSource.includes("meta.estimatedWallCount > 0"),
+    "confirm band must render only with estimated walls",
+  );
+}
+// The plan editor frames what is drawn (room, real arcs, pills): the room
+// is the hero and no opening label sits under a wall pill.
+{
+  const sample = {
+    id: "sample",
+    name: "Sample",
+    units: "cm",
+    walls: [
+      { id: "wall-1", start: { x: 0, z: 0 }, end: { x: 420, z: 0 }, height: 260, thickness: 12 },
+      {
+        id: "wall-2",
+        start: { x: 420, z: 0 },
+        end: { x: 420, z: 360 },
+        height: 260,
+        thickness: 12,
+      },
+      {
+        id: "wall-3",
+        start: { x: 420, z: 360 },
+        end: { x: 0, z: 360 },
+        height: 260,
+        thickness: 12,
+      },
+      { id: "wall-4", start: { x: 0, z: 360 }, end: { x: 0, z: 0 }, height: 260, thickness: 12 },
+    ],
+    openings: [
+      {
+        id: "door-1",
+        wallId: "wall-1",
+        type: "door",
+        offset: 30,
+        width: 90,
+        height: 210,
+        sillHeight: 0,
+        hinge: "left",
+        swing: "in",
+      },
+      {
+        id: "window-1",
+        wallId: "wall-3",
+        type: "window",
+        offset: 80,
+        width: 160,
+        height: 140,
+        sillHeight: 90,
+      },
+      {
+        id: "window-2",
+        wallId: "wall-2",
+        type: "window",
+        offset: 120,
+        width: 120,
+        height: 140,
+        sillHeight: 90,
+      },
+    ],
+    fixtures: [],
+    existing: [],
+    surfaces: { floor: "oak-light", wall: "warm-white" },
+    style: { tags: [], dominantColors: [] },
+    source: "sample",
+    confidence: 1,
+  } as unknown as RoomLayout;
+  const share = editorPlanRoomShare(sample);
+  check("plan:room-is-hero", share >= 0.5, `share=${share.toFixed(3)}`);
+  const [vx, vy, vw, vh] = editorPlanViewBox(sample);
+  const inside = (x: number, z: number): boolean =>
+    x >= vx && x <= vx + vw && -z >= vy && -z <= vy + vh;
+  const pillsInside = sample.walls.every((wall) => {
+    const anchor = pillAnchorFor(sample, wall.id);
+    return anchor !== null && inside(anchor.x, anchor.z);
+  });
+  check("plan:pills-stay-in-frame", pillsInside, `${vx},${vy},${vw},${vh}`);
+  const labelsClear = sample.openings.every(
+    (opening) => !openingLabelOverlapsPill(sample, opening.id),
+  );
+  check(
+    "plan:verdict-never-covers-wall-label",
+    labelsClear,
+    sample.openings.map((o) => o.id).join(","),
+  );
+}
 // The band's tape pill names the next estimated wall letter.
 check("tape:wall-a", tapeWallLabel("A") === "Tape wall A", tapeWallLabel("A"));
 check("tape:wall-c", tapeWallLabel("C") === "Tape wall C", tapeWallLabel("C"));

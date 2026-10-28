@@ -108,6 +108,146 @@ function fmt(n: number): string {
   return String(Math.round(n * 10) / 10);
 }
 
+/** Outward pill anchor for one wall (plan cm), before clamping. Pure. */
+export function pillAnchorFor(room: RoomLayout, wallId: string): Vec | null {
+  const wall = room.walls.find((w) => w.id === wallId);
+  if (wall === undefined || wallLen(wall) < 1) return null;
+  const centroid = centroidOf(room);
+  const mid = along(wall, wallLen(wall) / 2);
+  let dx = mid.x - centroid.x;
+  let dz = mid.z - centroid.z;
+  const len = Math.hypot(dx, dz) || 1;
+  dx /= len;
+  dz /= len;
+  return { x: mid.x + dx * PILL_OFFSET_CM, z: mid.z + dz * PILL_OFFSET_CM };
+}
+
+/** Opening label anchor (plan cm): 62 cm inside its wall. Pure. */
+export function openingLabelAnchorFor(room: RoomLayout, openingId: string): Vec | null {
+  const opening = room.openings.find((o) => o.id === openingId);
+  if (opening === undefined) return null;
+  const wall = room.walls.find((w) => w.id === opening.wallId);
+  if (wall === undefined) return null;
+  const centroid = centroidOf(room);
+  const inward = inwardOf(wall, centroid);
+  const mid = along(wall, opening.offset + opening.width / 2);
+  return { x: mid.x + inward.x * 62, z: mid.z + inward.z * 62 };
+}
+
+/** Drawn quarter-arc samples for one door (hinge, leaf end, arc). Pure. */
+export function doorArcPointsFor(room: RoomLayout, openingId: string): Vec[] {
+  const opening = room.openings.find((o) => o.id === openingId);
+  if (opening === undefined || opening.type !== "door") return [];
+  const wall = room.walls.find((w) => w.id === opening.wallId);
+  if (wall === undefined) return [];
+  const centroid = centroidOf(room);
+  const d = wallDir(wall);
+  const inward = inwardOf(wall, centroid);
+  const hingeAt = opening.hinge === "left" ? opening.offset : opening.offset + opening.width;
+  const hinge = along(wall, hingeAt);
+  const s = opening.hinge === "left" ? 1 : -1;
+  const leaf: Vec = { x: s * d.x, z: s * d.z };
+  const side = opening.swing === "in" ? inward : { x: -inward.x, z: -inward.z };
+  const rad = (30 * Math.PI) / 180;
+  const leafDir: Vec = {
+    x: leaf.x * Math.cos(rad) + side.x * Math.sin(rad),
+    z: leaf.z * Math.cos(rad) + side.z * Math.sin(rad),
+  };
+  const r = opening.width - 4;
+  const pts: Vec[] = [{ ...hinge }];
+  pts.push({ x: hinge.x + leafDir.x * r, z: hinge.z + leafDir.z * r });
+  for (let i = 0; i <= 8; i += 1) {
+    const a = (i / 8) * (Math.PI / 2);
+    pts.push({
+      x: hinge.x + (leaf.x * Math.cos(a) + side.x * Math.sin(a)) * opening.width,
+      z: hinge.z + (leaf.z * Math.cos(a) + side.z * Math.sin(a)) * opening.width,
+    });
+  }
+  return pts;
+}
+
+/**
+ * Headless plan frame: room walls plus the drawn quarter arcs and the pill
+ * anchors, with a small margin. Pure so checks cover the room's share.
+ */
+export function editorPlanViewBox(room: RoomLayout): [number, number, number, number] {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const wall of room.walls) {
+    for (const p of [wall.start, wall.end]) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minZ = Math.min(minZ, p.z);
+      maxZ = Math.max(maxZ, p.z);
+    }
+  }
+  if (!Number.isFinite(minX)) {
+    minX = 0;
+    maxX = 400;
+    minZ = 0;
+    maxZ = 350;
+  }
+  const grow = (x: number, z: number): void => {
+    if (x < minX) minX = x;
+    if (x > maxX) maxX = x;
+    if (z < minZ) minZ = z;
+    if (z > maxZ) maxZ = z;
+  };
+  for (const opening of room.openings) {
+    if (opening.type !== "door") continue;
+    for (const p of doorArcPointsFor(room, opening.id)) grow(p.x, p.z);
+  }
+  for (const wall of room.walls) {
+    const anchor = pillAnchorFor(room, wall.id);
+    if (anchor !== null) grow(anchor.x, anchor.z);
+  }
+  const pad = Math.max(16, Math.max(maxX - minX, maxZ - minZ) * FRAME_MARGIN);
+  return [minX - pad, -(maxZ + pad), maxX - minX + pad * 2, maxZ - minZ + pad * 2];
+}
+
+/** Room share of its plan frame (room area / viewBox area). Pure. */
+export function editorPlanRoomShare(room: RoomLayout): number {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const wall of room.walls) {
+    for (const p of [wall.start, wall.end]) {
+      minX = Math.min(minX, p.x);
+      maxX = Math.max(maxX, p.x);
+      minZ = Math.min(minZ, p.z);
+      maxZ = Math.max(maxZ, p.z);
+    }
+  }
+  if (!Number.isFinite(minX) || maxX <= minX || maxZ <= minZ) return 0;
+  const [, , vw, vh] = editorPlanViewBox(room);
+  if (!(vw > 0) || !(vh > 0)) return 0;
+  return ((maxX - minX) * (maxZ - minZ)) / (vw * vh);
+}
+
+/**
+ * Opening label kept clear of the wall-length pills: when its box would
+ * overlap a pill anchor, it steps further inside; when still covered the
+ * wall pill yields (hidden under the verdict). Pure box test in plan cm.
+ */
+export function openingLabelOverlapsPill(
+  room: RoomLayout,
+  openingId: string,
+  halfW = 60,
+  halfH = 12,
+): boolean {
+  const label = openingLabelAnchorFor(room, openingId);
+  if (label === null) return false;
+  for (const wall of room.walls) {
+    const pill = pillAnchorFor(room, wall.id);
+    if (pill === null) continue;
+    if (Math.abs(label.x - pill.x) < halfW && Math.abs(label.z - pill.z) < halfH + 28) return true;
+  }
+  return false;
+}
+
 export class EditorPlanView {
   readonly element: HTMLElement;
   private readonly svg: SVGSVGElement;
@@ -157,50 +297,14 @@ export class EditorPlanView {
   };
 
   /**
-   * Frame the room itself — walls plus door swing arcs — with a margin of
-   * about 8 %. Pills and opening labels sit inside this frame (they never
-   * widen it), so the room fills the card at any card shape.
+   * Frame what is drawn — the room, the real swing arcs and the pills —
+   * with a small margin, so the room is the hero at any card shape. Only
+   * the drawn quarter arc counts (hinge, leaf end and arc samples), never
+   * the full disc of every possible swing; pill anchors widen the frame so
+   * no pill clips.
    */
-  private viewBox(room: RoomLayout): [number, number, number, number] {
-    let minX = Infinity;
-    let maxX = -Infinity;
-    let minZ = Infinity;
-    let maxZ = -Infinity;
-    for (const wall of room.walls) {
-      for (const p of [wall.start, wall.end]) {
-        minX = Math.min(minX, p.x);
-        maxX = Math.max(maxX, p.x);
-        minZ = Math.min(minZ, p.z);
-        maxZ = Math.max(maxZ, p.z);
-      }
-    }
-    if (!Number.isFinite(minX)) {
-      minX = 0;
-      maxX = 400;
-      minZ = 0;
-      maxZ = 350;
-    }
-    const grow = (x: number, z: number): void => {
-      if (x < minX) minX = x;
-      if (x > maxX) maxX = x;
-      if (z < minZ) minZ = z;
-      if (z > maxZ) maxZ = z;
-    };
-    // Door swing arcs sweep a full quadrant of radius `width` around the
-    // hinge: include the whole disc so an outward swing is never cut.
-    for (const opening of room.openings) {
-      if (opening.type !== "door") continue;
-      const wall = room.walls.find((w) => w.id === opening.wallId);
-      if (wall === undefined) continue;
-      const hingeAt = opening.hinge === "left" ? opening.offset : opening.offset + opening.width;
-      const hinge = along(wall, hingeAt);
-      const r = opening.width;
-      grow(hinge.x - r, hinge.z - r);
-      grow(hinge.x + r, hinge.z + r);
-    }
-    const pad = Math.max(16, Math.max(maxX - minX, maxZ - minZ) * FRAME_MARGIN);
-    // SVG y runs down: y = -z, so the top is -(maxZ + pad).
-    return [minX - pad, -(maxZ + pad), maxX - minX + pad * 2, maxZ - minZ + pad * 2];
+  viewBox(room: RoomLayout): [number, number, number, number] {
+    return editorPlanViewBox(room);
   }
 
   private render(): void {
@@ -259,6 +363,7 @@ export class EditorPlanView {
   }
 
   private openingNodes(
+    room: RoomLayout,
     opening: Opening,
     wall: Wall,
     centroid: Vec,
@@ -330,13 +435,15 @@ export class EditorPlanView {
       }
     }
 
-    // Labels always sit well inside (62 cm) so a wide "Window · 120 cm" tag
-    // never reaches under the outward wall-length pills; a white halo keeps
-    // the text readable over the floor. The swing arc stays on its own side.
+    // Labels sit well inside so a wide "Window · 120 cm" tag never sits
+    // under an outward wall-length pill: 62 cm inside, stepped to 102 cm
+    // when the pill box would still cover it. A white halo keeps the text
+    // readable over the floor. The swing arc stays on its own side.
     const labelSide = inward;
     const label = document.createElementNS(NS, "text");
-    label.setAttribute("x", fmt(mid.x + labelSide.x * 62));
-    label.setAttribute("y", fmt(-(mid.z + labelSide.z * 62)));
+    const pushedIn = openingLabelOverlapsPill(room, opening.id) ? 102 : 62;
+    label.setAttribute("x", fmt(mid.x + labelSide.x * pushedIn));
+    label.setAttribute("y", fmt(-(mid.z + labelSide.z * pushedIn)));
     label.setAttribute(
       "class",
       selected ? "editor-opening-label selected" : "editor-opening-label",
@@ -396,7 +503,7 @@ export class EditorPlanView {
     group.setAttribute("role", "button");
     group.setAttribute("aria-label", openingName(room, opening));
     group.setAttribute("class", selected ? "editor-focusable selected" : "editor-focusable");
-    for (const node of this.openingNodes(opening, wall, centroid, selected)) {
+    for (const node of this.openingNodes(room, opening, wall, centroid, selected)) {
       group.appendChild(node);
     }
     group.addEventListener("keydown", (event: KeyboardEvent) => {
