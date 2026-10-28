@@ -84,6 +84,38 @@ check(
 check("unviewed chip invites one tap", confirm.includes("Select to view it"), "photo-confirm.ts");
 check("viewed walls keep Active/Done", confirm.includes("wallCardStatus"), "photo-confirm.ts");
 
+// ---- Item 4: the wall chips say only the finding ----
+{
+  // Bar: the confirm-walls check asserts the chips' text — the unviewed
+  // chip reads exactly the found summary ("1 window found"), never the
+  // wall name again (the card's title already names the wall).
+  const wallsAt = confirm.indexOf("private renderWalls(");
+  const wallsBlock = wallsAt >= 0 ? confirm.slice(wallsAt, wallsAt + 2200) : "";
+  check(
+    "the unviewed chip says only the finding",
+    wallsBlock.includes("status.textContent = found") &&
+      !wallsBlock.includes("status.textContent = `${wallLetterLabel") &&
+      wallsBlock.includes("wallChipFound(doors, windows)"),
+    "photo-confirm.ts renderWalls",
+  );
+  check(
+    "the chip keeps the wall name in its accessible name",
+    wallsBlock.includes("Select to view it") &&
+      wallsBlock.includes("wallLetterLabel(this.store.room, letter)"),
+    "photo-confirm.ts renderWalls",
+  );
+  check(
+    "no openings reads without the wall name",
+    wallChipFound(0, 0) === "no openings found",
+    wallChipFound(0, 0),
+  );
+  check(
+    "one window reads without the wall name",
+    wallChipFound(0, 1) === "1 window found",
+    wallChipFound(0, 1),
+  );
+}
+
 // ---- Item 3: the header's Undo and Redo hide on every photo-flow screen ----
 {
   const app = src("main.ts");

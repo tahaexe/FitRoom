@@ -745,9 +745,11 @@ export class PhotoConfirmView {
       // it); viewed walls keep Active/Done.
       if (!active && !seen) {
         const { doors, windows } = this.openingsOn(letter);
+        // The chip says only the finding; the card's title already names
+        // the wall.
         const found = wallChipFound(doors, windows);
         status.className = "photo-wall-status todo";
-        status.textContent = `${wallLetterLabel(this.store.room, letter)} · ${found}`;
+        status.textContent = found;
         card.append(thumb, name, status);
         card.setAttribute(
           "aria-label",
