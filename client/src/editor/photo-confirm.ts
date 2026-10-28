@@ -970,9 +970,10 @@ export class PhotoConfirmView {
       const widthPm = opening.width.source === "taped" ? undefined : opening.width.plusMinus;
       tag.textContent = openingBoxTextWithPm(kind, widthCm, heightCm, widthPm);
       // The label sits above the box's top edge, clear of the box's own
-      // top handle; with no room above it flips inside the box instead, so
-      // no handle ever sits on its own label.
-      if (minY / Math.max(1, size.height) < 0.15) tag.classList.add("inside");
+      // top handle and every corner handle's 44 px hit area at 390 px;
+      // with no room above it flips inside the box instead, so no handle
+      // ever sits on its own label.
+      if (minY / Math.max(1, size.height) < 0.22) tag.classList.add("inside");
       box.setAttribute(
         "aria-label",
         openingBoxLabel(kind, session.activeWall, widthCm, heightCm, tag.textContent),

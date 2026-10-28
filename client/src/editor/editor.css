@@ -644,11 +644,21 @@
   grid-template-columns: minmax(320px, 7fr) minmax(320px, 5fr);
   grid-template-areas:
     "top top"
+    "banner banner"
+    "actions actions"
     "walls plan"
     "photo plan";
   gap: 16px;
   flex: 1;
   min-height: 0;
+}
+
+.photo-confirm .photo-draft-band {
+  grid-area: banner;
+}
+
+.photo-confirm .editor-actions {
+  grid-area: actions;
 }
 
 /* The step bar spans the full width at the top, outside every column, with
@@ -880,7 +890,7 @@
 .photo-opening-tag {
   position: absolute;
   left: 50%;
-  bottom: calc(100% + 14px);
+  bottom: calc(100% + 26px);
   transform: translateX(-50%);
   white-space: nowrap;
   background: #ffffff;
@@ -897,7 +907,7 @@
    handle, so no handle sits on its own label. */
 .photo-opening-tag.inside {
   bottom: auto;
-  top: 12px;
+  top: 28px;
 }
 
 .photo-grip {
@@ -1024,6 +1034,8 @@
     grid-template-columns: minmax(0, 1fr);
     grid-template-areas:
       "top"
+      "banner"
+      "actions"
       "photo"
       "walls"
       "plan";

@@ -78,6 +78,7 @@ export class RoomEditor {
   private readonly noteEl: HTMLElement;
   private readonly summaryEl: HTMLElement;
   private readonly bandEl: HTMLElement;
+  private readonly actionsEl: HTMLElement;
   private readonly gridEl: HTMLElement;
   private readonly confirmHost: HTMLElement;
   private confirmView: PhotoConfirmView | null = null;
@@ -114,6 +115,7 @@ export class RoomEditor {
     this.undoBtn = this.pill("Undo", () => this.store.undo());
     this.cancelBtn = this.pill(LEAVE, () => this.callbacks.onCancel());
     actions.append(addDoor, addWindow, addPiece, this.undoBtn, this.cancelBtn);
+    this.actionsEl = actions;
     scroll.appendChild(actions);
 
     const grid = document.createElement("div");
@@ -665,6 +667,26 @@ export class RoomEditor {
     this.gridEl.style.display = photo ? "none" : "";
     if (photo) this.confirmHost.removeAttribute("hidden");
     else this.confirmHost.setAttribute("hidden", "");
+    // Confirm order: step bar, estimate banner, action row, columns. The
+    // banner and the actions live inside the confirm view between its top
+    // bar and its columns while the confirm view is open, so they sit
+    // right under the step bar without scrolling; otherwise they sit in
+    // the scrolling body above the plain plan grid.
+    const view = this.confirmView?.element ?? null;
+    if (photo && view !== null) {
+      const anchor = view.querySelector(".photo-confirm-walls");
+      if (anchor !== null) {
+        if (this.bandEl.parentElement !== view) view.insertBefore(this.bandEl, anchor);
+        if (this.actionsEl.parentElement !== view) view.insertBefore(this.actionsEl, anchor);
+      }
+    } else {
+      const scroll = this.element.querySelector(".editor-scroll");
+      if (scroll !== null) {
+        if (this.bandEl.parentElement !== scroll) scroll.insertBefore(this.bandEl, scroll.firstChild);
+        if (this.actionsEl.parentElement !== scroll)
+          scroll.insertBefore(this.actionsEl, this.gridEl);
+      }
+    }
     const active = document.activeElement;
     const focusKey = active instanceof HTMLInputElement ? active.dataset["key"] : undefined;
     const focusValue = active instanceof HTMLInputElement ? active.value : undefined;

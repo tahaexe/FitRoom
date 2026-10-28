@@ -71,18 +71,18 @@ check(
 );
 const leaveUses = (confirm.match(/LEAVE/g) ?? []).length;
 check("the confirm view carries one Leave", leaveUses === 2, `LEAVE × ${String(leaveUses)}`);
-// ---- Item 5: the step bar reads first ----
+// ---- Item 5: the step bar reads first, banner and actions under it ----
 {
   const editorSrc = src("editor/editor.ts");
-  // Bar: the view's first row is the step bar with Leave, above the
-  // estimate banner and the action row — the confirm host sits before
-  // both in the scrolling body.
-  const hostAt = editorSrc.indexOf("this.confirmHost");
-  const createdAt = editorSrc.indexOf("scroll.insertBefore(this.confirmHost, scroll.firstChild)");
+  // Bar: step bar, estimate banner, action row, columns — the banner and
+  // the actions live inside the confirm view between its top bar and its
+  // columns, so they sit right under the step bar without scrolling.
   check(
-    "the confirm host reads before the estimate banner and the action row",
-    createdAt >= 0 && hostAt >= 0,
-    "editor.ts",
+    "the banner and actions move inside the confirm view above its columns",
+    editorSrc.includes("view.insertBefore(this.bandEl, anchor)") &&
+      editorSrc.includes("view.insertBefore(this.actionsEl, anchor)") &&
+      editorSrc.includes('view.querySelector(".photo-confirm-walls")'),
+    "editor.ts renderPanels",
   );
   // The step bar itself is the confirm view's first child and first grid
   // row, with Leave at its right.
@@ -98,6 +98,21 @@ check("the confirm view carries one Leave", leaveUses === 2, `LEAVE × ${String(
     "the step bar spans the first grid row",
     /"top top"/.test(cssAreas) && cssAreas.indexOf('"top top"') < cssAreas.indexOf('"walls plan"'),
     "editor.css",
+  );
+  check(
+    "the rows read step bar, banner, actions, columns",
+    /"top top".*"banner banner".*"actions actions".*"walls plan"/s.test(cssAreas),
+    "editor.css grid areas",
+  );
+  const mediaAt = cssAreas.indexOf("@media");
+  const mediaTail = mediaAt >= 0 ? cssAreas.slice(mediaAt) : "";
+  check(
+    "narrow rows keep banner and actions under the step bar",
+    mediaTail.includes('"top"') &&
+      mediaTail.indexOf('"top"') < mediaTail.indexOf('"banner"') &&
+      mediaTail.indexOf('"banner"') < mediaTail.indexOf('"actions"') &&
+      mediaTail.indexOf('"actions"') < mediaTail.indexOf('"photo"'),
+    "editor.css phone areas",
   );
 }
 check(
@@ -295,15 +310,44 @@ check(
 }
 check(
   "box labels sit above the top edge",
-  /\.photo-opening-tag\s*\{[^}]*bottom\s*:\s*calc\(100% \+ 14px\)/s.test(confirmCss),
+  /\.photo-opening-tag\s*\{[^}]*bottom\s*:\s*calc\(100% \+ 26px\)/s.test(confirmCss),
   "editor.css",
 );
 check(
   "box labels flip inside with no room above",
   confirm.includes('tag.classList.add("inside")') &&
-    /\.photo-opening-tag\.inside\s*\{[^}]*top\s*:\s*12px/s.test(confirmCss),
+    /\.photo-opening-tag\.inside\s*\{[^}]*top\s*:\s*28px/s.test(confirmCss),
   "photo-confirm.ts + editor.css",
 );
+{
+  // Bar: every box label stays clear of every handle's 44 px hit area at
+  // 390 px — the label floats 26 px above (or 28 px inside) while a
+  // handle reaches 22 px from its centre, and boxes near the top flip
+  // inside early (22 % of the photo height).
+  const above = /\.photo-opening-tag\s*\{[^}]*bottom\s*:\s*calc\(100% \+ (\d+)px\)/s.exec(
+    confirmCss,
+  );
+  const inside = /\.photo-opening-tag\.inside\s*\{[^}]*top\s*:\s*(\d+)px/s.exec(confirmCss);
+  const aboveGap = above?.[1] === undefined ? NaN : Number(above[1]);
+  const insideTop = inside?.[1] === undefined ? NaN : Number(inside[1]);
+  check("the label floats clear above its box", aboveGap >= 26, `${String(aboveGap)} px`);
+  check("the inside label sits below the top grip", insideTop >= 26, `${String(insideTop)} px`);
+  check(
+    "boxes near the top flip inside early",
+    /< 0\.22/.test(confirm),
+    "photo-confirm.ts threshold",
+  );
+  const handleHit =
+    /\.photo-handle::after\s*\{[^}]*inset\s*:\s*-8px/s.test(confirmCss) &&
+    /\.photo-grip::after\s*\{[^}]*inset\s*:\s*-12px/s.test(confirmCss);
+  check("handles answer 44 px at 390 px", handleHit, "editor.css hit areas");
+  const reach = 22;
+  check(
+    "the label clears every handle hit area at 390 px",
+    handleHit && aboveGap - reach >= 4 && insideTop - reach >= 4,
+    `gap ${String(aboveGap)} / inside ${String(insideTop)} vs reach ${String(reach)}`,
+  );
+}
 check(
   "corner handles answer 44 px with a 28 px dot",
   /\.photo-handle\s*\{[^}]*width\s*:\s*28px/s.test(confirmCss) &&
