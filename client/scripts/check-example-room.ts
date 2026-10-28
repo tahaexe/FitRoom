@@ -56,7 +56,7 @@ import {
   openingBoxTextWithPm,
   wallPillText,
 } from "../src/editor/photo-confirm.js";
-import { TURN_ON_LIVE, USE_SAMPLE_ROOM } from "../src/copy.js";
+import { ARRANGE_PLACEHOLDER, TURN_ON_LIVE, USE_SAMPLE_ROOM } from "../src/copy.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const clientDir = resolve(here, "..");
@@ -440,6 +440,67 @@ function main(): void {
     renderFiles >= 1,
     `${String(renderFiles)} render file(s)`,
   );
+
+  // ---- Item 1: example floor is light oak, arrange placeholder fits ----
+  check(
+    "the example build uses the light-oak floor",
+    flowSource.includes('this.exampleMode ? "WoodFloor039"'),
+    "flow.ts must build the example room with WoodFloor039",
+  );
+  const surfacesSource = readFileSync(
+    join(repoRoot, "shared", "src", "photo-room", "surfaces.ts"),
+    "utf8",
+  );
+  check(
+    "the surface picker knows WoodFloor039",
+    surfacesSource.includes("WoodFloor039") && surfacesSource.includes("WOOD_FLOORS"),
+    "shared surfaces.ts",
+  );
+  let means: Record<string, string> = {};
+  try {
+    means = JSON.parse(
+      readFileSync(join(repoRoot, "shared", "src", "photo-room", "texture-means.json"), "utf8"),
+    ) as Record<string, string>;
+  } catch {
+    means = {};
+  }
+  check(
+    "WoodFloor039 has a measured mean colour",
+    typeof means["WoodFloor039"] === "string" && /^#[0-9A-F]{6}$/.test(means["WoodFloor039"] as string),
+    String(means["WoodFloor039"] ?? "missing"),
+  );
+  check(
+    "the light-oak texture exists on disk",
+    readdirSync(join(repoRoot, "client", "public", "assets", "textures", "ambientcg")).includes(
+      "WoodFloor039",
+    ),
+    "ambientcg/WoodFloor039",
+  );
+  check(
+    "the arrange placeholder is the short copy",
+    ARRANGE_PLACEHOLDER === "Arrange my room…",
+    ARRANGE_PLACEHOLDER,
+  );
+  check(
+    "the arrange input renders the placeholder from the copy module",
+    assistantSource.includes("ARRANGE_PLACEHOLDER") &&
+      assistantSource.includes("input.placeholder = ARRANGE_PLACEHOLDER"),
+    "panel.ts",
+  );
+  // The field keeps the whole placeholder: desktop panel (264 px) and phone
+  // sheet (390 px) both leave room for the 17-char placeholder plus padding
+  // and the Send button.
+  for (const [width, inputWidth] of [
+    [1366, 154],
+    [390, 280],
+  ] as const) {
+    const estimate = ARRANGE_PLACEHOLDER.length * 7.8 + 16;
+    check(
+      `the arrange placeholder fits at ${String(width)} px`,
+      estimate <= inputWidth,
+      `"${ARRANGE_PLACEHOLDER}" ~${estimate.toFixed(0)} px in ~${String(inputWidth)} px`,
+    );
+  }
 
   console.log(
     failures === 0

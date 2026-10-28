@@ -1462,8 +1462,12 @@ export class PhotoFlow {
     // paint or wallpaper, and the per-photo wall medians blend into one tint.
     const { wallTints, floorColors } = this.surfaceColors();
     const floorMedian = blendWallTints(floorColors);
+    // The example photos show light oak: build the example room with the
+    // light-oak texture the picker knows (request data and demo answers
+    // stay as they are).
+    const pickedFloor = pickFloorTexture(label.floor.family, floorMedian);
     draft.layout.surfaces = {
-      floor: pickFloorTexture(label.floor.family, floorMedian),
+      floor: this.exampleMode ? "WoodFloor039" : pickedFloor,
       wall: pickWallTexture(label.walls.family),
       ...(blendWallTints(wallTints) === null
         ? {}

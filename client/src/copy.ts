@@ -53,6 +53,9 @@ export const EMPTY_ROOM_ACTION = "Furnish it for me";
 export const CART_EMPTY = "Your cart is empty. Add furniture from the catalog.";
 export const CART_EMPTY_ACTION = "Add furniture to the room first";
 
+/** Arrange input placeholder: short enough to fit the field at 390 px. */
+export const ARRANGE_PLACEHOLDER = "Arrange my room…";
+
 /** Catalog search with no result. */
 export function catalogEmptyText(query: string): string {
   const q = query.trim();

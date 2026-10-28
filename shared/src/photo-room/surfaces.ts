@@ -47,6 +47,7 @@ export const FINISH_NAMES: Readonly<Record<string, string>> = {
   WoodFloor051: "Honey oak",
   WoodFloor064: "Smoked oak",
   WoodFloor071: "Pale ash",
+  WoodFloor039: "Light oak natural",
   Tiles107: "Grey stone tiles",
   Tiles139: "Sand stone tiles",
   Carpet012: "Oatmeal carpet",
@@ -70,6 +71,7 @@ export const WOOD_FLOORS: readonly string[] = [
   "WoodFloor051",
   "WoodFloor064",
   "WoodFloor071",
+  "WoodFloor039",
 ];
 export const TILE_FLOORS: readonly string[] = ["Tiles107", "Tiles139"];
 export const CARPET_FLOORS: readonly string[] = ["Carpet012", "Carpet015", "Carpet016"];

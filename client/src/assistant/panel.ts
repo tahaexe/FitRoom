@@ -52,6 +52,7 @@ import { isLive, postAssistant, setLive, type ApiResult } from "../api";
 import { isExampleRoom } from "../photo-room/example";
 import {
   AI_UNREACHABLE,
+  ARRANGE_PLACEHOLDER,
   ASSISTANT_LOADING,
   NOT_READY_MESSAGE,
   TURN_ON_LIVE,
@@ -183,7 +184,7 @@ export class AssistantPanel {
     const input = document.createElement("input");
     input.type = "text";
     input.name = "arrange-request";
-    input.placeholder = "Arrange the room…";
+    input.placeholder = ARRANGE_PLACEHOLDER;
     input.title = "Ask the layout assistant in plain language";
     input.setAttribute("aria-label", "Ask the layout assistant");
     input.addEventListener("keydown", (event) => {
