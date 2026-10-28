@@ -310,7 +310,8 @@ check(
   const short = "4 · $3,280";
   const long = "4 items · $3,280";
   const usesShort =
-    main.includes("`${String(count)} · $${") && main.includes("phoneCart.textContent = short");
+    main.includes("`${String(count)} · ${formatCatalogPrice(total)}`") &&
+    main.includes("phoneCart.textContent = short");
   const usesLongName =
     main.includes("phoneCart.setAttribute(") && main.includes("formatTopBar(count, total)");
   check(
