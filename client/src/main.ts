@@ -1924,6 +1924,8 @@ class FitRoomApp {
     } else if (action === "credits") {
       const dlg = document.getElementById("credits-dialog");
       if (dlg instanceof HTMLDialogElement) dlg.showModal();
+    } else if (action === "guide") {
+      this.restartGuide();
     }
     this.syncPhoneBar();
   }
@@ -2311,6 +2313,12 @@ class FitRoomApp {
   /** Escape / "Skip tour": stored as `skipped`, the room keeps working. */
   private skipGuide(): void {
     this.guide.skip();
+    this.renderGuide();
+  }
+
+  /** Help ("?" / "Show the guide again"): the tour at the fitting moment. */
+  private restartGuide(): void {
+    this.guide.restart(this.guideScreen());
     this.renderGuide();
   }
 
@@ -2757,6 +2765,7 @@ class FitRoomApp {
       const dlg = document.getElementById("credits-dialog");
       if (dlg instanceof HTMLDialogElement) dlg.showModal();
     });
+    on("tool-guide", () => this.restartGuide());
   }
 
   /**

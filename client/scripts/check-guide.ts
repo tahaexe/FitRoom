@@ -231,6 +231,33 @@ check(
   check("guide:next-never-missing", stayed === 2, `got ${String(stayed)}`);
 }
 
+// ---- Help after `skipped` or `done` shows the moment that fits ----
+{
+  for (const outcome of ["skipped", "done"] as const) {
+    const storage = memoryStorage({ [GUIDE_KEY]: outcome });
+    const guide = new Guide(storage);
+    check(
+      `guide:help-after-${outcome}-empty`,
+      guide.restart(emptyScreen) === 2,
+      `Help on an empty room must show moment 2 after ${outcome}`,
+    );
+    const storagePieces = memoryStorage({ [GUIDE_KEY]: outcome });
+    const guidePieces = new Guide(storagePieces);
+    check(
+      `guide:help-after-${outcome}-pieces`,
+      guidePieces.restart(piecesScreen) === 3,
+      `Help with pieces must show moment 3 after ${outcome}`,
+    );
+    const storageDialog = memoryStorage({ [GUIDE_KEY]: outcome });
+    const guideDialog = new Guide(storageDialog);
+    check(
+      `guide:help-after-${outcome}-dialog`,
+      guideDialog.restart(dialogScreen) === 1,
+      `Help on the dialog must show moment 1 after ${outcome}`,
+    );
+  }
+}
+
 // ---- Targets exist per moment, desktop and phone ----
 {
   check(
@@ -332,6 +359,8 @@ const here = dirname(fileURLToPath(import.meta.url));
 const mainSource = readFileSync(join(here, "..", "src", "main.ts"), "utf8");
 const styleSource = readFileSync(join(here, "..", "src", "style.css"), "utf8");
 const hintsSource = readFileSync(join(here, "..", "src", "hints.ts"), "utf8");
+const indexSource = readFileSync(join(here, "..", "index.html"), "utf8");
+const phoneSource = readFileSync(join(here, "..", "index.html"), "utf8");
 
 check(
   "guide:motion-window",
@@ -415,5 +444,24 @@ check(
   mainSource.includes("this.skipGuide()") && /if \(this\.guide\.showing\)/.test(mainSource),
   "Escape skips the guide",
 );
+check(
+  "guide:help-desktop",
+  indexSource.includes('id="tool-guide"') &&
+    indexSource.includes('aria-label="Show the guide again"') &&
+    indexSource.includes('title="Show the guide again"'),
+  "a ? button in the header",
+);
+check(
+  "guide:help-phone",
+  phoneSource.includes('data-phone-action="guide"') &&
+    phoneSource.replace(/\s+/g, " ").includes("> Show the guide again <"),
+  "the phone ⋯ menu restarts the guide",
+);
+check(
+  "guide:help-wires-restart",
+  mainSource.includes("restartGuide") && mainSource.includes('"guide"'),
+  "Help starts the guide again at the fitting moment",
+);
+
 if (failures > 0) process.exit(1);
 console.log("guide: all checks passed");
