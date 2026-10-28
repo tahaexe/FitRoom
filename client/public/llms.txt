@@ -1,0 +1,3 @@
+# FitRoom
+Try furniture in your own room at true size, in the browser.
+Open the sample room to explore Demo mode with no account.

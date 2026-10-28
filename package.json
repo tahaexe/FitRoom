@@ -19,6 +19,7 @@
     "validate": "npm run validate -w @fitroom/shared",
     "dev:worker": "npm run build && wrangler dev",
     "check:worker": "tsx scripts/check-worker.ts",
+    "check:page-basics": "tsx scripts/check-page-basics.ts",
     "deploy": "node scripts/deploy.mjs",
     "check:gateway": "npm run check:gateway -w @fitroom/server",
     "check:recommend": "npm run check:recommend -w @fitroom/server",
