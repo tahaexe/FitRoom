@@ -34,10 +34,12 @@ function check(name: string, pass: boolean, detail?: string): void {
 const DESCRIPTION = "Try furniture in your own room at true size, in the browser.";
 
 const html = readFileSync(join(repoRoot, "client", "index.html"), "utf8");
+const metaTag = html.match(/<meta\b[^>]*\bname\s*=\s*(["'])description\1[^>]*>/s)?.[0] ?? "";
+const metaContent = metaTag.match(/\bcontent\s*=\s*(["'])(.*?)\1/s)?.[2];
 check(
   "HTML has the one-line meta description",
-  html.includes(`<meta name="description" content="${DESCRIPTION}" />`),
-  "client/index.html",
+  metaContent === DESCRIPTION,
+  JSON.stringify(metaTag),
 );
 
 const robotsPath = join(repoRoot, "client", "public", "robots.txt");
