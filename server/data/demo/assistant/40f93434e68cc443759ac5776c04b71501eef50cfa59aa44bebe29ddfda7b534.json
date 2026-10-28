@@ -1,0 +1,222 @@
+{
+  "route": "assistant",
+  "model": "muse-spark-1.3",
+  "input": {
+    "request": "Put the sofa under the window and keep 80 cm free in front of the door.",
+    "messages": [
+      {
+        "role": "user",
+        "content": "Put the sofa under the window and keep 80 cm free in front of the door."
+      },
+      {
+        "role": "assistant",
+        "content": "I'll place your sofa under the window while keeping the door clear.",
+        "toolCalls": [
+          {
+            "id": "call_b4a0c558-5c56-455f-80e9-70e96bcd07a4",
+            "name": "get_room",
+            "arguments": {}
+          },
+          {
+            "id": "call_a4d5e7b6-c63a-4dda-b047-5c9210324117",
+            "name": "list_items",
+            "arguments": {}
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "{\"ok\":true,\"room\":{\"name\":\"Example room (generated photos)\",\"walls\":[{\"id\":\"wall-1\",\"name\":\"Door wall\",\"start\":{\"x\":0,\"z\":0},\"end\":{\"x\":420,\"z\":0},\"length_cm\":420},{\"id\":\"wall-2\",\"name\":\"Right wall (window)\",\"start\":{\"x\":420,\"z\":0},\"end\":{\"x\":420,\"z\":362},\"length_cm\":362},{\"id\":\"wall-3\",\"name\":\"Back wall (window)\",\"start\":{\"x\":420,\"z\":362},\"end\":{\"x\":0,\"z\":362},\"length_cm\":420},{\"id\":\"wall-4\",\"name\":\"Left wall\",\"start\":{\"x\":0,\"z\":362},\"end\":{\"x\":0,\"z\":0},\"length_cm\":362}],\"openings\":[{\"id\":\"door-1\",\"wallId\":\"wall-1\",\"wall\":\"Door wall\",\"type\":\"door\",\"span_cm\":[21,121],\"sill_cm\":0,\"hinge\":\"left\",\"swing\":\"in\"},{\"id\":\"window-1\",\"wallId\":\"wall-3\",\"wall\":\"Back wall (window)\",\"type\":\"window\",\"span_cm\":[78,238],\"sill_cm\":98},{\"id\":\"window-2\",\"wallId\":\"wall-2\",\"wall\":\"Right wall (window)\",\"type\":\"window\",\"span_cm\":[121,241],\"sill_cm\":99}],\"fixtures\":[],\"freeRuns\":[{\"wallId\":\"wall-1\",\"wall\":\"Door wall\",\"start_cm\":130,\"end_cm\":415,\"length_cm\":285,\"depth_cm\":150},{\"wallId\":\"wall-2\",\"wall\":\"Right wall (window)\",\"start_cm\":5,\"end_cm\":357,\"length_cm\":352,\"depth_cm\":150},{\"wallId\":\"wall-3\",\"wall\":\"Back wall (window)\",\"start_cm\":10,\"end_cm\":415,\"length_cm\":405,\"depth_cm\":122},{\"wallId\":\"wall-4\",\"wall\":\"Left wall\",\"start_cm\":10,\"end_cm\":120,\"length_cm\":110,\"depth_cm\":150}]}}",
+        "toolCallId": "call_b4a0c558-5c56-455f-80e9-70e96bcd07a4",
+        "name": "get_room"
+      },
+      {
+        "role": "tool",
+        "content": "{\"ok\":true,\"items\":[]}",
+        "toolCallId": "call_a4d5e7b6-c63a-4dda-b047-5c9210324117",
+        "name": "list_items"
+      },
+      {
+        "role": "assistant",
+        "content": "Let me find a sofa that fits under your window.",
+        "toolCalls": [
+          {
+            "id": "call_f4e08691-0933-42c3-ac53-4be66bdd6014",
+            "name": "list_catalog",
+            "arguments": {
+              "category": "sofa"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "{\"ok\":true,\"products\":[{\"id\":\"sofa_02\",\"name\":\"Chester Leather Sofa\",\"category\":\"sofa\",\"size\":{\"w\":180.7,\"d\":81.8,\"h\":70.9},\"price_usd\":1490,\"variants\":[]},{\"id\":\"sofa_03\",\"name\":\"Heritage Grand Sofa\",\"category\":\"sofa\",\"size\":{\"w\":273.1,\"d\":92.5,\"h\":111.8},\"price_usd\":1790,\"variants\":[]},{\"id\":\"Sofa_01\",\"name\":\"Provence Loveseat\",\"category\":\"sofa\",\"size\":{\"w\":157.1,\"d\":65.8,\"h\":79.7},\"price_usd\":890,\"variants\":[\"Stone\",\"Navy\",\"Rust\",\"Oatmeal\",\"Charcoal\",\"Pearl Grey\"]},{\"id\":\"painted_wooden_sofa\",\"name\":\"Vintage Painted Settee\",\"category\":\"sofa\",\"size\":{\"w\":192.6,\"d\":61.9,\"h\":100.7},\"price_usd\":990,\"variants\":[]},{\"id\":\"vintage_day_bed\",\"name\":\"Vintage Wooden Daybed\",\"category\":\"sofa\",\"size\":{\"w\":166.9,\"d\":72.3,\"h\":95.4},\"price_usd\":1050,\"variants\":[]},{\"id\":\"fitroom_sofa_3seat\",\"name\":\"Oslo Three-Seat Sofa\",\"category\":\"sofa\",\"size\":{\"w\":220,\"d\":90,\"h\":80},\"price_usd\":1190,\"variants\":[]}]}",
+        "toolCallId": "call_f4e08691-0933-42c3-ac53-4be66bdd6014",
+        "name": "list_catalog"
+      },
+      {
+        "role": "assistant",
+        "content": "I'll put a loveseat under the back-wall window where it fits the sill and leaves the door clear.",
+        "toolCalls": [
+          {
+            "id": "call_c9bc6a6c-90bd-481d-aea3-a56dbf398147",
+            "name": "place_against_wall",
+            "arguments": {
+              "centred_on": "window-1",
+              "productId": "Sofa_01",
+              "wallId": "wall-3"
+            }
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "{\"ok\":true,\"instanceId\":\"Sofa_01\",\"productId\":\"Sofa_01\",\"name\":\"Provence Loveseat\",\"centre\":{\"x\":262,\"z\":329.1},\"rotationY\":180,\"footprint\":{\"x0\":183.5,\"z0\":296.2,\"x1\":340.6,\"z1\":362},\"variant\":\"Stone\",\"issues\":[],\"wall\":\"Back wall (window)\"}",
+        "toolCallId": "call_c9bc6a6c-90bd-481d-aea3-a56dbf398147",
+        "name": "place_against_wall"
+      }
+    ],
+    "room": {
+      "id": "photos-room",
+      "name": "Example room (generated photos)",
+      "units": "cm",
+      "walls": [
+        {
+          "id": "wall-1",
+          "start": {
+            "x": 0,
+            "z": 0
+          },
+          "end": {
+            "x": 420,
+            "z": 0
+          },
+          "height": 269,
+          "thickness": 12
+        },
+        {
+          "id": "wall-2",
+          "start": {
+            "x": 420,
+            "z": 0
+          },
+          "end": {
+            "x": 420,
+            "z": 362
+          },
+          "height": 269,
+          "thickness": 12
+        },
+        {
+          "id": "wall-3",
+          "start": {
+            "x": 420,
+            "z": 362
+          },
+          "end": {
+            "x": 0,
+            "z": 362
+          },
+          "height": 269,
+          "thickness": 12
+        },
+        {
+          "id": "wall-4",
+          "start": {
+            "x": 0,
+            "z": 362
+          },
+          "end": {
+            "x": 0,
+            "z": 0
+          },
+          "height": 269,
+          "thickness": 12
+        }
+      ],
+      "openings": [
+        {
+          "id": "door-1",
+          "wallId": "wall-1",
+          "type": "door",
+          "offset": 21,
+          "width": 100,
+          "height": 210,
+          "sillHeight": 0,
+          "hinge": "left",
+          "swing": "in"
+        },
+        {
+          "id": "window-1",
+          "wallId": "wall-3",
+          "type": "window",
+          "offset": 78,
+          "width": 160,
+          "height": 137,
+          "sillHeight": 98
+        },
+        {
+          "id": "window-2",
+          "wallId": "wall-2",
+          "type": "window",
+          "offset": 121,
+          "width": 120,
+          "height": 139,
+          "sillHeight": 99
+        }
+      ],
+      "fixtures": [],
+      "existing": [],
+      "surfaces": {
+        "floor": "oak-light",
+        "wall": "PaintedPlaster017"
+      },
+      "style": {
+        "tags": [],
+        "dominantColors": []
+      },
+      "source": "photos",
+      "confidence": 0.7
+    },
+    "scene": {
+      "roomId": "photos-room",
+      "items": [
+        {
+          "instanceId": "Sofa_01",
+          "productId": "Sofa_01",
+          "position": {
+            "x": 262,
+            "z": 329.1
+          },
+          "rotationY": 180,
+          "variant": "Stone"
+        }
+      ],
+      "camera": {
+        "mode": "orbit",
+        "position": {
+          "x": 3.4,
+          "y": 3.1,
+          "z": 4.2
+        },
+        "target": {
+          "x": 2.1,
+          "y": 0,
+          "z": 1.8
+        }
+      }
+    }
+  },
+  "response": {
+    "text": "Sofa is under the window — now I'll verify the door clearance and fit.",
+    "toolCalls": [
+      {
+        "id": "call_d91edfc7-5508-4336-aa19-df5dc8c4e138",
+        "name": "check_fit",
+        "arguments": {}
+      }
+    ]
+  },
+  "time": "2026-10-28T09:12:23.058Z"
+}

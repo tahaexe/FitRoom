@@ -4,32 +4,53 @@
   "input": {
     "room": {
       "name": "Living room 420 × 360",
-      "size_cm": [420, 360],
+      "size_cm": [
+        420,
+        360
+      ],
       "style": {
-        "tags": ["modern", "neutral"],
-        "colors": ["#E8E2D9", "#A8A29E"]
+        "tags": [
+          "modern",
+          "neutral"
+        ],
+        "colors": [
+          "#E8E2D9",
+          "#A8A29E"
+        ]
       }
     },
     "placed": [
       {
         "productId": "modern_arm_chair_01",
         "name": "Nord Leather Armchair",
-        "colors": ["black leather", "oak"]
+        "colors": [
+          "black leather",
+          "oak"
+        ]
       },
       {
         "productId": "modern_coffee_table_01",
         "name": "Slate Coffee Table",
-        "colors": ["warm wood frame", "stone top"]
+        "colors": [
+          "warm wood frame",
+          "stone top"
+        ]
       },
       {
         "productId": "modern_wooden_cabinet",
         "name": "Rhythm TV Unit",
-        "colors": ["walnut slats", "black legs"]
+        "colors": [
+          "walnut slats",
+          "black legs"
+        ]
       },
       {
         "productId": "sofa_02",
         "name": "Chester Leather Sofa",
-        "colors": ["black leather", "dark wood"]
+        "colors": [
+          "black leather",
+          "dark wood"
+        ]
       }
     ],
     "request": {
@@ -89,17 +110,32 @@
       {
         "productId": "wooden_display_shelves_01",
         "name": "Cube Shelf 3×3",
-        "size_cm": [107.8, 37.2, 155.6],
+        "size_cm": [
+          107.8,
+          37.2,
+          155.6
+        ],
         "price_usd": 210,
-        "styleTags": ["Scandinavian"],
-        "colors": ["light wood", "grey fabric boxes"],
+        "styleTags": [
+          "Scandinavian"
+        ],
+        "colors": [
+          "light wood",
+          "grey fabric boxes"
+        ],
         "spot": {
           "kind": "run",
           "wall": "Door wall",
-          "run_cm": [230, 415],
+          "run_cm": [
+            230,
+            415
+          ],
           "runLength_cm": 185,
           "spare_cm": 77.2,
-          "centre_cm": [322.5, 22.6],
+          "centre_cm": [
+            322.5,
+            22.6
+          ],
           "rotationY": 0
         }
       }

@@ -4,32 +4,53 @@
   "input": {
     "room": {
       "name": "Living room 420 × 360",
-      "size_cm": [420, 360],
+      "size_cm": [
+        420,
+        360
+      ],
       "style": {
-        "tags": ["modern", "neutral"],
-        "colors": ["#E8E2D9", "#A8A29E"]
+        "tags": [
+          "modern",
+          "neutral"
+        ],
+        "colors": [
+          "#E8E2D9",
+          "#A8A29E"
+        ]
       }
     },
     "placed": [
       {
         "productId": "modern_arm_chair_01",
         "name": "Nord Leather Armchair",
-        "colors": ["black leather", "oak"]
+        "colors": [
+          "black leather",
+          "oak"
+        ]
       },
       {
         "productId": "modern_coffee_table_01",
         "name": "Slate Coffee Table",
-        "colors": ["warm wood frame", "stone top"]
+        "colors": [
+          "warm wood frame",
+          "stone top"
+        ]
       },
       {
         "productId": "modern_wooden_cabinet",
         "name": "Rhythm TV Unit",
-        "colors": ["walnut slats", "black legs"]
+        "colors": [
+          "walnut slats",
+          "black legs"
+        ]
       },
       {
         "productId": "sofa_02",
         "name": "Chester Leather Sofa",
-        "colors": ["black leather", "dark wood"]
+        "colors": [
+          "black leather",
+          "dark wood"
+        ]
       }
     ],
     "request": {
@@ -94,85 +115,163 @@
       {
         "productId": "side_table_01",
         "name": "Pine Side Table",
-        "size_cm": [55, 45, 55.1],
+        "size_cm": [
+          55,
+          45,
+          55.1
+        ],
         "price_usd": 120,
-        "styleTags": ["simple", "Scandinavian"],
-        "colors": ["light wood"],
+        "styleTags": [
+          "simple",
+          "Scandinavian"
+        ],
+        "colors": [
+          "light wood"
+        ],
         "spot": {
           "kind": "run",
           "wall": "Right wall (window)",
-          "run_cm": [5, 75],
+          "run_cm": [
+            5,
+            75
+          ],
           "runLength_cm": 70,
           "spare_cm": 15,
-          "centre_cm": [393.5, 40],
+          "centre_cm": [
+            393.5,
+            40
+          ],
           "rotationY": 270
         }
       },
       {
         "productId": "painted_wooden_chair_01",
         "name": "Country Painted Dining Chair",
-        "size_cm": [43.2, 54, 95.6],
+        "size_cm": [
+          43.2,
+          54,
+          95.6
+        ],
         "price_usd": 160,
-        "styleTags": ["country", "rustic"],
-        "colors": ["painted wood"],
+        "styleTags": [
+          "country",
+          "rustic"
+        ],
+        "colors": [
+          "painted wood"
+        ],
         "spot": {
           "kind": "run",
           "wall": "Right wall (window)",
-          "run_cm": [5, 75],
+          "run_cm": [
+            5,
+            75
+          ],
           "runLength_cm": 70,
           "spare_cm": 26.8,
-          "centre_cm": [389, 40],
+          "centre_cm": [
+            389,
+            40
+          ],
           "rotationY": 270
         }
       },
       {
         "productId": "painted_wooden_chair_02",
         "name": "High-Back Painted Dining Chair",
-        "size_cm": [50.5, 52.3, 99.8],
+        "size_cm": [
+          50.5,
+          52.3,
+          99.8
+        ],
         "price_usd": 190,
-        "styleTags": ["country", "classic"],
-        "colors": ["painted wood", "woven rush seat"],
+        "styleTags": [
+          "country",
+          "classic"
+        ],
+        "colors": [
+          "painted wood",
+          "woven rush seat"
+        ],
         "spot": {
           "kind": "run",
           "wall": "Right wall (window)",
-          "run_cm": [5, 75],
+          "run_cm": [
+            5,
+            75
+          ],
           "runLength_cm": 70,
           "spare_cm": 19.5,
-          "centre_cm": [389.9, 40],
+          "centre_cm": [
+            389.9,
+            40
+          ],
           "rotationY": 270
         }
       },
       {
         "productId": "steel_frame_shelves_02",
         "name": "Steel Frame Single Bookcase",
-        "size_cm": [59.3, 50.2, 214.2],
+        "size_cm": [
+          59.3,
+          50.2,
+          214.2
+        ],
         "price_usd": 290,
-        "styleTags": ["industrial", "modern"],
-        "colors": ["black steel", "wood shelves"],
+        "styleTags": [
+          "industrial",
+          "modern"
+        ],
+        "colors": [
+          "black steel",
+          "wood shelves"
+        ],
         "spot": {
           "kind": "run",
           "wall": "Right wall (window)",
-          "run_cm": [5, 75],
+          "run_cm": [
+            5,
+            75
+          ],
           "runLength_cm": 70,
           "spare_cm": 10.7,
-          "centre_cm": [390.9, 40],
+          "centre_cm": [
+            390.9,
+            40
+          ],
           "rotationY": 270
         }
       },
       {
         "productId": "fitroom_floor_lamp",
         "name": "Aria Floor Lamp",
-        "size_cm": [40, 40, 160],
+        "size_cm": [
+          40,
+          40,
+          160
+        ],
         "price_usd": 189,
-        "styleTags": ["modern", "minimalist"],
-        "colors": ["black metal", "oatmeal fabric shade"],
+        "styleTags": [
+          "modern",
+          "minimalist"
+        ],
+        "colors": [
+          "black metal",
+          "oatmeal fabric shade"
+        ],
         "spot": {
           "kind": "run",
           "wall": "Right wall (window)",
-          "run_cm": [5, 75],
+          "run_cm": [
+            5,
+            75
+          ],
           "runLength_cm": 70,
           "spare_cm": 30,
-          "centre_cm": [396, 40],
+          "centre_cm": [
+            396,
+            40
+          ],
           "rotationY": 270
         }
       }

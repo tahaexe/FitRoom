@@ -4,39 +4,63 @@
   "input": {
     "room": {
       "name": "Living room 420 × 360",
-      "size_cm": [420, 360],
+      "size_cm": [
+        420,
+        360
+      ],
       "style": {
-        "tags": ["modern", "neutral"],
-        "colors": ["#E8E2D9", "#A8A29E"]
+        "tags": [
+          "modern",
+          "neutral"
+        ],
+        "colors": [
+          "#E8E2D9",
+          "#A8A29E"
+        ]
       }
     },
     "placed": [
       {
         "productId": "modern_arm_chair_01",
         "name": "Nord Leather Armchair",
-        "colors": ["black leather", "oak"]
+        "colors": [
+          "black leather",
+          "oak"
+        ]
       },
       {
         "productId": "modern_coffee_table_01",
         "name": "Slate Coffee Table",
-        "colors": ["warm wood frame", "stone top"]
+        "colors": [
+          "warm wood frame",
+          "stone top"
+        ]
       },
       {
         "productId": "modern_wooden_cabinet",
         "name": "Rhythm TV Unit",
-        "colors": ["walnut slats", "black legs"]
+        "colors": [
+          "walnut slats",
+          "black legs"
+        ]
       },
       {
         "productId": "sofa_02",
         "name": "Chester Leather Sofa",
-        "colors": ["black leather", "dark wood"]
+        "colors": [
+          "black leather",
+          "dark wood"
+        ]
       }
     ],
     "request": {
       "category": "sofa",
       "replace": {
         "productId": "sofa_02",
-        "centre_cm": [41, 200],
+        "centre_cm": [
+          41,
+          200
+        ],
         "rotationY": 90
       }
     },
@@ -94,51 +118,99 @@
       {
         "productId": "Sofa_01",
         "name": "Provence Loveseat",
-        "size_cm": [157.1, 65.8, 79.7],
+        "size_cm": [
+          157.1,
+          65.8,
+          79.7
+        ],
         "price_usd": 890,
-        "styleTags": ["French provincial", "classic"],
-        "colors": ["stone fabric (default)", "carved dark wood"],
+        "styleTags": [
+          "French provincial",
+          "classic"
+        ],
+        "colors": [
+          "stone fabric (default)",
+          "carved dark wood"
+        ],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [81.4, 238.6],
+          "run_cm": [
+            81.4,
+            238.6
+          ],
           "runLength_cm": 157.2,
           "spare_cm": 0,
-          "centre_cm": [41, 200],
+          "centre_cm": [
+            41,
+            200
+          ],
           "rotationY": 90
         }
       },
       {
         "productId": "painted_wooden_sofa",
         "name": "Vintage Painted Settee",
-        "size_cm": [192.6, 61.9, 100.7],
+        "size_cm": [
+          192.6,
+          61.9,
+          100.7
+        ],
         "price_usd": 990,
-        "styleTags": ["rustic", "vintage"],
-        "colors": ["distressed white wood", "striped cushion"],
+        "styleTags": [
+          "rustic",
+          "vintage"
+        ],
+        "colors": [
+          "distressed white wood",
+          "striped cushion"
+        ],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [63.7, 256.3],
+          "run_cm": [
+            63.7,
+            256.3
+          ],
           "runLength_cm": 192.6,
           "spare_cm": 0,
-          "centre_cm": [41, 200],
+          "centre_cm": [
+            41,
+            200
+          ],
           "rotationY": 90
         }
       },
       {
         "productId": "vintage_day_bed",
         "name": "Vintage Wooden Daybed",
-        "size_cm": [166.9, 72.3, 95.4],
+        "size_cm": [
+          166.9,
+          72.3,
+          95.4
+        ],
         "price_usd": 1050,
-        "styleTags": ["vintage", "colonial"],
-        "colors": ["dark wood", "natural mattress"],
+        "styleTags": [
+          "vintage",
+          "colonial"
+        ],
+        "colors": [
+          "dark wood",
+          "natural mattress"
+        ],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [76.5, 243.5],
+          "run_cm": [
+            76.5,
+            243.5
+          ],
           "runLength_cm": 167,
           "spare_cm": 0,
-          "centre_cm": [41, 200],
+          "centre_cm": [
+            41,
+            200
+          ],
           "rotationY": 90
         }
       }

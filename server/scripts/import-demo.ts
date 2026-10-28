@@ -31,7 +31,10 @@ import {
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { buildAssistantDemoRequests } from "../src/assistant-demo.js";
+import {
+  buildAssistantDemoRequests,
+  buildExampleAssistantDemoRequests,
+} from "../src/assistant-demo.js";
 import { loadGatewayConfig, META_MODELS } from "../src/config.js";
 import { gatewayKey } from "../src/meta/keys.js";
 import { assistantKeyInput } from "../src/routes/assistant.js";
@@ -135,7 +138,9 @@ function main(): void {
   const catalog = JSON.parse(
     readFileSync(resolve(sharedDir, "catalog", "catalog.json"), "utf8"),
   ) as CatalogItem[];
-  const briefFirsts = buildAssistantDemoRequests().filter((first) => first.brief !== undefined);
+  const briefFirsts = [...buildAssistantDemoRequests(), ...buildExampleAssistantDemoRequests()].filter(
+    (first) => first.brief !== undefined,
+  );
   const briefReached = new Set<string>();
   const briefImportable = new Set<string>();
   for (const first of briefFirsts) {

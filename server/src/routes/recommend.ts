@@ -99,12 +99,35 @@ async function callAdvisor(apiKey: string, request: RecommendRequest): Promise<U
   throw new UpstreamFriendlyError(RECOMMEND_FRIENDLY_ERROR, lastUsage ?? emptyUsage());
 }
 
+/**
+ * Key input for the demo store, cache and caps: the canonical request with
+ * the pixel-blended `surfaces.wallTint` stripped from the room, so the
+ * example room replays whatever the photo pixels blended to (JPEG decoders
+ * differ by a step or two). Rooms without a tint key exactly as before.
+ */
+export function recommendKeyInput(input: unknown): unknown {
+  if (typeof input !== "object" || input === null || Array.isArray(input)) return input;
+  const record = input as Record<string, unknown>;
+  if (typeof record["room"] !== "object" || record["room"] === null) return input;
+  const room = record["room"] as Record<string, unknown>;
+  if (
+    typeof room["surfaces"] !== "object" ||
+    room["surfaces"] === null ||
+    !("wallTint" in (room["surfaces"] as Record<string, unknown>))
+  ) {
+    return input;
+  }
+  const surfaces = { ...(room["surfaces"] as Record<string, unknown>) };
+  delete surfaces["wallTint"];
+  return { ...record, room: { ...room, surfaces } };
+}
+
 export const recommendDef: RouteDef = {
   route: "recommend",
   model: META_MODELS.spark,
   liveReady: true,
   parseBody: parseRecommendBody,
-  keyInput: (input: unknown) => input,
+  keyInput: recommendKeyInput,
   upstream: async (apiKey: string, input: unknown): Promise<UpstreamResult> =>
     callAdvisor(apiKey, input as RecommendRequest),
 };

@@ -150,6 +150,21 @@ export function assistantKeyInput(input: unknown): unknown {
   if (typeof input !== "object" || input === null || Array.isArray(input)) return input;
   const record = input as Record<string, unknown>;
   if (!Array.isArray(record["messages"])) return input;
+  // The pixel-blended wall tint never changes the layout, so the demo,
+  // cache and cap keys ignore it: the example room replays whatever the
+  // photo pixels blended to (JPEG decoders differ by a step or two).
+  if (typeof record["room"] === "object" && record["room"] !== null) {
+    const room = record["room"] as Record<string, unknown>;
+    if (
+      typeof room["surfaces"] === "object" &&
+      room["surfaces"] !== null &&
+      "wallTint" in (room["surfaces"] as Record<string, unknown>)
+    ) {
+      const surfaces = { ...(room["surfaces"] as Record<string, unknown>) };
+      delete surfaces["wallTint"];
+      return assistantKeyInput({ ...record, room: { ...room, surfaces } });
+    }
+  }
   const messages = (record["messages"] as unknown[]).map((entry) => {
     if (typeof entry !== "object" || entry === null || Array.isArray(entry)) return entry;
     const message = entry as Record<string, unknown>;

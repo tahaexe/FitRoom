@@ -75,3 +75,66 @@ export function buildAssistantDemoRequests(): AssistantRequest[] {
   });
   return [...arrange, ...furnish];
 }
+
+/**
+ * The example room's built layout (photo-solved, as the photo flow builds
+ * it: A taped 420, B estimated, default label style, paint + oak finishes),
+ * and its empty start scene (the photo build opens with no pieces and the
+ * default camera, like `emptyScene` in the client).
+ */
+export function readExampleRoom(): RoomLayout {
+  const sharedDir = resolve(serverRoot(), "..", "shared");
+  return readJson(resolve(sharedDir, "samples", "example-room.json")) as RoomLayout;
+}
+
+export function emptyExampleScene(): SceneState {
+  return {
+    roomId: "photos-room",
+    items: [],
+    camera: {
+      mode: "orbit",
+      position: { x: 3.4, y: 3.1, z: 4.2 },
+      target: { x: 2.1, y: 0, z: 1.8 },
+    },
+  };
+}
+
+/**
+ * The example room's scripted arrange chips recorded for the demo: the
+ * first chip and the impossible one, on the built (empty) layout.
+ */
+export const EXAMPLE_ASSISTANT_DEMO_CHIPS: string[] = [
+  ASSISTANT_DEMO_REQUESTS[0] as string,
+  ASSISTANT_DEMO_REQUESTS[5] as string,
+];
+
+/** The example brief recorded for the demo: the first of the three briefs. */
+export const EXAMPLE_ASSISTANT_DEMO_BRIEF: AssistantBrief = {
+  ...(ASSISTANT_DEMO_BRIEFS[0] as AssistantBrief),
+};
+
+/**
+ * The example demo turns, rebuilt deterministically (one brief + two
+ * arrangements, all on the built empty layout). `demo-requests.ts` embeds
+ * their output; `check:assistant` replays them from the store.
+ */
+export function buildExampleAssistantDemoRequests(): AssistantRequest[] {
+  const room = readExampleRoom();
+  const scene = emptyExampleScene();
+  const brief = EXAMPLE_ASSISTANT_DEMO_BRIEF;
+  const briefRequest = buildBriefRequest(brief);
+  const first: AssistantRequest = {
+    request: briefRequest,
+    messages: [{ role: "user" as const, content: briefRequest }],
+    room: JSON.parse(JSON.stringify(room)) as RoomLayout,
+    scene: JSON.parse(JSON.stringify(scene)) as SceneState,
+    brief: { ...brief },
+  };
+  const arrange: AssistantRequest[] = EXAMPLE_ASSISTANT_DEMO_CHIPS.map((request) => ({
+    request,
+    messages: [{ role: "user" as const, content: request }],
+    room: JSON.parse(JSON.stringify(room)) as RoomLayout,
+    scene: JSON.parse(JSON.stringify(scene)) as SceneState,
+  }));
+  return [first, ...arrange];
+}

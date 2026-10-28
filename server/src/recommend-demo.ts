@@ -137,3 +137,79 @@ export function buildRecommendDemoRequests(): RecommendRequest[] {
     buildRecommendRequest(room, scene, catalog, query, verifyFor(query)),
   );
 }
+
+/**
+ * The example demo requests: "What fits here?" on the free wall runs of the
+ * built (empty) example room, longest first. Every run with a fitting
+ * candidate becomes one request (runs with none stay local, no model call),
+ * so every recorded answer fits by construction. Rebuilt deterministically;
+ * `demo-requests.ts` embeds their output; `check:recommend` replays them
+ * from the store.
+ */
+export function buildExampleRecommendDemoRequests(): RecommendRequest[] {
+  const sharedDir = resolve(serverRoot(), "..", "shared");
+  const room = readJson(resolve(sharedDir, "samples", "example-room.json")) as RoomLayout;
+  const scene = {
+    roomId: "photos-room",
+    items: [],
+    camera: {
+      mode: "orbit",
+      position: { x: 3.4, y: 3.1, z: 4.2 },
+      target: { x: 2.1, y: 0, z: 1.8 },
+    },
+  } as SceneState;
+  const catalog = readJson(resolve(sharedDir, "catalog", "catalog.json")) as CatalogItem[];
+  const catalogById = new Map(catalog.map((c) => [c.id, c]));
+  const products = new Map(
+    catalog.map((c) => [c.id, { size: { ...c.size }, category: c.category, name: c.name }]),
+  );
+  const engine = new FitEngine(room, products);
+  const base = new Set<string>();
+  for (const issue of engine.check(scene)) {
+    if (issue.severity === "error") base.add(issueKey(issue));
+  }
+  const verifyFor = (query: CandidateQuery) => {
+    const ignore = new Set(recommendIgnoreIds(scene, catalog, query));
+    const items = scene.items.filter((i) => !ignore.has(i.instanceId));
+    return (productId: string, position: { x: number; z: number }, rotationY: number): boolean => {
+      const probe = {
+        ...scene,
+        items: [
+          ...items,
+          {
+            instanceId: "recommend-probe",
+            productId,
+            position: {
+              x: Math.round(position.x * 10) / 10,
+              z: Math.round(position.z * 10) / 10,
+            },
+            rotationY,
+            variant: "",
+          },
+        ],
+      };
+      for (const issue of engine.check(probe)) {
+        if (issue.severity !== "error") continue;
+        if (!base.has(issueKey(issue))) return false;
+      }
+      return true;
+    };
+  };
+
+  const free = analyzeFreeSpace(room, scene, catalogById);
+  // Longest run first, like the demo room's own list.
+  const runs = [...free.runs].sort((a, b) => b.length_cm - a.length_cm);
+  const queries: CandidateQuery[] = [];
+  for (const run of runs) {
+    const query: CandidateQuery = {
+      category: "any",
+      spot: { wall: run.wall, start_cm: run.start_cm, end_cm: run.end_cm },
+    };
+    const built = buildRecommendRequest(room, scene, catalog, query, verifyFor(query));
+    if (built.candidates.length === 0) continue;
+    queries.push(query);
+  }
+  return queries.map((query) =>
+    buildRecommendRequest(room, scene, catalog, query, verifyFor(query)),
+  );
+}
