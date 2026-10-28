@@ -28,6 +28,7 @@ import type {
 } from "@fitroom/shared";
 import {
   ASSISTANT_MAX_ROUNDS,
+  answerParagraphs,
   assistantToolMessages,
   briefError,
   briefResultCard,
@@ -45,6 +46,7 @@ import {
   startBriefDraft,
   summarizeAssistantTurn,
   turnErrors,
+  vetoLinesForRecord,
 } from "@fitroom/shared";
 import { isLive, postAssistant, setLive, type ApiResult } from "../api";
 import { isExampleRoom } from "../photo-room/example";
@@ -914,17 +916,14 @@ export class AssistantPanel {
     const label = document.createElement("p");
     label.className = "assistant-model";
     label.textContent = "Muse Spark";
-    const text = document.createElement("p");
-    text.className = "assistant-answer";
-    text.textContent = answer;
-    card.append(label, text);
+    card.appendChild(label);
     // A turn that ends at the round cap composes its answer from the summary:
     // show it once instead of repeating the same paragraph twice.
-    if (summary !== answer) {
-      const sum = document.createElement("p");
-      sum.className = "assistant-summary";
-      sum.textContent = summary;
-      card.append(sum);
+    for (const [index, paragraph] of answerParagraphs(answer, summary).entries()) {
+      const line = document.createElement("p");
+      line.className = index === 0 ? "assistant-answer" : "assistant-summary";
+      line.textContent = paragraph;
+      card.append(line);
     }
     if (records.length > 0) {
       const details = document.createElement("details");
@@ -937,6 +936,14 @@ export class AssistantPanel {
         const item = document.createElement("li");
         item.textContent = formatAssistantToolRecord(this.deps.room, record);
         list.appendChild(item);
+        // A refused placement places nothing: its veto reads as its own
+        // line under the call, in shopper words with both lengths.
+        for (const veto of vetoLinesForRecord(this.deps.room, this.deps.catalog, record)) {
+          const vetoItem = document.createElement("li");
+          vetoItem.className = "assistant-veto";
+          vetoItem.textContent = veto;
+          list.appendChild(vetoItem);
+        }
       }
       details.appendChild(list);
       card.appendChild(details);

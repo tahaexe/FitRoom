@@ -312,13 +312,15 @@ export function summarizeAssistantTurn(
 }
 
 function displayValue(room: RoomLayout, value: unknown): string {
+  // Shopper names only: a wall reads "Left wall", an opening "door on the
+  // Door wall" — never ids like `wall-4` or `door-1`.
   if (typeof value === "string" && room.walls.some((w) => w.id === value)) {
-    return `${value} (${wallDisplayName(room, value)})`;
+    return wallDisplayName(room, value);
   }
   if (typeof value === "string") {
     const opening = room.openings.find((o) => o.id === value);
     if (opening !== undefined) {
-      return `${value} (${opening.type} on ${wallDisplayName(room, opening.wallId)})`;
+      return `${opening.type} on ${wallDisplayName(room, opening.wallId)}`;
     }
   }
   return JSON.stringify(value);
@@ -443,4 +445,86 @@ export function formatAssistantToolRecord(room: RoomLayout, record: AssistantToo
     .map(([key, value]) => `${key}=${displayValue(room, value)}`)
     .join(", ");
   return `${record.name}(${args}) ${shortResult(room, record.result)}`;
+}
+
+/**
+ * Free text with ids rewritten to shopper names: `wall-4` reads "Left
+ * wall", "the door door-1" reads "the door", `window-2` reads "the window".
+ * Display only — the executor's stored texts stay untouched, so demo keys
+ * never change.
+ */
+export function withoutIds(room: RoomLayout, text: string): string {
+  let out = text;
+  for (const opening of room.openings) {
+    if (opening.type === "door") {
+      out = out.split(`the door ${opening.id}`).join("the door");
+    } else {
+      out = out.split(`window ${opening.id}`).join("the window");
+    }
+  }
+  for (const wall of room.walls) {
+    out = out.split(wall.id).join(wallDisplayName(room, wall.id));
+  }
+  for (const opening of room.openings) {
+    out = out.split(opening.id).join(`${opening.type} on ${wallDisplayName(room, opening.wallId)}`);
+  }
+  return out;
+}
+
+function decapitalized(text: string): string {
+  return text.length === 0 ? text : text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+function round1Cm(value: number): number {
+  return Math.round(value * 10) / 10;
+}
+
+/**
+ * One "Not placed" line per refused tool call (ok false: budget, wall
+ * stretch, mount and "does not fit" refusals place nothing). A refusal with
+ * both lengths reads them both ("Not placed: Heritage Grand Sofa, it needs
+ * 273.1 cm but the free stretch is only 30 cm."). Placed calls return no
+ * lines: their single short result above already carries the verdict.
+ */
+export function vetoLinesForRecord(
+  room: RoomLayout,
+  catalog: CatalogItem[],
+  record: AssistantToolRecord,
+): string[] {
+  if (record.result["ok"] !== false) return [];
+  const args = record.args;
+  let name = "the piece";
+  const productId = args["productId"];
+  if (typeof productId === "string") {
+    name = catalog.find((c) => c.id === productId)?.name ?? productId;
+  }
+  const need = record.result["needCm"];
+  const free = record.result["freeCm"];
+  if (
+    record.result["doesNotFit"] === true &&
+    typeof need === "number" &&
+    Number.isFinite(need) &&
+    typeof free === "number" &&
+    Number.isFinite(free)
+  ) {
+    return [
+      `Not placed: ${name}, it needs ${String(round1Cm(need))} cm ` +
+        `but the free stretch is only ${String(round1Cm(free))} cm.`,
+    ];
+  }
+  const raw =
+    typeof record.result["error"] === "string" && record.result["error"].length > 0
+      ? record.result["error"]
+      : "it does not fit there.";
+  return [`Not placed: ${name}, ${decapitalized(withoutIds(room, raw.trim()))}`];
+}
+
+/**
+ * The answer card's paragraphs: the model's answer, plus the composed
+ * summary — except at the round cap, where the answer already is the
+ * summary and must read once, not twice.
+ */
+export function answerParagraphs(answer: string, summary: string): string[] {
+  if (summary === answer) return [answer];
+  return [answer, summary];
 }

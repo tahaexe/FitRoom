@@ -32,6 +32,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
+  answerParagraphs,
   ASSISTANT_MAX_ROUNDS,
   assistantRequestError,
   assistantToolMessages,
@@ -45,12 +46,14 @@ import {
   executeAssistantTool,
   executeTurnRound,
   footprintOf,
+  formatAssistantToolRecord,
   impossibleAnswer,
   isAssistantRequest,
   isAssistantRoundData,
   overBudgetError,
   startBriefDraft,
   summarizeAssistantTurn,
+  vetoLinesForRecord,
   wallDisplayName,
   type AssistantBrief,
   type AssistantMessage,
@@ -141,6 +144,7 @@ interface Replay {
   answer: string;
   rounds: number;
   draft: SceneState;
+  records: AssistantToolRecord[];
 }
 
 async function fetchRound(body: unknown): Promise<{ status: number; payload: unknown } | null> {
@@ -203,7 +207,7 @@ async function replayTurn(
     reached.add(gatewayKey("assistant", META_MODELS.spark, assistantKeyInput(body)));
     const fetched = await fetchRound(body);
     if (fetched === null) {
-      return { ok: false, answer: "", rounds: round, draft };
+      return { ok: false, answer: "", rounds: round, draft, records };
     }
     const { status, payload } = fetched;
     if (
@@ -213,15 +217,21 @@ async function replayTurn(
       payload["source"] !== "demo" ||
       !isAssistantRoundData(payload["data"])
     ) {
-      return { ok: false, answer: "", rounds: round, draft };
+      return { ok: false, answer: "", rounds: round, draft, records };
     }
     const data = payload["data"];
     if (data.toolCalls.length === 0) {
       const enforced = impossibleAnswer(records, data.text);
       if (enforced !== null) {
-        return { ok: true, answer: enforced, rounds: round + 1, draft: cloneScene(start) };
+        return {
+          ok: true,
+          answer: enforced,
+          rounds: round + 1,
+          draft: cloneScene(start),
+          records,
+        };
       }
-      return { ok: true, answer: data.text, rounds: round + 1, draft };
+      return { ok: true, answer: data.text, rounds: round + 1, draft, records };
     }
     messages.push({ role: "assistant", content: data.text, toolCalls: data.toolCalls });
     const step = executeTurnRound(ctx, draft, data.toolCalls);
@@ -233,7 +243,13 @@ async function replayTurn(
   }
   const refused = impossibleAnswer(records, "");
   if (refused !== null) {
-    return { ok: true, answer: refused, rounds: ASSISTANT_MAX_ROUNDS, draft: cloneScene(start) };
+    return {
+      ok: true,
+      answer: refused,
+      rounds: ASSISTANT_MAX_ROUNDS,
+      draft: cloneScene(start),
+      records,
+    };
   }
   if (clean !== null) {
     return {
@@ -241,9 +257,10 @@ async function replayTurn(
       answer: summarizeAssistantTurn(start, clean, room, replayCatalog),
       rounds: ASSISTANT_MAX_ROUNDS,
       draft: clean,
+      records,
     };
   }
-  return { ok: false, answer: "", rounds: ASSISTANT_MAX_ROUNDS, draft };
+  return { ok: false, answer: "", rounds: ASSISTANT_MAX_ROUNDS, draft, records };
 }
 
 let replayCatalog: CatalogItem[] = [];
@@ -627,6 +644,46 @@ async function main(): Promise<void> {
   );
   check("brief: no status line without a brief", !("brief" in plainStatus));
 
+  // ---- What I did readability: one result per line, shopper wall names,
+  // veto lines for refusals, one paragraph at the round cap ----
+  check(
+    "round-cap answer reads once",
+    answerParagraphs("Moved the sofa.", "Moved the sofa.").length === 1 &&
+      answerParagraphs("Moved the sofa.", "Moved the sofa.")[0] === "Moved the sofa.",
+  );
+  check(
+    "answer plus summary reads twice",
+    answerParagraphs("Done.", "Moved the sofa.").length === 2,
+  );
+  const vetoProbe = vetoLinesForRecord(room, catalog, {
+    name: "place_against_wall",
+    args: {
+      productId: "sofa_03",
+      wallId: room.walls[0]?.id ?? "wall-1",
+      offset_cm: 15,
+    },
+    result: {
+      ok: false,
+      doesNotFit: true,
+      needCm: 273.1,
+      freeCm: 30,
+      error: "The Heritage Grand Sofa is 273.1 cm; it does not fit there.",
+    },
+  });
+  check(
+    "veto line names the refusal with both lengths",
+    vetoProbe.length === 1 &&
+      (vetoProbe[0] ?? "").startsWith("Not placed: Heritage Grand Sofa,") &&
+      (vetoProbe[0] ?? "").includes("273.1") &&
+      (vetoProbe[0] ?? "").includes("30"),
+    vetoProbe.join(" ").slice(0, 160),
+  );
+  check(
+    "veto line hides wall ids",
+    vetoProbe.every((line) => !line.includes("wall-")),
+    vetoProbe.join(" ").slice(0, 160),
+  );
+
   // ---- result card numbers equal the end scene's ----
   const byId = new Map(catalog.map((c) => [c.id, c]));
   const endSeats = budgetDraft.items.reduce(
@@ -699,6 +756,41 @@ async function main(): Promise<void> {
         !replay.answer.includes("wall-"),
         replay.answer.slice(0, 120),
       );
+      // "What I did": one result per line, walls by name, vetoes as lines.
+      for (const record of replay.records) {
+        const line = formatAssistantToolRecord(room, record);
+        check(
+          `${tag}: What I did hides wall ids`,
+          !line.includes("wall-"),
+          line.slice(0, 160),
+        );
+        check(
+          `${tag}: What I did result once`,
+          (line.match(/issue\(s\)/g) ?? []).length <= 1,
+          line.slice(0, 160),
+        );
+        for (const veto of vetoLinesForRecord(room, replayCatalog, record)) {
+          check(`${tag}: veto hides wall ids`, !veto.includes("wall-"), veto.slice(0, 160));
+        }
+      }
+      if (i === 5) {
+        const vetoes = replay.records.flatMap((record) =>
+          vetoLinesForRecord(room, replayCatalog, record),
+        );
+        check(
+          `${tag}: refused placement reads its own veto line`,
+          vetoes.length >= 1,
+          `${String(replay.records.length)} tool call(s), ${String(vetoes.length)} veto line(s)`,
+        );
+        const veto = vetoes[0] ?? "";
+        check(
+          `${tag}: veto names the Heritage Grand Sofa with both lengths`,
+          veto.startsWith("Not placed: Heritage Grand Sofa,") &&
+            veto.includes("273") &&
+            veto.includes("30"),
+          veto.slice(0, 200),
+        );
+      }
       const errs = errorsOf(room, replay.draft, products);
 
       if (i === 0) {
