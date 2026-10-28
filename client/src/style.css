@@ -1471,32 +1471,74 @@ button.danger {
   display: none;
 }
 
-.coach-marks {
-  position: absolute;
-  bottom: 76px;
-  left: 50%;
-  transform: translateX(-50%);
+/* ---- four-moment guide: one white bubble + a soft coral ring ----
+ * The bubble and the ring float above the page (fixed); only the bubble's
+ * own buttons take clicks, so the rest of the page stays usable while the
+ * bubble shows. Nothing is blocked or dimmed. */
+
+.guide-ring {
+  position: fixed;
+  z-index: 34;
+  border: 2px solid #f54e49;
+  border-radius: 12px;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 220ms ease;
+}
+
+.guide-ring[data-show="true"] {
+  opacity: 1;
+}
+
+.guide-bubble {
+  position: fixed;
+  z-index: 35;
+  max-width: min(340px, calc(100vw - 16px));
+  background: #ffffff;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 12px 16px;
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+.guide-bubble[data-show="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+.guide-bubble[hidden],
+.guide-ring[hidden] {
+  display: none;
+}
+
+.guide-text {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 400;
+  color: var(--ink);
+}
+
+.guide-row {
   display: flex;
   align-items: center;
   gap: 8px;
-  background: #2b2c30;
-  color: #ffffff;
-  border-radius: 999px;
-  padding: 8px 8px 8px 16px;
+}
+
+.guide-progress {
+  margin-right: auto;
   font-size: 14px;
-  font-weight: 600;
-  box-shadow: var(--shadow);
-  z-index: 3;
+  font-weight: 700;
+  color: #f54e49;
+  font-variant-numeric: tabular-nums;
   white-space: nowrap;
-  max-width: calc(100% - 32px);
 }
 
-.coach-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.coach-next {
+.guide-next {
   background: var(--coral);
   color: var(--on-coral);
   border: 0;
@@ -1507,15 +1549,22 @@ button.danger {
   cursor: pointer;
 }
 
-.coach-skip {
-  background: transparent;
-  color: #ffffff;
-  border: 1px solid #ffffff;
+.guide-skip {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
   border-radius: 999px;
   padding: 4px 12px;
   font-weight: 600;
   font-size: 14px;
   cursor: pointer;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .guide-bubble,
+  .guide-ring {
+    transition: none;
+  }
 }
 
 .assistant-quiet {
@@ -2257,7 +2306,9 @@ button.danger {
 .size-unit:focus-visible,
 .size-label input:focus-visible,
 .size-more summary:focus-visible,
-.door-tip-dismiss:focus-visible {
+.door-tip-dismiss:focus-visible,
+.guide-next:focus-visible,
+.guide-skip:focus-visible {
   outline: 2px solid var(--coral);
   outline-offset: 2px;
 }
@@ -2559,14 +2610,12 @@ button.danger {
     overflow-y: auto;
   }
 
-  body[data-sheet-open="true"] .coach-marks,
   body[data-sheet-open="true"] .delete-toast,
   body[data-sheet-open="true"] .door-tip {
     bottom: calc(var(--sheet-peek) + 12px);
     z-index: 30;
   }
 
-  body[data-sheet-open="true"][data-sheet-size="full"] .coach-marks,
   body[data-sheet-open="true"][data-sheet-size="full"] .delete-toast,
   body[data-sheet-open="true"][data-sheet-size="full"] .door-tip {
     bottom: calc(var(--sheet-full) + 12px);
@@ -2578,7 +2627,6 @@ button.danger {
     width: auto;
   }
 
-  .coach-marks,
   .delete-toast,
   .door-tip {
     max-width: calc(100% - 16px);

@@ -55,7 +55,7 @@ import {
   type PhoneSheetName,
 } from "../src/phone-sheet.js";
 import { measuredMarkText, photoBandText, tapeWallLabel } from "../src/editor/source-mark.js";
-import { EMPTY_HINT_TEXT, coachMarksReady, needsDoorTip } from "../src/hints.js";
+import { EMPTY_HINT_TEXT, needsDoorTip } from "../src/hints.js";
 import {
   cornerHandleLabel,
   openingBoxLabel,
@@ -1112,14 +1112,16 @@ check(
   "the door tip shows only with no door and no window",
 );
 check(
-  "hints:tour-waits-for-piece",
-  coachMarksReady(0) === false && coachMarksReady(1) === true,
-  "the tour starts only once a piece is in the room",
+  "hints:guide-owns-tour",
+  phoneMain.includes("updateGuide") &&
+    phoneMain.includes('from "./guide"') &&
+    !phoneMain.includes("coachMarksReady") &&
+    !phoneMain.includes("coach-marks"),
+  "the four-moment guide owns the tour; the coach marks are gone",
 );
 check(
   "hints:main-uses-rules",
   phoneMain.includes("needsDoorTip(ROOM.openings)") &&
-    phoneMain.includes("coachMarksReady(this.store.state.items.length)") &&
     !phoneMain.includes("Add furniture from the catalog on the left") &&
     !phoneMain.includes("Add more from the catalog on the left"),
   "main.ts follows the hint rules, with no 'on the left' copy",

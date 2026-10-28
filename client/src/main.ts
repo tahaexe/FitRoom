@@ -41,7 +41,8 @@ import rotatedOverlapScene from "../../shared/samples/fit-tests/rotated-overlap.
 import rotatedOutsideScene from "../../shared/samples/fit-tests/rotated-outside.json";
 import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.json";
 import { initLiveSwitch } from "./api";
-import { EMPTY_HINT_TEXT, coachMarksReady, needsDoorTip } from "./hints";
+import { EMPTY_HINT_TEXT, needsDoorTip } from "./hints";
+import { Guide, GuideView, queryGuideTarget, type GuideScreen } from "./guide";
 import { CatalogPanel, formatMeasure, formatTopBar } from "./catalog-ui";
 import { RecommendPanel } from "./recommend/panel";
 import { AssistantPanel } from "./assistant/panel";
@@ -277,6 +278,9 @@ class FitRoomApp {
   private photoFlow: PhotoFlow | null = null;
   private firstOpen: FirstOpen | null = null;
   private firstOpenSetup = false;
+  /** Four-moment first-visit guide (state machine) plus its small view. */
+  private guide = new Guide();
+  private guideView: GuideView | null = null;
   /** Photo-built draft kept while its editor session is open (photos + solver output). */
   private photoDraft: import("@fitroom/shared").RoomDraft | null = null;
   private photoMeta: import("./photo-room/flow").PhotoFlowDone["meta"] | null = null;
@@ -660,6 +664,9 @@ class FitRoomApp {
     window.addEventListener("resize", () => {
       this.syncBreakpoint();
       this.resize();
+      // A new window size re-seats the bubble by its target (it still flips
+      // side to stay inside the window).
+      this.guideView?.reposition();
     });
     this.applyDevGating();
     // Nothing open on first load: the side column starts empty.
@@ -669,7 +676,6 @@ class FitRoomApp {
     this.updateSelectionTools();
     this.updateMeasure();
     this.updateTopBar();
-    this.maybeShowCoachMarks();
     this.updateUndoRedo();
     this.firstOpen = new FirstOpen({
       onUsePhotos: () => {
@@ -689,12 +695,20 @@ class FitRoomApp {
         this.firstOpen?.hide();
         this.menuChoice = "sample";
         this.refreshMenu();
+        this.updateGuide();
       },
       onBuildRoom: (size) => this.buildRoomAtSize(size),
       onShapeInEditor: (size) => this.shapeInEditor(size),
     });
     document.body.appendChild(this.firstOpen.element);
+    this.guideView = new GuideView({
+      onNext: () => this.nextGuide(),
+      onSkip: () => this.skipGuide(),
+    });
     if (this.firstOpenSetup && roomParam !== "sample") this.firstOpen.showCards();
+    // First paint of the four-moment guide: moment 1 on the first-run
+    // dialog, else the moment that fits the screen — or nothing seen.
+    this.updateGuide();
     // A reload that resumes a photo-built room reopens its confirm view
     // with the catalog sheet closed, like every other way into the flow.
     if (ROOM.id === "photos-room" && roomParam !== "sample") {
@@ -1152,11 +1166,13 @@ class FitRoomApp {
     this.photoFlow = flow;
     document.body.appendChild(flow.element);
     this.refreshMenu();
+    this.updateGuide();
   }
 
   private closePhotoFlow(): void {
     this.photoFlow?.element.remove();
     this.photoFlow = null;
+    this.updateGuide();
   }
 
   /** A solved photo draft becomes the live room, confirmed in the plan editor. */
@@ -1217,6 +1233,7 @@ class FitRoomApp {
     this.sheets?.close();
     this.syncPhoneBar();
     this.editing = true;
+    this.updateGuide();
     this.editorBase = JSON.parse(JSON.stringify(ROOM)) as RoomLayout;
     this.select(null);
     this.showSidePanel("none");
@@ -1228,6 +1245,7 @@ class FitRoomApp {
     this.editing = false;
     this.editor?.element.setAttribute("hidden", "");
     this.updateEmptyHint(this.store.state.items.length);
+    this.updateGuide();
   }
 
   /** Leave the editor for the 3D room view with catalogue and fit checks. */
@@ -1258,6 +1276,7 @@ class FitRoomApp {
     }
     this.syncPhoneBar();
     this.maybeShowDoorTip();
+    this.updateGuide();
   }
 
   /** Cancel leaves the room with no change: restore the pre-edit layout. */
@@ -1366,6 +1385,8 @@ class FitRoomApp {
     this.updateMeasure();
     this.recommendPanel?.refresh();
     this.markSceneChanged();
+    // Another room (menu, photo build, reload) re-evaluates the guide.
+    this.updateGuide();
   }
 
   /** Own pieces as simple blocks in the 3D room. */
@@ -1452,6 +1473,7 @@ class FitRoomApp {
         it.position = { x: clamped.x, z: clamped.z };
       }
     });
+    this.noteGuidePieceMoved();
   }
 
   /** Arrow-key nudge as one undo step per press, with live fit feedback. */
@@ -1473,6 +1495,7 @@ class FitRoomApp {
     this.updateMeasure();
     this.refreshIssues([id]);
     this.store.touch();
+    this.noteGuidePieceMoved();
     this.requestRender();
   }
 
@@ -1482,6 +1505,7 @@ class FitRoomApp {
       const it = draft.items.find((i) => i.instanceId === id);
       if (it !== undefined) it.rotationY = Math.round(norm * 10) / 10;
     });
+    this.noteGuidePieceMoved();
   }
 
   private commitVariant(id: string, variant: string): void {
@@ -1929,6 +1953,8 @@ class FitRoomApp {
       String(sheet === "assistant" || sheet === "recommend" || sheet === "inspector"),
     );
     visualise?.setAttribute("data-active", String(sheet === "render"));
+    // Sheets move the guide's targets (catalog, AI tab): re-seat the bubble.
+    this.updateGuide();
   }
 
   /** Crossing the phone/desktop breakpoint rebuilds the panel chrome. */
@@ -2057,8 +2083,9 @@ class FitRoomApp {
     this.fitOverlay.setAnalysis(this.analysis, this.issues);
     this.renderFitList();
     this.updateTopBar();
-    // A placed piece may now let the first-visit tour start.
-    this.maybeShowCoachMarks();
+    // Room changes re-evaluate the guide: never a moment whose target is
+    // missing (an empty room falls back to the catalog moment).
+    this.updateGuide();
   }
 
   /** Live fit feedback while dragging, re-checked at most once per frame. */
@@ -2217,69 +2244,81 @@ class FitRoomApp {
   }
 
   /**
-   * First-visit coach marks: three short steps in order (click a piece,
-   * drag it, add more from the catalog), dismissible, shown once
-   * (remembered locally). The bar is anchored to the bottom chrome above
-   * the toolbar, so it never covers a piece in the room.
+   * What the guide sees: the first-run dialog (moment 1) or the 3D room
+   * (moments 2-4). The plan editor, the photo flow and the size form fit no
+   * moment — the tour pauses there and resumes on the next room change.
    */
-  private maybeShowCoachMarks(): void {
-    const seen = ((): boolean => {
-      try {
-        return window.localStorage.getItem("fitroom.coach-seen") === "1";
-      } catch {
-        return true;
-      }
-    })();
-    if (seen) return;
-    // "Click a piece to select it" needs a piece: wait until one is in the
-    // room instead of touring an empty room. Never stack two bars.
-    if (!coachMarksReady(this.store.state.items.length)) return;
-    if (this.container.querySelector(".coach-marks") !== null) return;
-    const steps = [
-      "Click a piece to select it.",
-      "Drag a piece to move it.",
-      "Add more from the catalog.",
-    ];
-    let at = 0;
-    const bar = document.createElement("div");
-    bar.className = "coach-marks";
-    bar.setAttribute("role", "status");
-    const text = document.createElement("span");
-    text.className = "coach-text";
-    const next = document.createElement("button");
-    next.type = "button";
-    next.className = "coach-next";
-    const skip = document.createElement("button");
-    skip.type = "button";
-    skip.className = "coach-skip";
-    skip.textContent = "Skip tour";
-    const done = (): void => {
-      try {
-        window.localStorage.setItem("fitroom.coach-seen", "1");
-      } catch {
-        // Private mode: the tour simply shows again next visit.
-      }
-      bar.remove();
+  private guideScreen(): GuideScreen {
+    const firstOpenVisible = this.firstOpen?.visible ?? false;
+    const roomVisible = !this.editing && this.photoFlow === null && !firstOpenVisible;
+    return {
+      firstOpenVisible,
+      exampleActionVisible: this.firstOpen?.cardsVisible ?? false,
+      roomVisible,
+      itemCount: this.store.state.items.length,
+      aiVisible: roomVisible,
+      isPhone: isPhoneViewport(),
     };
-    const draw = (): void => {
-      text.textContent = `${String(at + 1)} of ${String(steps.length)} · ${steps[at] ?? ""}`;
-      next.textContent = at === steps.length - 1 ? "Got it" : "Next";
-    };
-    next.addEventListener("click", () => {
-      at += 1;
-      if (at >= steps.length) done();
-      else draw();
-    });
-    skip.addEventListener("click", done);
-    bar.append(text, next, skip);
-    this.container.appendChild(bar);
-    // Sit above the toolbar whatever its wrapped height is, so the bar
-    // never covers the Recommend or Arrange buttons.
-    const toolbar = this.container.querySelector(".bottom-toolbar");
-    const toolbarHeight =
-      toolbar instanceof HTMLElement ? toolbar.getBoundingClientRect().height : 52;
-    bar.style.bottom = `${String(Math.ceil(toolbarHeight) + 24)}px`;
-    draw();
+  }
+
+  /**
+   * Drive the guide: start it on first paint, re-evaluate it on every room
+   * change (room menu, photo build, reload), then render. Adding a piece
+   * moves on from the catalog moment; the guide never shows a moment whose
+   * target is missing.
+   */
+  private updateGuide(): void {
+    if (this.guideView === null) return;
+    const screen = this.guideScreen();
+    if (!this.guide.started) {
+      this.guide.start(screen);
+    } else {
+      if (this.guide.moment === 2 && screen.itemCount > 0) {
+        this.guide.advanceOnItemsAdded(screen);
+      } else {
+        this.guide.reevaluate(screen);
+      }
+    }
+    this.renderGuide();
+  }
+
+  /** Paint the bubble by the moment's target, or hide it and let the hints work. */
+  private renderGuide(): void {
+    if (this.guideView === null) return;
+    const screen = this.guideScreen();
+    if (this.guide.showing && this.guide.moment !== null) {
+      const target = queryGuideTarget(this.guide.moment, screen.isPhone);
+      if (target !== null) {
+        this.guideView.render(this.guide.moment, screen.isPhone);
+        return;
+      }
+    }
+    this.guideView.hide();
+    this.updateEmptyHint(this.store.state.items.length);
+    this.maybeShowDoorTip();
+  }
+
+  /** "Next" (the real action also moves on); "Got it" on moment 4 ends it. */
+  private nextGuide(): void {
+    if (this.guide.moment === 4) {
+      this.guide.finish();
+    } else {
+      this.guide.next(this.guideScreen());
+    }
+    this.renderGuide();
+  }
+
+  /** Escape / "Skip tour": stored as `skipped`, the room keeps working. */
+  private skipGuide(): void {
+    this.guide.skip();
+    this.renderGuide();
+  }
+
+  /** Moving a piece moves on from the drag moment. */
+  private noteGuidePieceMoved(): void {
+    if (!this.guide.started) return;
+    this.guide.advanceOnPieceMoved(this.guideScreen());
+    this.renderGuide();
   }
 
   /** Download the current cart (room + placed pieces + total) as JSON. */
@@ -2523,6 +2562,7 @@ class FitRoomApp {
           // Commit: the store emits, which runs the full (non-incremental)
           // fit check once.
           this.store.touch();
+          this.noteGuidePieceMoved();
         }
       }
       this.ownership.release(event.pointerId);
@@ -2606,6 +2646,11 @@ class FitRoomApp {
         const openDialog = document.querySelector("dialog[open]");
         if (openDialog !== null) return;
         if (this.photoFlow !== null) return;
+        // Escape skips the guide (stored as `skipped`), like "Skip tour".
+        if (this.guide.showing) {
+          this.skipGuide();
+          return;
+        }
         if (this.editing) {
           this.cancelEditor();
           return;

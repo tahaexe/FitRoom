@@ -13,6 +13,7 @@
     "check:photo-cards": "tsx scripts/check-photo-cards.ts",
     "check:pointer-ownership": "tsx scripts/check-pointer-ownership.ts",
     "check:guidance": "tsx scripts/check-guidance.ts",
+    "check:guide": "tsx scripts/check-guide.ts",
     "check:scene-sync": "tsx scripts/check-scene-sync.ts",
     "check:footprints": "node scripts/check-model-footprints.mjs",
     "preview": "vite preview --port 5173 --strictPort",

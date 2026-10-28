@@ -125,6 +125,11 @@ export class FirstOpen {
     return !this.element.hasAttribute("hidden");
   }
 
+  /** The cards view (with "Try the example room") is the one on screen. */
+  get cardsVisible(): boolean {
+    return this.visible && !this.cardsView.hasAttribute("hidden");
+  }
+
   private buildCards(): void {
     this.cardsView.innerHTML = "";
     const title = el("h2", "setup-title", "Set up your room");
@@ -154,7 +159,7 @@ export class FirstOpen {
     photoBtn.type = "button";
     photoBtn.addEventListener("click", () => this.callbacks.onUsePhotos());
     photoCard.appendChild(photoBtn);
-    const exampleBtn = el("button", "setup-secondary", "Try the example room");
+    const exampleBtn = el("button", "setup-secondary setup-try-example", "Try the example room");
     exampleBtn.type = "button";
     exampleBtn.addEventListener("click", () => this.callbacks.onTryExample());
     photoCard.appendChild(exampleBtn);

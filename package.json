@@ -34,6 +34,7 @@
     "check:photo-cards": "npm run check:photo-cards -w @fitroom/client",
     "check:example-room": "npm run check:example-room -w @fitroom/client",
     "check:guidance": "npm run check:guidance -w @fitroom/client",
+    "check:guide": "npm run check:guide -w @fitroom/client",
     "check:orbit-resolution": "npm run check:orbit-resolution -w @fitroom/client",
     "check:pointer-ownership": "npm run check:pointer-ownership -w @fitroom/client",
     "check:scene-sync": "npm run check:scene-sync -w @fitroom/client",
