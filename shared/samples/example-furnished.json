@@ -1,0 +1,48 @@
+{
+  "roomId": "photos-room",
+  "items": [
+    {
+      "instanceId": "SheenChair",
+      "productId": "SheenChair",
+      "position": {
+        "x": 180,
+        "z": 28.5
+      },
+      "rotationY": 0,
+      "variant": "Mango Velvet"
+    },
+    {
+      "instanceId": "SheenChair-2",
+      "productId": "SheenChair",
+      "position": {
+        "x": 280,
+        "z": 28.5
+      },
+      "rotationY": 0,
+      "variant": "Mango Velvet"
+    },
+    {
+      "instanceId": "side_table_01",
+      "productId": "side_table_01",
+      "position": {
+        "x": 370,
+        "z": 22.5
+      },
+      "rotationY": 0,
+      "variant": "default"
+    }
+  ],
+  "camera": {
+    "mode": "orbit",
+    "position": {
+      "x": 3.4,
+      "y": 3.1,
+      "z": 4.2
+    },
+    "target": {
+      "x": 2.1,
+      "y": 0,
+      "z": 1.8
+    }
+  }
+}
