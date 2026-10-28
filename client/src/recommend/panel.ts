@@ -682,7 +682,7 @@ export class RecommendPanel {
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "btn-quiet";
-    reset.textContent = "Reset demo room";
+    reset.textContent = "Use the sample room";
     reset.addEventListener("click", () => this.deps.resetDemoRoom());
     row.appendChild(reset);
     if (!isLive()) {

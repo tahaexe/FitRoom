@@ -47,6 +47,7 @@ import {
   turnErrors,
 } from "@fitroom/shared";
 import { isLive, postAssistant, setLive, type ApiResult } from "../api";
+import { isExampleRoom } from "../photo-room/example";
 
 /** The six scripted demo requests (same list as the server demo store). */
 export const ASSISTANT_DEMO_CHIPS: string[] = [
@@ -56,6 +57,17 @@ export const ASSISTANT_DEMO_CHIPS: string[] = [
   "I want a second armchair facing the sofa.",
   "Move the TV unit to the west wall and turn the sofa to face it.",
   "Put the Heritage Grand Sofa on the wall between the door and the corner.",
+];
+
+/**
+ * The example room's recorded arrange chips (same builder as the server
+ * demo store: the first chip and the impossible one, on the built layout).
+ * In the example room these replay its own recordings — never the sample
+ * room, so no "uses the sample room" card appears there.
+ */
+export const EXAMPLE_ASSISTANT_DEMO_CHIPS: string[] = [
+  ASSISTANT_DEMO_CHIPS[0] as string,
+  ASSISTANT_DEMO_CHIPS[5] as string,
 ];
 
 export interface AssistantDeps {
@@ -226,13 +238,21 @@ export class AssistantPanel {
     return chips;
   }
 
+  /** True in the photo-built example room (its own demo recordings). */
+  private isExampleRoom(): boolean {
+    return isExampleRoom(this.deps.room.name);
+  }
+
   private async fillChips(host: HTMLElement): Promise<void> {
     const recorded = await this.loadRecordedChips();
     if (recorded !== null && recorded.length === 0) {
       host.remove();
       return;
     }
-    for (const text of ASSISTANT_DEMO_CHIPS) {
+    // In the example room only its own recorded chips replay, in place —
+    // never the sample room, so no "uses the sample room" card appears.
+    const texts = this.isExampleRoom() ? EXAMPLE_ASSISTANT_DEMO_CHIPS : ASSISTANT_DEMO_CHIPS;
+    for (const text of texts) {
       const chip = document.createElement("button");
       chip.type = "button";
       chip.className = "assistant-chip";
@@ -530,6 +550,13 @@ export class AssistantPanel {
    */
   private async sendFurnishDemo(text: string, brief: AssistantBrief, note: string): Promise<void> {
     if (this.sending) return;
+    // In the example room Furnish has no recording yet: run it in place so
+    // the store miss shows the one miss card (never the sample room).
+    if (this.isExampleRoom()) {
+      this.pendingDemo = null;
+      await this.furnishTurn(brief, buildBriefRequest(brief, note));
+      return;
+    }
     const pending = this.pendingDemo;
     if ((pending?.text !== text || pending.brief === null) && !this.deps.isSampleScene()) {
       this.pendingDemo = { text, brief, note };
@@ -783,7 +810,7 @@ export class AssistantPanel {
 
   /**
    * Demo miss on the Furnish tab: the message plus a way out in the same
-   * card — reset the demo room and, where it applies, Live AI.
+   * card — use the sample room and, where it applies, Live AI.
    */
   private addFurnishDemoMiss(message: string): void {
     const log = this.furnishLogEl();
@@ -799,7 +826,7 @@ export class AssistantPanel {
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "assistant-go";
-    reset.textContent = "Reset demo room";
+    reset.textContent = "Use the sample room";
     reset.addEventListener("click", () => this.deps.resetDemoRoom());
     row.appendChild(reset);
     if (!isLive()) {
@@ -843,7 +870,7 @@ export class AssistantPanel {
   }
 
   /**
-   * Demo miss: the message plus a way out in the same card — reset the demo
+   * Demo miss: the message plus a way out in the same card — use the sample
    * room (one undo step) and, where it applies, Live AI. No "Try again"
    * that would repeat the same miss.
    */
@@ -860,7 +887,7 @@ export class AssistantPanel {
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "assistant-go";
-    reset.textContent = "Reset demo room";
+    reset.textContent = "Use the sample room";
     reset.addEventListener("click", () => this.deps.resetDemoRoom());
     row.appendChild(reset);
     if (!isLive()) {
@@ -939,6 +966,13 @@ export class AssistantPanel {
 
   private async sendDemo(text: string): Promise<void> {
     if (this.sending) return;
+    // In the example room the chips replay its own recordings in place:
+    // no reset, no "uses the sample room" card.
+    if (this.isExampleRoom()) {
+      this.pendingDemo = null;
+      await this.send(text);
+      return;
+    }
     if (
       (this.pendingDemo?.text !== text || this.pendingDemo.brief !== null) &&
       !this.deps.isSampleScene()

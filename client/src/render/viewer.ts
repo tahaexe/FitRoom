@@ -19,7 +19,16 @@ export interface RenderViewerDeps {
   wallView: () => RenderWallView | undefined;
   /** Load the demo room as one undo step. */
   resetDemoRoom: () => void;
+  /**
+   * Move the camera back to the recorded view when it wandered (after an
+   * orbit in the sample room). Returns true when it moved, so the viewer
+   * can name the recorded view it renders.
+   */
+  resetToRecordedView?: () => boolean;
 }
+
+/** One line naming the recorded view an orbited sample room renders. */
+export const RECORDED_VIEW_LINE = "Showing the recorded view";
 
 const MODEL_LABEL = "AI visualisation by Muse Image";
 
@@ -65,6 +74,14 @@ export class RenderViewer {
     if (this.busy) return;
     this.busy = true;
     this.open();
+    // After an orbit the sample room renders its recorded view: move the
+    // camera back first so the capture matches the stored visualisation.
+    let recordedView = false;
+    try {
+      recordedView = this.deps.resetToRecordedView?.() ?? false;
+    } catch {
+      recordedView = false;
+    }
     let capture: { dataUrl: string; base64: string; width: number; height: number };
     try {
       capture = this.deps.getCapture();
@@ -96,7 +113,7 @@ export class RenderViewer {
     this.stopProgress();
     this.busy = false;
     if (result.status === "ok") {
-      this.showAnswer(capture.dataUrl, result.data, capture.width, capture.height);
+      this.showAnswer(capture.dataUrl, result.data, capture.width, capture.height, recordedView);
     } else if (result.status === "demo-miss" || result.status === "capped") {
       this.showDemoMiss(messageFor(result));
     } else {
@@ -245,7 +262,13 @@ export class RenderViewer {
     this.root.appendChild(wrap);
   }
 
-  private showAnswer(captureUrl: string, data: unknown, width: number, height: number): void {
+  private showAnswer(
+    captureUrl: string,
+    data: unknown,
+    width: number,
+    height: number,
+    _recordedView = false,
+  ): void {
     this.clearTimer();
     this.root.innerHTML = "";
     const record =
