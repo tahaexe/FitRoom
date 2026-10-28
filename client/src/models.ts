@@ -94,11 +94,11 @@ export const MODEL_NOTES: Record<string, string> = {
   fitroom_floor_lamp:
     "FitRoom Studio original, built in code: rolled-edge disc base, pole and Fabric040 shade with a rolled hem.",
   fitroom_wardrobe:
-    "FitRoom Studio original, built in code: rounded two-door wardrobe in WoodFloor051.",
+    "FitRoom Studio original, built in code: rounded two-door wardrobe in solid furniture oak with a dark reveal and bar handles, front +Z.",
   fitroom_platform_bed:
-    "FitRoom Studio original, built in code: rounded platform bed with headboard in WoodFloor070 and Fabric061 linen.",
+    "FitRoom Studio original, built in code: rounded platform bed with a solid-oak frame and headboard at -Z (foot at +Z) and Fabric061 linen.",
   fitroom_sofa_3seat:
-    "FitRoom Studio original, built in code: rounded three-seat sofa fully upholstered in Fabric075 on dark-metal feet.",
+    "FitRoom Studio original, built in code: rounded three-seat sofa fully upholstered in Fabric075 on dark-metal feet, seat facing +Z with the backrest at -Z.",
 };
 
 const loader = new GLTFLoader();

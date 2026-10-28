@@ -43,13 +43,13 @@
       "name": "fitroom_platform_bed-wood",
       "pbrMetallicRoughness": {
         "metallicFactor": 0,
-        "roughnessFactor": 0.7,
-        "baseColorTexture": {
-          "index": 0
-        }
-      },
-      "normalTexture": {
-        "index": 1
+        "roughnessFactor": 0.62,
+        "baseColorFactor": [
+          0.62,
+          0.44,
+          0.28,
+          1
+        ]
       }
     },
     {
@@ -58,11 +58,11 @@
         "metallicFactor": 0,
         "roughnessFactor": 0.94,
         "baseColorTexture": {
-          "index": 2
+          "index": 0
         }
       },
       "normalTexture": {
-        "index": 3
+        "index": 1
       }
     }
   ],
@@ -146,27 +146,9 @@
     {
       "sampler": 0,
       "source": 1
-    },
-    {
-      "sampler": 0,
-      "source": 2
-    },
-    {
-      "sampler": 0,
-      "source": 3
     }
   ],
   "images": [
-    {
-      "mimeType": "image/jpeg",
-      "name": "WoodFloor070_1K-JPG_Color",
-      "uri": "../../../textures/ambientcg/WoodFloor070/WoodFloor070_1K-JPG_Color.jpg"
-    },
-    {
-      "mimeType": "image/jpeg",
-      "name": "WoodFloor070_1K-JPG_NormalGL",
-      "uri": "../../../textures/ambientcg/WoodFloor070/WoodFloor070_1K-JPG_NormalGL.jpg"
-    },
     {
       "mimeType": "image/jpeg",
       "name": "Fabric061_1K-JPG_Color",
@@ -187,12 +169,12 @@
       "min": [
         -0.8,
         3.469446951953614e-18,
-        -1
+        -0.9199999999999999
       ],
       "max": [
         0.8,
         0.22,
-        0.9199999999999999
+        1
       ]
     },
     {
@@ -221,12 +203,12 @@
       "min": [
         -0.78,
         0.21999999999999995,
-        -0.98
+        -0.8600000000000001
       ],
       "max": [
         0.78,
         0.35,
-        0.8600000000000001
+        0.98
       ]
     },
     {
@@ -255,12 +237,12 @@
       "min": [
         -0.66,
         0.35,
-        0.37500000000000006
+        -0.7250000000000001
       ],
       "max": [
         -0.059999999999999984,
         0.47,
-        0.7250000000000001
+        -0.37500000000000006
       ]
     },
     {
@@ -289,12 +271,12 @@
       "min": [
         0.059999999999999984,
         0.35,
-        0.37500000000000006
+        -0.7250000000000001
       ],
       "max": [
         0.66,
         0.47,
-        0.7250000000000001
+        -0.37500000000000006
       ]
     },
     {
@@ -323,12 +305,12 @@
       "min": [
         -0.8,
         1.734723475976807e-17,
-        0.9199999999999999
+        -1
       ],
       "max": [
         0.8,
         1,
-        1
+        -0.9199999999999999
       ]
     },
     {

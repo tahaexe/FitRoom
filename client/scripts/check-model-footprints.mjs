@@ -320,6 +320,42 @@ for (const item of catalog) {
       ` long=${longSide} corners=[${detail.corners.join(",")}]  ${okThumb ? "PASS" : "FAIL"}`,
   );
 }
+
+// Every code-built thumbnail camera sits on the piece's front side (+Z,
+// the side each original faces) and above its top, looking down 25-35 deg
+// at three-quarters. The shared rig lives in generate-fitroom-models.mjs
+// as azimuth/elevation constants; this check reads those same constants so
+// it cannot drift from the renderer.
+{
+  const src = readFileSync(join(clientDir, "scripts", "generate-fitroom-models.mjs"), "utf8");
+  const azMatch = src.match(/const az = \(([\d.]+) \* Math\.PI\)/);
+  const elMatch = src.match(/const el = \(([\d.]+) \* Math\.PI\)/);
+  const azDeg = azMatch === null ? NaN : Number(azMatch[1]);
+  const elDeg = elMatch === null ? NaN : Number(elMatch[1]);
+  const az = (azDeg * Math.PI) / 180;
+  const el = (elDeg * Math.PI) / 180;
+  const dir = [Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)];
+  const elevOk = elDeg >= 25 && elDeg <= 35;
+  const frontOk = dir[2] > 0.2 && dir[0] > 0.2;
+  const aboveOk = dir[1] > Math.sin((25 * Math.PI) / 180) - 1e-9;
+  for (const item of catalog) {
+    if (!FITROOM_IDS.has(item.id)) continue;
+    const box = authoredBox(loadGltf(join(clientDir, "public", item.model)));
+    const top = box.maxY;
+    const cameraAboveTop = dir[1] > 0 && top > 0;
+    const okCam = elevOk && frontOk && aboveOk && cameraAboveTop;
+    if (!okCam) failures += 1;
+    console.log(
+      `${item.id}: camera az=${Number.isFinite(azDeg) ? azDeg.toFixed(1) : "?"}deg` +
+        ` el=${Number.isFinite(elDeg) ? elDeg.toFixed(1) : "?"}deg` +
+        ` dir=[${dir.map((v) => (Number.isFinite(v) ? v.toFixed(3) : "?")).join(",")}]` +
+        ` top=${Number.isFinite(top) ? (top * 100).toFixed(1) : "?"}cm` +
+        ` frontSide=${dir[2] > 0 ? "+Z" : "NOT-+Z"}` +
+        ` above=${dir[1] > 0 ? "yes" : "no"}` +
+        `  ${okCam ? "PASS" : "FAIL"}`,
+    );
+  }
+}
 console.log(
   failures === 0
     ? `All ${catalog.length} models within ±${TOLERANCE_CM.toFixed(0)} cm.`

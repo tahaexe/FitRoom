@@ -7,16 +7,24 @@
  * rounded shade: cushions, arms, frames, door edges and the lamp shade all
  * carry a small fillet radius, so nothing reads as a hard box edge. Fabrics
  * use the ambientCG weaves on disk (Fabric075 on the sofa, Fabric061 on the
- * bed, Carpet012/015/016 on the rugs, Fabric040 on the lamp shade), wardrobe
- * and bed frame use WoodFloor051/WoodFloor070 grain, and the lamp stem stays
- * dark metal. UVs are authored in metres (the glTF sampler already repeats),
- * so the grain reads at a real-world scale in the app.
+ * bed mattress and pillows, Carpet012/015/016 on the rugs, Fabric040 on the
+ * lamp shade), wardrobe carcass/doors and the bed frame/headboard use a warm
+ * solid furniture oak (no board seams, no parquet), and the lamp stem and
+ * wardrobe handles stay dark metal. Fabric and rug UVs are authored in
+ * metres (the glTF sampler already repeats), so the weave reads at a
+ * real-world scale in the app; the furniture oak is a plain
+ * baseColorFactor + roughnessFactor with no image map, so no floor planks
+ * can appear. Every piece faces front (+Z): sofa seat and back cushions
+ * face +Z with the backrest at -Z, the bed foot faces +Z with the
+ * headboard at -Z, and the wardrobe doors and bar handles sit at +Z.
  *
  * Each model's `thumb.png` is software-rendered from its own triangles in a
- * shared 3/4-view rig (key + fill, soft contact shadow, transparent
- * background), 256 px on the long side — the same framing and light for all
- * seven pieces. Sizes are exact: rounded forms keep the authored outer
- * dimensions, and rim rings tuck inside the cylinder extents.
+ * shared front-right 3/4-view rig (camera azimuth 33° on the +X/+Z front
+ * side, elevation 30° above the piece looking down, key + fill, soft
+ * contact shadow, transparent background), 256 px on the long side — the
+ * same framing and light for all seven pieces. Sizes are exact: rounded
+ * forms keep the authored outer dimensions, and rim rings tuck inside the
+ * cylinder extents.
  *
  * Run: `node client/scripts/generate-fitroom-models.mjs` (Node + sharp from
  * the repo's node_modules).
@@ -465,10 +473,15 @@ const fabricMat = (id) => ({
   normal: texUri(id, "NormalGL"),
   roughness: 0.94,
 });
-const woodMat = (id) => ({
-  map: texUri(id, "Color"),
-  normal: texUri(id, "NormalGL"),
-  roughness: 0.7,
+/**
+ * Warm solid furniture oak for the wardrobe carcass/doors and the bed
+ * frame/headboard: one plain warm colour with a furniture roughness and no
+ * image map, so no floor-board seams or parquet pattern can appear. The
+ * geometry normal stays the plain panel normal.
+ */
+const furnitureOakMat = () => ({
+  color: [0.62, 0.44, 0.28, 1],
+  roughness: 0.62,
 });
 /** Three low rugs, 1 cm high, with softly rounded edges, in the carpet weaves. */
 function rugModel(wCm, dCm, carpet) {
@@ -500,40 +513,50 @@ function floorLampModel() {
   };
 }
 
-/** Modern two-door wardrobe: rounded carcass, rounded doors, bar handles. */
+/**
+ * Modern two-door wardrobe: rounded carcass, two rounded doors with a dark
+ * recessed reveal behind the centre gap so the split reads from the front,
+ * and two dark bar handles on the +Z front face.
+ */
 function wardrobeModel() {
   const parts = [];
   roundedBoxPart(parts, 1.0, 2.0, 0.54, 0.015, 3, 0, 1.0, -0.03, "wood");
+  roundedBoxPart(parts, 0.98, 1.98, 0.01, 0.004, 2, 0, 1.0, 0.238, "reveal");
   roundedBoxPart(parts, 0.49, 1.96, 0.04, 0.012, 3, -0.25, 1.0, 0.26, "wood");
   roundedBoxPart(parts, 0.49, 1.96, 0.04, 0.012, 3, 0.25, 1.0, 0.26, "wood");
-  roundedBoxPart(parts, 0.02, 0.2, 0.02, 0.006, 2, -0.05, 1.0, 0.29, "metal");
-  roundedBoxPart(parts, 0.02, 0.2, 0.02, 0.006, 2, 0.05, 1.0, 0.29, "metal");
+  roundedBoxPart(parts, 0.025, 0.28, 0.02, 0.006, 2, -0.07, 1.0, 0.29, "metal");
+  roundedBoxPart(parts, 0.025, 0.28, 0.02, 0.006, 2, 0.07, 1.0, 0.29, "metal");
   return {
     parts,
     materials: {
-      wood: woodMat("WoodFloor051"),
+      wood: furnitureOakMat(),
+      reveal: { color: [0.11, 0.11, 0.12, 1], metallic: 0, roughness: 0.9 },
       metal: { color: [0.08, 0.08, 0.09, 1], metallic: 0.8, roughness: 0.4 },
     },
   };
 }
 
-/** Low platform bed: rounded frame, mattress, two pillows, 100 cm headboard. */
+/**
+ * Low platform bed: rounded frame, mattress, two pillows, 100 cm headboard.
+ * Front (+Z) is the foot; the headboard stands at -Z like the catalog beds.
+ */
 function bedModel() {
   const parts = [];
-  roundedBoxPart(parts, 1.6, 0.22, 1.92, 0.02, 3, 0, 0.11, -0.04, "wood");
-  roundedBoxPart(parts, 1.56, 0.13, 1.84, 0.04, 4, 0, 0.285, -0.06, "linen");
-  roundedBoxPart(parts, 0.6, 0.12, 0.35, 0.05, 4, -0.36, 0.41, 0.55, "linen");
-  roundedBoxPart(parts, 0.6, 0.12, 0.35, 0.05, 4, 0.36, 0.41, 0.55, "linen");
-  roundedBoxPart(parts, 1.6, 1.0, 0.08, 0.02, 3, 0, 0.5, 0.96, "wood");
+  roundedBoxPart(parts, 1.6, 0.22, 1.92, 0.02, 3, 0, 0.11, 0.04, "wood");
+  roundedBoxPart(parts, 1.56, 0.13, 1.84, 0.04, 4, 0, 0.285, 0.06, "linen");
+  roundedBoxPart(parts, 0.6, 0.12, 0.35, 0.05, 4, -0.36, 0.41, -0.55, "linen");
+  roundedBoxPart(parts, 0.6, 0.12, 0.35, 0.05, 4, 0.36, 0.41, -0.55, "linen");
+  roundedBoxPart(parts, 1.6, 1.0, 0.08, 0.02, 3, 0, 0.5, -0.96, "wood");
   return {
     parts,
-    materials: { wood: woodMat("WoodFloor070"), linen: fabricMat("Fabric061") },
+    materials: { wood: furnitureOakMat(), linen: fabricMat("Fabric061") },
   };
 }
 
 /**
  * Modern three-seat sofa: fully upholstered in Fabric075 (frame, arms and
- * cushions all rounded) on dark-metal feet.
+ * cushions all rounded) on dark-metal feet. Front (+Z) is the seat edge;
+ * the backrest and back cushions stand at -Z.
  */
 function sofaModel() {
   const parts = [];
@@ -546,11 +569,11 @@ function sofaModel() {
   roundedBoxPart(parts, 0.2, 0.34, 0.9, 0.05, 4, -1.0, 0.49, 0, "fabric");
   roundedBoxPart(parts, 0.2, 0.34, 0.9, 0.05, 4, 1.0, 0.49, 0, "fabric");
   for (const cx of [-0.6075, 0, 0.6075]) {
-    roundedBoxPart(parts, 0.585, 0.14, 0.66, 0.05, 4, cx, 0.37, -0.09, "fabric");
+    roundedBoxPart(parts, 0.585, 0.14, 0.66, 0.05, 4, cx, 0.37, 0.09, "fabric");
   }
-  roundedBoxPart(parts, 2.2, 0.48, 0.2, 0.06, 3, 0, 0.56, 0.35, "fabric");
+  roundedBoxPart(parts, 2.2, 0.48, 0.2, 0.06, 3, 0, 0.56, -0.35, "fabric");
   for (const cx of [-0.6075, 0, 0.6075]) {
-    roundedBoxPart(parts, 0.585, 0.34, 0.16, 0.06, 4, cx, 0.61, 0.17, "fabric");
+    roundedBoxPart(parts, 0.585, 0.34, 0.16, 0.06, 4, cx, 0.61, -0.17, "fabric");
   }
   return {
     parts,
@@ -593,13 +616,15 @@ function authoredBox(parts) {
 
 /**
  * Software-render a catalog thumbnail from the model's own triangles: a
- * shared 3/4-view orthographic rig (camera azimuth 33°, elevation 24°), a
- * warm key plus a cool fill, and a soft contact shadow on the ground plane.
- * Textured parts sample the same on-disk colour textures the glTF points at
- * (UVs are in metres, wrapping), so the weave and grain show in the thumb.
- * Rendered at 2x and downsampled for smooth edges; the canvas fits the
- * piece with margin so the long side lands on exactly 256 px, background
- * stays transparent, and corners stay clear.
+ * shared front-right 3/4-view orthographic rig (camera azimuth 33° on the
+ * +X/+Z front side, elevation 30° above the piece looking down), a warm key
+ * plus a cool fill, and a soft contact shadow on the ground plane. Textured
+ * parts sample the same on-disk colour textures the glTF points at (fabric
+ * and rug UVs are in metres, wrapping), so the weave shows in the thumb;
+ * the solid furniture oak needs no sampling. Rendered at 2x and downsampled
+ * for smooth edges; the canvas fits the piece with margin so the long side
+ * lands on exactly 256 px, background stays transparent, and corners stay
+ * clear.
  */
 async function renderThumbnail(parts, materials) {
   const samplers = new Map();
@@ -620,7 +645,7 @@ async function renderThumbnail(parts, materials) {
   );
 
   const az = (33 * Math.PI) / 180;
-  const el = (24 * Math.PI) / 180;
+  const el = (30 * Math.PI) / 180;
   const d = [Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)];
   const f = vnorm([-d[0], -d[1], -d[2]]);
   const r = vnorm(vcross(f, [0, 1, 0]));
