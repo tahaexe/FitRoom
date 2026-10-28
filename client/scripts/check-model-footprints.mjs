@@ -9,15 +9,32 @@
  * accessor min/max transformed by the glTF node hierarchy, which is exactly
  * what three's Box3.setFromObject measures at runtime.
  *
+ * FitRoom Studio originals (built in code) hold a tighter bar: their full
+ * bounding box must equal the catalog W × D × H within ±0.5 cm, and their
+ * catalog thumbnails must be real renders — existing RGBA PNGs, 256 px on
+ * the long side, with transparent corners.
+ *
  * Run: npm run check:footprints -w @fitroom/client
  */
 /* global console, process */
 import { Buffer } from "node:buffer";
 import { readFileSync } from "node:fs";
+import { inflateSync } from "node:zlib";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const TOLERANCE_CM = 1.0;
+/** Tighter bar for the code-built FitRoom originals (bounding box W×D×H). */
+const FITROOM_TOLERANCE_CM = 0.5;
+const FITROOM_IDS = new Set([
+  "rug_160x230",
+  "rug_200x300",
+  "rug_240x340",
+  "fitroom_floor_lamp",
+  "fitroom_wardrobe",
+  "fitroom_platform_bed",
+  "fitroom_sofa_3seat",
+]);
 
 const here = dirname(fileURLToPath(import.meta.url));
 const clientDir = resolve(here, "..");
@@ -229,6 +246,78 @@ for (const item of catalog) {
       ` vs catalog ${item.size.w.toFixed(1)}x${item.size.d.toFixed(1)}cm` +
       ` (rot0 dw=${fmt(dw0)} dd=${fmt(dd0)}; rot90 dw=${fmt(dw90)} dd=${fmt(dd90)}; yaw=${yaw})` +
       `  ${ok ? "PASS" : "FAIL"}`,
+  );
+  // Tighter bar for the code-built originals: the full bounding box
+  // (W × H × D, base at y=0 so height is maxY − minY) equals the catalog.
+  if (FITROOM_IDS.has(item.id)) {
+    const wCm = (box.maxX - box.minX) * 100;
+    const hCm = (box.maxY - box.minY) * 100;
+    const dCm = (box.maxZ - box.minZ) * 100;
+    const dw = wCm - item.size.w;
+    const dh = hCm - item.size.h;
+    const dd = dCm - item.size.d;
+    const tight =
+      Math.abs(dw) <= FITROOM_TOLERANCE_CM + 1e-9 &&
+      Math.abs(dh) <= FITROOM_TOLERANCE_CM + 1e-9 &&
+      Math.abs(dd) <= FITROOM_TOLERANCE_CM + 1e-9;
+    if (!tight) failures += 1;
+    console.log(
+      `${item.id}: bbox ${wCm.toFixed(2)}x${hCm.toFixed(2)}x${dCm.toFixed(2)}cm` +
+        ` vs catalog ${item.size.w.toFixed(1)}x${item.size.h.toFixed(1)}x${item.size.d.toFixed(1)}cm` +
+        ` (dw=${fmt(dw)} dh=${fmt(dh)} dd=${fmt(dd)})  ${tight ? "PASS" : "FAIL"}`,
+    );
+  }
+}
+
+/** Read an RGBA PNG's corners: width, height, color type, corner alphas. */
+function readPngCorners(thumbPath) {
+  const bytes = readFileSync(thumbPath);
+  if (bytes.readUInt32BE(0) !== 0x89504e47) throw new Error("not a PNG file");
+  const w = bytes.readUInt32BE(16);
+  const h = bytes.readUInt32BE(20);
+  const colorType = bytes[25];
+  if (colorType !== 6) return { w, h, colorType, corners: [] };
+  const idat = [];
+  let pos = 8;
+  while (pos + 8 <= bytes.length) {
+    const len = bytes.readUInt32BE(pos);
+    const type = bytes.subarray(pos + 4, pos + 8).toString("ascii");
+    if (type === "IDAT") idat.push(bytes.subarray(pos + 8, pos + 8 + len));
+    pos += 12 + len;
+    if (type === "IEND") break;
+  }
+  const raw = inflateSync(Buffer.concat(idat));
+  const stride = 1 + w * 4;
+  const alphaAt = (x, y) => raw[y * stride + 1 + x * 4 + 3];
+  return {
+    w,
+    h,
+    colorType,
+    corners: [alphaAt(0, 0), alphaAt(w - 1, 0), alphaAt(0, h - 1), alphaAt(w - 1, h - 1)],
+  };
+}
+
+// Every code-built original's catalog thumbnail is a real render: an
+// existing RGBA PNG, 256 px on the long side, with transparent corners.
+for (const item of catalog) {
+  if (!FITROOM_IDS.has(item.id)) continue;
+  const label = `${item.id}: thumbnail ${item.thumbnail}`;
+  let detail;
+  try {
+    detail = readPngCorners(join(clientDir, "public", item.thumbnail));
+  } catch (error) {
+    console.log(`${label}  FAIL — ${error.message}`);
+    failures += 1;
+    continue;
+  }
+  const longSide = Math.max(detail.w, detail.h);
+  const clear = detail.corners.length === 4 && detail.corners.every((a) => a === 0);
+  const okThumb =
+    detail.colorType === 6 && longSide === 256 && detail.w >= 1 && detail.h >= 1 && clear;
+  if (!okThumb) failures += 1;
+  console.log(
+    `${label}: ${detail.w}x${detail.h} ctype=${detail.colorType}` +
+      ` long=${longSide} corners=[${detail.corners.join(",")}]  ${okThumb ? "PASS" : "FAIL"}`,
   );
 }
 console.log(

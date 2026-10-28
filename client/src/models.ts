@@ -92,12 +92,13 @@ export const MODEL_NOTES: Record<string, string> = {
   rug_200x300: "FitRoom Studio original, built in code: flat 200x300cm rug in Carpet015.",
   rug_240x340: "FitRoom Studio original, built in code: flat 240x340cm rug in Carpet016.",
   fitroom_floor_lamp:
-    "FitRoom Studio original, built in code: disc base, pole and Fabric040 shade.",
-  fitroom_wardrobe: "FitRoom Studio original, built in code: two-door wardrobe in WoodFloor051.",
+    "FitRoom Studio original, built in code: rolled-edge disc base, pole and Fabric040 shade with a rolled hem.",
+  fitroom_wardrobe:
+    "FitRoom Studio original, built in code: rounded two-door wardrobe in WoodFloor051.",
   fitroom_platform_bed:
-    "FitRoom Studio original, built in code: platform bed with headboard in WoodFloor070.",
+    "FitRoom Studio original, built in code: rounded platform bed with headboard in WoodFloor070 and Fabric061 linen.",
   fitroom_sofa_3seat:
-    "FitRoom Studio original, built in code: three-seat sofa with Fabric075 cushions.",
+    "FitRoom Studio original, built in code: rounded three-seat sofa fully upholstered in Fabric075 on dark-metal feet.",
 };
 
 const loader = new GLTFLoader();

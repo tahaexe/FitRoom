@@ -169,24 +169,24 @@
     },
     {
       "mimeType": "image/jpeg",
-      "name": "PaintedPlaster017_1K-JPG_Color",
-      "uri": "../../../textures/ambientcg/PaintedPlaster017/PaintedPlaster017_1K-JPG_Color.jpg"
+      "name": "Fabric061_1K-JPG_Color",
+      "uri": "../../../textures/ambientcg/Fabric061/Fabric061_1K-JPG_Color.jpg"
     },
     {
       "mimeType": "image/jpeg",
-      "name": "PaintedPlaster017_1K-JPG_NormalGL",
-      "uri": "../../../textures/ambientcg/PaintedPlaster017/PaintedPlaster017_1K-JPG_NormalGL.jpg"
+      "name": "Fabric061_1K-JPG_NormalGL",
+      "uri": "../../../textures/ambientcg/Fabric061/Fabric061_1K-JPG_NormalGL.jpg"
     }
   ],
   "accessors": [
     {
       "bufferView": 0,
       "componentType": 5126,
-      "count": 24,
+      "count": 96,
       "type": "VEC3",
       "min": [
         -0.8,
-        0,
+        3.469446951953614e-18,
         -1
       ],
       "max": [
@@ -198,19 +198,19 @@
     {
       "bufferView": 1,
       "componentType": 5126,
-      "count": 24,
+      "count": 96,
       "type": "VEC3"
     },
     {
       "bufferView": 2,
       "componentType": 5126,
-      "count": 24,
+      "count": 96,
       "type": "VEC2"
     },
     {
       "bufferView": 3,
       "componentType": 5123,
-      "count": 36,
+      "count": 324,
       "type": "SCALAR"
     },
     {
@@ -318,11 +318,11 @@
     {
       "bufferView": 16,
       "componentType": 5126,
-      "count": 24,
+      "count": 96,
       "type": "VEC3",
       "min": [
         -0.8,
-        0,
+        1.734723475976807e-17,
         0.9199999999999999
       ],
       "max": [
@@ -334,19 +334,19 @@
     {
       "bufferView": 17,
       "componentType": 5126,
-      "count": 24,
+      "count": 96,
       "type": "VEC3"
     },
     {
       "bufferView": 18,
       "componentType": 5126,
-      "count": 24,
+      "count": 96,
       "type": "VEC2"
     },
     {
       "bufferView": 19,
       "componentType": 5123,
-      "count": 36,
+      "count": 324,
       "type": "SCALAR"
     }
   ],
@@ -354,102 +354,102 @@
     {
       "buffer": 0,
       "byteOffset": 0,
-      "byteLength": 288
-    },
-    {
-      "buffer": 0,
-      "byteOffset": 288,
-      "byteLength": 288
-    },
-    {
-      "buffer": 0,
-      "byteOffset": 576,
-      "byteLength": 192
-    },
-    {
-      "buffer": 0,
-      "byteOffset": 768,
-      "byteLength": 72
-    },
-    {
-      "buffer": 0,
-      "byteOffset": 840,
-      "byteLength": 1800
-    },
-    {
-      "buffer": 0,
-      "byteOffset": 2640,
-      "byteLength": 1800
-    },
-    {
-      "buffer": 0,
-      "byteOffset": 4440,
-      "byteLength": 1200
-    },
-    {
-      "buffer": 0,
-      "byteOffset": 5640,
       "byteLength": 1152
     },
     {
       "buffer": 0,
-      "byteOffset": 6792,
-      "byteLength": 1800
-    },
-    {
-      "buffer": 0,
-      "byteOffset": 8592,
-      "byteLength": 1800
-    },
-    {
-      "buffer": 0,
-      "byteOffset": 10392,
-      "byteLength": 1200
-    },
-    {
-      "buffer": 0,
-      "byteOffset": 11592,
+      "byteOffset": 1152,
       "byteLength": 1152
     },
     {
       "buffer": 0,
-      "byteOffset": 12744,
+      "byteOffset": 2304,
+      "byteLength": 768
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 3072,
+      "byteLength": 648
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 3720,
       "byteLength": 1800
     },
     {
       "buffer": 0,
-      "byteOffset": 14544,
+      "byteOffset": 5520,
       "byteLength": 1800
     },
     {
       "buffer": 0,
-      "byteOffset": 16344,
+      "byteOffset": 7320,
       "byteLength": 1200
     },
     {
       "buffer": 0,
-      "byteOffset": 17544,
+      "byteOffset": 8520,
       "byteLength": 1152
     },
     {
       "buffer": 0,
-      "byteOffset": 18696,
-      "byteLength": 288
+      "byteOffset": 9672,
+      "byteLength": 1800
     },
     {
       "buffer": 0,
-      "byteOffset": 18984,
-      "byteLength": 288
+      "byteOffset": 11472,
+      "byteLength": 1800
     },
     {
       "buffer": 0,
-      "byteOffset": 19272,
-      "byteLength": 192
+      "byteOffset": 13272,
+      "byteLength": 1200
     },
     {
       "buffer": 0,
-      "byteOffset": 19464,
-      "byteLength": 72
+      "byteOffset": 14472,
+      "byteLength": 1152
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 15624,
+      "byteLength": 1800
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 17424,
+      "byteLength": 1800
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 19224,
+      "byteLength": 1200
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 20424,
+      "byteLength": 1152
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 21576,
+      "byteLength": 1152
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 22728,
+      "byteLength": 1152
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 23880,
+      "byteLength": 768
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 24648,
+      "byteLength": 648
     }
   ],
   "samplers": [
@@ -462,7 +462,7 @@
   ],
   "buffers": [
     {
-      "byteLength": 19536,
+      "byteLength": 25296,
       "uri": "fitroom_platform_bed.bin"
     }
   ]

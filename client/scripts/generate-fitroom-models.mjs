@@ -3,12 +3,28 @@
  * simple furniture pieces at real sizes, using only the CC0 textures already
  * in `client/public/assets/textures/ambientcg/`.
  *
- * Run: `node client/scripts/generate-fitroom-models.mjs` (Node builtins only).
+ * Every part is a rounded box, a cylinder with rounded rim rings, or a
+ * rounded shade: cushions, arms, frames, door edges and the lamp shade all
+ * carry a small fillet radius, so nothing reads as a hard box edge. Fabrics
+ * use the ambientCG weaves on disk (Fabric075 on the sofa, Fabric061 on the
+ * bed, Carpet012/015/016 on the rugs, Fabric040 on the lamp shade), wardrobe
+ * and bed frame use WoodFloor051/WoodFloor070 grain, and the lamp stem stays
+ * dark metal. UVs are authored in metres (the glTF sampler already repeats),
+ * so the grain reads at a real-world scale in the app.
+ *
+ * Each model's `thumb.png` is software-rendered from its own triangles in a
+ * shared 3/4-view rig (key + fill, soft contact shadow, transparent
+ * background), 256 px on the long side — the same framing and light for all
+ * seven pieces. Sizes are exact: rounded forms keep the authored outer
+ * dimensions, and rim rings tuck inside the cylinder extents.
+ *
+ * Run: `node client/scripts/generate-fitroom-models.mjs` (Node + sharp from
+ * the repo's node_modules).
  * Output: `client/public/assets/models/fitroom/<id>/<id>_1k.gltf` +
- * `<id>.bin` + `thumb.png`. Every part is a box, cylinder or rounded box with
- * baked world coordinates (metres); the app's normalisation (centred XZ,
- * base at y=0) then applies unchanged, and `check:footprints` measures the
- * authored POSITION min/max against the catalog within ±1 cm.
+ * `<id>.bin` + `thumb.png`. The app's normalisation (centred XZ, base at
+ * y=0) then applies unchanged, and `check:footprints` measures the authored
+ * POSITION min/max against the catalog within ±1 cm (±0.5 cm for these
+ * seven).
  */
 
 /* global Buffer, console, process */
@@ -17,17 +33,29 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { deflateSync } from "node:zlib";
+import sharp from "sharp";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..", "..");
 const outRoot = join(repoRoot, "client", "public", "assets", "models", "fitroom");
 
 const texUri = (id, kind) => `../../../textures/ambientcg/${id}/${id}_1K-JPG_${kind}.jpg`;
+const texFile = (id) =>
+  join(
+    repoRoot,
+    "client",
+    "public",
+    "assets",
+    "textures",
+    "ambientcg",
+    id,
+    `${id}_1K-JPG_Color.jpg`,
+  );
 
-/* ---------------------------------------------------------------- PNG -- */
+/* -------------------------------------------- PNG (RGBA thumbs) -- */
 
-/** Minimal RGB PNG writer (8-bit, no interlace) for catalog thumbnails. */
-function writePng(width, height, rgb) {
+/** Minimal RGBA PNG writer (8-bit, non-interlace) for catalog thumbnails. */
+function writePngRGBA(width, height, rgba) {
   const crcTable = new Int32Array(256);
   for (let n = 0; n < 256; n += 1) {
     let c = n;
@@ -51,16 +79,11 @@ function writePng(width, height, rgb) {
   ihdr.writeUInt32BE(width, 0);
   ihdr.writeUInt32BE(height, 4);
   ihdr[8] = 8;
-  ihdr[9] = 2;
-  const raw = Buffer.alloc(height * (1 + width * 3));
+  ihdr[9] = 6;
+  const raw = Buffer.alloc(height * (1 + width * 4));
   for (let y = 0; y < height; y += 1) {
-    raw[y * (1 + width * 3)] = 0;
-    for (let x = 0; x < width; x += 1) {
-      const p = rgb(x / (width - 1), y / (height - 1));
-      raw[y * (1 + width * 3) + 1 + x * 3] = p[0];
-      raw[y * (1 + width * 3) + 1 + x * 3 + 1] = p[1];
-      raw[y * (1 + width * 3) + 1 + x * 3 + 2] = p[2];
-    }
+    raw[y * (1 + width * 4)] = 0;
+    rgba.subarray(y * width * 4, (y + 1) * width * 4).copy(raw, y * (1 + width * 4) + 1);
   }
   const parts = [Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])];
   parts.push(chunk("IHDR", ihdr));
@@ -69,18 +92,50 @@ function writePng(width, height, rgb) {
   return Buffer.concat(parts);
 }
 
-/** Soft vertical-gradient thumbnail in the product's colour. */
-function thumbnail(top, bottom) {
-  const mix = (t) => [
-    Math.round(top[0] + (bottom[0] - top[0]) * t),
-    Math.round(top[1] + (bottom[1] - top[1]) * t),
-    Math.round(top[2] + (bottom[2] - top[2]) * t),
-  ];
-  return writePng(256, 160, (u, v) => {
-    const edge = Math.min(u, 1 - u) * 256 < 10 || Math.min(v, 1 - v) * 160 < 10;
-    if (edge) return [226, 224, 220];
-    return mix(v);
-  });
+/* --------------------------------------- texture sampling (thumbs) -- */
+
+/** Resized raw RGB copies of the on-disk colour textures, keyed by texture id. */
+const texRawCache = new Map();
+async function texRaw(id) {
+  const hit = texRawCache.get(id);
+  if (hit !== undefined) return hit;
+  const { data, info } = await sharp(texFile(id))
+    .resize(256, 256, { fit: "fill" })
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const entry = { data, w: info.width, h: info.height, channels: info.channels };
+  texRawCache.set(id, entry);
+  return entry;
+}
+
+function texIdFromUri(uri) {
+  const m = /ambientcg\/([^/]+)\//.exec(uri);
+  return m === null ? undefined : m[1];
+}
+
+/** Repeat-wrapped nearest sample of a raw texture entry. Returns [r, g, b]. */
+function sampleTex(entry, u, v) {
+  const x = (((u % 1) + 1) % 1) * entry.w;
+  const y = (((v % 1) + 1) % 1) * entry.h;
+  const ix = Math.min(entry.w - 1, Math.floor(x));
+  const iy = Math.min(entry.h - 1, Math.floor(y));
+  const o = (iy * entry.w + ix) * entry.channels;
+  return [entry.data[o] ?? 128, entry.data[o + 1] ?? 128, entry.data[o + 2] ?? 128];
+}
+
+/* ------------------------------------------------------------ math -- */
+
+function vdot(a, b) {
+  return a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+}
+
+function vnorm(a) {
+  const l = Math.hypot(a[0], a[1], a[2]) || 1;
+  return [a[0] / l, a[1] / l, a[2] / l];
+}
+
+function vcross(a, b) {
+  return [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
 }
 
 /* ------------------------------------------------------------ buffers -- */
@@ -121,90 +176,45 @@ function orientOutward(part, cx, cy, cz) {
   }
 }
 
-/** Axis-aligned box centred at (cx, cy, cz), 24 verts, outward normals. */
-function boxPart(parts, w, h, d, cx, cy, cz, material) {
-  const hx = w / 2;
-  const hy = h / 2;
-  const hz = d / 2;
+/**
+ * Small rounded rim where a lamp cylinder meets its cap (base edges, shade
+ * hem): a torus of tube `t` tucked inside radius R at height y, so the outer
+ * extent stays exactly R and the height stays within y ± t — callers inset y
+ * by t from the cap plane to keep the authored size. Reads as a rolled edge
+ * instead of a sharp corner.
+ */
+function rimPart(parts, R, y, t, cx, cz, material, seg = 48, tseg = 10) {
   const positions = [];
   const normals = [];
   const uvs = [];
   const indices = [];
-  const faces = [
-    {
-      n: [1, 0, 0],
-      corners: [
-        [1, -1, -1],
-        [1, -1, 1],
-        [1, 1, 1],
-        [1, 1, -1],
-      ],
-    },
-    {
-      n: [-1, 0, 0],
-      corners: [
-        [-1, -1, 1],
-        [-1, -1, -1],
-        [-1, 1, -1],
-        [-1, 1, 1],
-      ],
-    },
-    {
-      n: [0, 1, 0],
-      corners: [
-        [-1, 1, -1],
-        [1, 1, -1],
-        [1, 1, 1],
-        [-1, 1, 1],
-      ],
-    },
-    {
-      n: [0, -1, 0],
-      corners: [
-        [-1, -1, 1],
-        [1, -1, 1],
-        [1, -1, -1],
-        [-1, -1, -1],
-      ],
-    },
-    {
-      n: [0, 0, 1],
-      corners: [
-        [-1, -1, 1],
-        [-1, 1, 1],
-        [1, 1, 1],
-        [1, -1, 1],
-      ],
-    },
-    {
-      n: [0, 0, -1],
-      corners: [
-        [1, -1, -1],
-        [1, 1, -1],
-        [-1, 1, -1],
-        [-1, -1, -1],
-      ],
-    },
-  ];
-  const faceUv = [
-    [0, 0],
-    [1, 0],
-    [1, 1],
-    [0, 1],
-  ];
-  for (const face of faces) {
-    const base = positions.length / 3;
-    for (let i = 0; i < 4; i += 1) {
-      const c = face.corners[i];
-      pushFloat(positions, [cx + c[0] * hx, cy + c[1] * hy, cz + c[2] * hz]);
-      pushFloat(normals, face.n);
-      pushFloat(uvs, faceUv[i]);
+  const base = 0;
+  for (let j = 0; j <= tseg; j += 1) {
+    const b = (j / tseg) * Math.PI * 2;
+    const cb = Math.cos(b);
+    const sb = Math.sin(b);
+    for (let i = 0; i <= seg; i += 1) {
+      const a = (i / seg) * Math.PI * 2;
+      const ca = Math.cos(a);
+      const sa = Math.sin(a);
+      const rr = R - t + cb * t;
+      pushFloat(positions, [cx + rr * ca, y + sb * t, cz + rr * sa]);
+      pushFloat(normals, [cb * ca, sb, cb * sa]);
+      pushFloat(uvs, [(i / seg) * 2 * Math.PI * (R - t), (j / tseg) * 2 * Math.PI * t]);
     }
-    indices.push(base, base + 1, base + 2, base, base + 2, base + 3);
   }
-  const box = { positions, normals, uvs, indices, material };
-  orientOutward(box, cx, cy, cz);
-  parts.push(box);
+  for (let j = 0; j < tseg; j += 1) {
+    for (let i = 0; i < seg; i += 1) {
+      const a = base + j * (seg + 1) + i;
+      const b = a + 1;
+      const c = a + seg + 1;
+      const e = c + 1;
+      indices.push(a, b, e, a, e, c);
+    }
+  }
+  const ring = { positions, normals, uvs, indices, material };
+  orientOutward(ring, cx, y, cz);
+  parts.push(ring);
 }
 
 /** Vertical cylinder (or cone when rTop !== rBottom) centred at (cx, y0). */
@@ -215,16 +225,17 @@ function cylinderPart(parts, rTop, rBottom, h, seg, cx, y0, cz, material, capped
   const indices = [];
   const slope = (rBottom - rTop) / h;
   const inv = 1 / Math.hypot(1, slope);
+  const avgCirc = (rTop + rBottom) * Math.PI;
   for (let i = 0; i <= seg; i += 1) {
     const a = (i / seg) * Math.PI * 2;
     const ca = Math.cos(a);
     const sa = Math.sin(a);
     pushFloat(positions, [cx + ca * rBottom, y0, cz + sa * rBottom]);
     pushFloat(normals, [ca * inv, slope * inv, sa * inv]);
-    pushFloat(uvs, [i / seg, 0]);
+    pushFloat(uvs, [(i / seg) * avgCirc, 0]);
     pushFloat(positions, [cx + ca * rTop, y0 + h, cz + sa * rTop]);
     pushFloat(normals, [ca * inv, slope * inv, sa * inv]);
-    pushFloat(uvs, [i / seg, 1]);
+    pushFloat(uvs, [(i / seg) * avgCirc, h]);
   }
   for (let i = 0; i < seg; i += 1) {
     const a = i * 2;
@@ -239,15 +250,16 @@ function cylinderPart(parts, rTop, rBottom, h, seg, cx, y0, cz, material, capped
       [y0 + h, 1, false],
     ]) {
       const base = positions.length / 3;
+      const rCap = ry === y0 ? rBottom : rTop;
       pushFloat(positions, [cx, ry, cz]);
       pushFloat(normals, [0, ny, 0]);
-      pushFloat(uvs, [0.5, 0.5]);
+      pushFloat(uvs, [rCap, rCap]);
       for (let i = 0; i <= seg; i += 1) {
         const a = (i / seg) * Math.PI * 2;
-        const r = ry === y0 ? rBottom : rTop;
+        const r = rCap;
         pushFloat(positions, [cx + Math.cos(a) * r, ry, cz + Math.sin(a) * r]);
         pushFloat(normals, [0, ny, 0]);
-        pushFloat(uvs, [0.5 + Math.cos(a) / 2, 0.5 + Math.sin(a) / 2]);
+        pushFloat(uvs, [(0.5 + Math.cos(a) / 2) * 2 * r, (0.5 + Math.sin(a) / 2) * 2 * r]);
       }
       for (let i = 1; i <= seg; i += 1) {
         if (flip) indices.push(base, base + i + 1, base + i);
@@ -303,7 +315,7 @@ function roundedBoxPart(parts, w, h, d, r, seg, cx, cy, cz, material) {
           cz + inner[2] + n[2] * r,
         ]);
         pushFloat(normals, n);
-        pushFloat(uvs, [i / seg, j / seg]);
+        pushFloat(uvs, [(i / seg) * 2 * face.hu, (j / seg) * 2 * face.hv]);
       }
     }
     for (let j = 0; j < seg; j += 1) {
@@ -458,25 +470,27 @@ const woodMat = (id) => ({
   normal: texUri(id, "NormalGL"),
   roughness: 0.7,
 });
-const plasterMat = {
-  map: texUri("PaintedPlaster017", "Color"),
-  normal: texUri("PaintedPlaster017", "NormalGL"),
-  roughness: 0.94,
-};
-
-/** Three flat rugs, 1 cm high, in the carpet textures already on disk. */
+/** Three low rugs, 1 cm high, with softly rounded edges, in the carpet weaves. */
 function rugModel(wCm, dCm, carpet) {
   const parts = [];
-  boxPart(parts, wCm / 100, 0.01, dCm / 100, 0, 0.005, 0, "carpet");
+  roundedBoxPart(parts, wCm / 100, 0.01, dCm / 100, 0.004, 2, 0, 0.005, 0, "carpet");
   return { parts, materials: { carpet: carpetMat(carpet) } };
 }
 
-/** Floor lamp: disc base, slim pole, cone fabric shade; 40 x 40 x 160 cm. */
+/**
+ * Floor lamp: disc base with a rolled edge, slim pole, tapered fabric shade
+ * with a rolled hem; 40 x 40 x 160 cm. Rim rings tuck inside the cylinder
+ * extents, so the authored size is unchanged.
+ */
 function floorLampModel() {
   const parts = [];
-  cylinderPart(parts, 0.2, 0.2, 0.02, 40, 0, 0, 0, "metal");
-  cylinderPart(parts, 0.02, 0.02, 1.28, 20, 0, 0.02, 0, "metal");
-  cylinderPart(parts, 0.14, 0.18, 0.3, 40, 0, 1.3, 0, "shade");
+  cylinderPart(parts, 0.2, 0.2, 0.02, 48, 0, 0, 0, "metal");
+  rimPart(parts, 0.2, 0.006, 0.006, 0, 0, "metal");
+  rimPart(parts, 0.2, 0.014, 0.006, 0, 0, "metal");
+  cylinderPart(parts, 0.02, 0.02, 1.28, 24, 0, 0.02, 0, "metal");
+  cylinderPart(parts, 0.14, 0.18, 0.3, 48, 0, 1.3, 0, "shade");
+  rimPart(parts, 0.18, 1.312, 0.012, 0, 0, "shade");
+  rimPart(parts, 0.14, 1.588, 0.012, 0, 0, "shade");
   return {
     parts,
     materials: {
@@ -486,14 +500,14 @@ function floorLampModel() {
   };
 }
 
-/** Modern two-door wardrobe: carcass, two flush doors, bar handles. */
+/** Modern two-door wardrobe: rounded carcass, rounded doors, bar handles. */
 function wardrobeModel() {
   const parts = [];
-  boxPart(parts, 1.0, 2.0, 0.54, 0, 1.0, -0.03, "wood");
-  boxPart(parts, 0.49, 1.96, 0.04, -0.25, 1.0, 0.26, "wood");
-  boxPart(parts, 0.49, 1.96, 0.04, 0.25, 1.0, 0.26, "wood");
-  boxPart(parts, 0.02, 0.2, 0.02, -0.05, 1.0, 0.29, "metal");
-  boxPart(parts, 0.02, 0.2, 0.02, 0.05, 1.0, 0.29, "metal");
+  roundedBoxPart(parts, 1.0, 2.0, 0.54, 0.015, 3, 0, 1.0, -0.03, "wood");
+  roundedBoxPart(parts, 0.49, 1.96, 0.04, 0.012, 3, -0.25, 1.0, 0.26, "wood");
+  roundedBoxPart(parts, 0.49, 1.96, 0.04, 0.012, 3, 0.25, 1.0, 0.26, "wood");
+  roundedBoxPart(parts, 0.02, 0.2, 0.02, 0.006, 2, -0.05, 1.0, 0.29, "metal");
+  roundedBoxPart(parts, 0.02, 0.2, 0.02, 0.006, 2, 0.05, 1.0, 0.29, "metal");
   return {
     parts,
     materials: {
@@ -503,41 +517,46 @@ function wardrobeModel() {
   };
 }
 
-/** Low platform bed: frame, mattress, two pillows, 100 cm headboard. */
+/** Low platform bed: rounded frame, mattress, two pillows, 100 cm headboard. */
 function bedModel() {
   const parts = [];
-  boxPart(parts, 1.6, 0.22, 1.92, 0, 0.11, -0.04, "wood");
+  roundedBoxPart(parts, 1.6, 0.22, 1.92, 0.02, 3, 0, 0.11, -0.04, "wood");
   roundedBoxPart(parts, 1.56, 0.13, 1.84, 0.04, 4, 0, 0.285, -0.06, "linen");
   roundedBoxPart(parts, 0.6, 0.12, 0.35, 0.05, 4, -0.36, 0.41, 0.55, "linen");
   roundedBoxPart(parts, 0.6, 0.12, 0.35, 0.05, 4, 0.36, 0.41, 0.55, "linen");
-  boxPart(parts, 1.6, 1.0, 0.08, 0, 0.5, 0.96, "wood");
+  roundedBoxPart(parts, 1.6, 1.0, 0.08, 0.02, 3, 0, 0.5, 0.96, "wood");
   return {
     parts,
-    materials: { wood: woodMat("WoodFloor070"), linen: plasterMat },
+    materials: { wood: woodMat("WoodFloor070"), linen: fabricMat("Fabric061") },
   };
 }
 
-/** Modern three-seat sofa: base, arms, three seat + three back cushions. */
+/**
+ * Modern three-seat sofa: fully upholstered in Fabric075 (frame, arms and
+ * cushions all rounded) on dark-metal feet.
+ */
 function sofaModel() {
   const parts = [];
   for (const fx of [-1.0, 1.0]) {
-    for (const fz of [-0.36, 0.36]) boxPart(parts, 0.06, 0.08, 0.06, fx, 0.04, fz, "base");
+    for (const fz of [-0.36, 0.36]) {
+      roundedBoxPart(parts, 0.06, 0.08, 0.06, 0.015, 2, fx, 0.04, fz, "metal");
+    }
   }
-  boxPart(parts, 2.2, 0.24, 0.9, 0, 0.2, 0, "base");
-  roundedBoxPart(parts, 0.2, 0.34, 0.9, 0.05, 4, -1.0, 0.49, 0, "base");
-  roundedBoxPart(parts, 0.2, 0.34, 0.9, 0.05, 4, 1.0, 0.49, 0, "base");
+  roundedBoxPart(parts, 2.2, 0.24, 0.9, 0.03, 3, 0, 0.2, 0, "fabric");
+  roundedBoxPart(parts, 0.2, 0.34, 0.9, 0.05, 4, -1.0, 0.49, 0, "fabric");
+  roundedBoxPart(parts, 0.2, 0.34, 0.9, 0.05, 4, 1.0, 0.49, 0, "fabric");
   for (const cx of [-0.6075, 0, 0.6075]) {
-    roundedBoxPart(parts, 0.585, 0.14, 0.66, 0.05, 4, cx, 0.37, -0.09, "cushion");
+    roundedBoxPart(parts, 0.585, 0.14, 0.66, 0.05, 4, cx, 0.37, -0.09, "fabric");
   }
-  boxPart(parts, 2.2, 0.48, 0.2, 0, 0.56, 0.35, "base");
+  roundedBoxPart(parts, 2.2, 0.48, 0.2, 0.06, 3, 0, 0.56, 0.35, "fabric");
   for (const cx of [-0.6075, 0, 0.6075]) {
-    roundedBoxPart(parts, 0.585, 0.34, 0.16, 0.06, 4, cx, 0.61, 0.17, "cushion");
+    roundedBoxPart(parts, 0.585, 0.34, 0.16, 0.06, 4, cx, 0.61, 0.17, "fabric");
   }
   return {
     parts,
     materials: {
-      base: { color: [0.32, 0.31, 0.3, 1], roughness: 0.9 },
-      cushion: fabricMat("Fabric075"),
+      fabric: fabricMat("Fabric075"),
+      metal: { color: [0.08, 0.08, 0.09, 1], metallic: 0.8, roughness: 0.4 },
     },
   };
 }
@@ -570,70 +589,241 @@ function authoredBox(parts) {
 
 /* ---------------------------------------------------------------- main -- */
 
+/* --------------------------------------------------- thumbnail rig -- */
+
+/**
+ * Software-render a catalog thumbnail from the model's own triangles: a
+ * shared 3/4-view orthographic rig (camera azimuth 33°, elevation 24°), a
+ * warm key plus a cool fill, and a soft contact shadow on the ground plane.
+ * Textured parts sample the same on-disk colour textures the glTF points at
+ * (UVs are in metres, wrapping), so the weave and grain show in the thumb.
+ * Rendered at 2x and downsampled for smooth edges; the canvas fits the
+ * piece with margin so the long side lands on exactly 256 px, background
+ * stays transparent, and corners stay clear.
+ */
+async function renderThumbnail(parts, materials) {
+  const samplers = new Map();
+  for (const [key, def] of Object.entries(materials)) {
+    if (def.map !== undefined) {
+      const id = texIdFromUri(def.map);
+      if (id === undefined) throw new Error(`Cannot resolve texture id from ${def.map}`);
+      samplers.set(key, { tex: await texRaw(id) });
+    } else {
+      const c = def.color ?? [0.5, 0.5, 0.5, 1];
+      samplers.set(key, { rgb: [c[0] * 255, c[1] * 255, c[2] * 255] });
+    }
+  }
+  const doubleSided = new Set(
+    Object.entries(materials)
+      .filter(([, def]) => def.doubleSided === true)
+      .map(([key]) => key),
+  );
+
+  const az = (33 * Math.PI) / 180;
+  const el = (24 * Math.PI) / 180;
+  const d = [Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el)];
+  const f = vnorm([-d[0], -d[1], -d[2]]);
+  const r = vnorm(vcross(f, [0, 1, 0]));
+  const u = vcross(r, f);
+  const key = vnorm([-0.45, 0.78, 0.5]);
+  const fill = vnorm([0.6, 0.25, -0.4]);
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+  for (const part of parts) {
+    for (let i = 0; i < part.positions.length; i += 3) {
+      const x = part.positions[i];
+      const y = part.positions[i + 1];
+      const z = part.positions[i + 2];
+      const sx = x * r[0] + y * r[1] + z * r[2];
+      const sy = x * u[0] + y * u[1] + z * u[2];
+      if (sx < minX) minX = sx;
+      if (sx > maxX) maxX = sx;
+      if (sy < minY) minY = sy;
+      if (sy > maxY) maxY = sy;
+    }
+  }
+  const MARGIN = 1.14;
+  const spanX = Math.max(1e-6, (maxX - minX) * MARGIN);
+  const spanY = Math.max(1e-6, (maxY - minY) * MARGIN);
+  const SS = 2;
+  const W = Math.max(1, Math.round((256 * spanX) / Math.max(spanX, spanY)));
+  const H = Math.max(1, Math.round((256 * spanY) / Math.max(spanX, spanY)));
+  const RW = W * SS;
+  const RH = H * SS;
+  const cx = (minX + maxX) / 2;
+  const cy = (minY + maxY) / 2;
+  const rgba = Buffer.alloc(RW * RH * 4, 0);
+  const zbuf = new Float32Array(RW * RH).fill(-Infinity);
+  const toPx = (sx, sy) => [
+    ((sx - cx) / spanX) * (RW - 1) + (RW - 1) / 2,
+    ((cy - sy) / spanY) * (RH - 1) + (RH - 1) / 2,
+  ];
+
+  // Soft contact shadow on the ground plane, drawn first (triangles overdraw).
+  // The world-space XZ footprint corners projected at y=0 set the ellipse.
+  {
+    let fx0 = Infinity;
+    let fx1 = -Infinity;
+    let fz0 = Infinity;
+    let fz1 = -Infinity;
+    for (const part of parts) {
+      for (let i = 0; i < part.positions.length; i += 3) {
+        const x = part.positions[i];
+        const z = part.positions[i + 2];
+        if (x < fx0) fx0 = x;
+        if (x > fx1) fx1 = x;
+        if (z < fz0) fz0 = z;
+        if (z > fz1) fz1 = z;
+      }
+    }
+    const foot = [];
+    for (const [wx, wz] of [
+      [fx0, fz0],
+      [fx0, fz1],
+      [fx1, fz0],
+      [fx1, fz1],
+    ]) {
+      const sx = wx * r[0] + wz * r[2];
+      const sy = wx * u[0] + wz * u[2];
+      foot.push(toPx(sx, sy));
+    }
+    let ex0 = Infinity;
+    let ex1 = -Infinity;
+    let ey0 = Infinity;
+    let ey1 = -Infinity;
+    for (const [px, py] of foot) {
+      if (px < ex0) ex0 = px;
+      if (px > ex1) ex1 = px;
+      if (py < ey0) ey0 = py;
+      if (py > ey1) ey1 = py;
+    }
+    const ecx = (ex0 + ex1) / 2;
+    const ecy = (ey0 + ey1) / 2;
+    const erx = Math.max(1, ((ex1 - ex0) / 2) * 1.1 + RW * 0.01);
+    const ery = Math.max(1, ((ey1 - ey0) / 2) * 1.1 + RH * 0.01);
+    for (let y = 0; y < RH; y += 1) {
+      for (let x = 0; x < RW; x += 1) {
+        const qx = (x + 0.5 - ecx) / erx;
+        const qy = (y + 0.5 - ecy) / ery;
+        const q = qx * qx + qy * qy;
+        if (q >= 1) continue;
+        const a = Math.round(72 * (1 - q) * (1 - q));
+        const o = (y * RW + x) * 4;
+        rgba[o] = 30;
+        rgba[o + 1] = 28;
+        rgba[o + 2] = 30;
+        rgba[o + 3] = a;
+      }
+    }
+  }
+
+  // Triangles, front-to-back-agnostic via a z-buffer (painter-safe).
+  for (const part of parts) {
+    const sampler = samplers.get(part.material);
+    if (sampler === undefined) throw new Error(`No sampler for material ${part.material}`);
+    const sided = doubleSided.has(part.material);
+    const { positions, normals, uvs, indices } = part;
+    for (let t = 0; t < indices.length; t += 3) {
+      const vi = [indices[t], indices[t + 1], indices[t + 2]];
+      const P = vi.map((k) => [positions[k * 3], positions[k * 3 + 1], positions[k * 3 + 2]]);
+      const e1 = [P[1][0] - P[0][0], P[1][1] - P[0][1], P[1][2] - P[0][2]];
+      const e2 = [P[2][0] - P[0][0], P[2][1] - P[0][1], P[2][2] - P[0][2]];
+      const gn = vnorm(vcross(e1, e2));
+      if (!sided && vdot(gn, f) <= 1e-9) continue;
+      const S = P.map((p) => {
+        const sx = p[0] * r[0] + p[1] * r[1] + p[2] * r[2];
+        const sy = p[0] * u[0] + p[1] * u[1] + p[2] * u[2];
+        return toPx(sx, sy);
+      });
+      const dep = P.map((p) => p[0] * f[0] + p[1] * f[1] + p[2] * f[2]);
+      const N = vi.map((k) => [normals[k * 3], normals[k * 3 + 1], normals[k * 3 + 2]]);
+      const T = vi.map((k) => [uvs[k * 2], uvs[k * 2 + 1]]);
+      const x0 = Math.max(0, Math.floor(Math.min(S[0][0], S[1][0], S[2][0])));
+      const x1 = Math.min(RW - 1, Math.ceil(Math.max(S[0][0], S[1][0], S[2][0])));
+      const y0 = Math.max(0, Math.floor(Math.min(S[0][1], S[1][1], S[2][1])));
+      const y1 = Math.min(RH - 1, Math.ceil(Math.max(S[0][1], S[1][1], S[2][1])));
+      const denom =
+        (S[1][1] - S[2][1]) * (S[0][0] - S[2][0]) + (S[2][0] - S[1][0]) * (S[0][1] - S[2][1]);
+      if (Math.abs(denom) < 1e-12) continue;
+      for (let y = y0; y <= y1; y += 1) {
+        for (let x = x0; x <= x1; x += 1) {
+          const px = x + 0.5;
+          const py = y + 0.5;
+          const w0 =
+            ((S[1][1] - S[2][1]) * (px - S[2][0]) + (S[2][0] - S[1][0]) * (py - S[2][1])) / denom;
+          const w1 =
+            ((S[2][1] - S[0][1]) * (px - S[2][0]) + (S[0][0] - S[2][0]) * (py - S[2][1])) / denom;
+          const w2 = 1 - w0 - w1;
+          if (w0 < -1e-9 || w1 < -1e-9 || w2 < -1e-9) continue;
+          const depth = w0 * dep[0] + w1 * dep[1] + w2 * dep[2];
+          const zi = y * RW + x;
+          if (depth <= zbuf[zi]) continue;
+          let nx = w0 * N[0][0] + w1 * N[1][0] + w2 * N[2][0];
+          let ny = w0 * N[0][1] + w1 * N[1][1] + w2 * N[2][1];
+          let nz = w0 * N[0][2] + w1 * N[1][2] + w2 * N[2][2];
+          const nl = Math.hypot(nx, ny, nz) || 1;
+          nx /= nl;
+          ny /= nl;
+          nz /= nl;
+          const tu = w0 * T[0][0] + w1 * T[1][0] + w2 * T[2][0];
+          const tv = w0 * T[0][1] + w1 * T[1][1] + w2 * T[2][1];
+          const baseCol = sampler.tex !== undefined ? sampleTex(sampler.tex, tu, tv) : sampler.rgb;
+          const li = Math.max(0, nx * key[0] + ny * key[1] + nz * key[2]);
+          const fi = Math.max(0, nx * fill[0] + ny * fill[1] + nz * fill[2]);
+          const k = Math.min(1.04, 0.46 + 0.58 * li + 0.12 * fi);
+          const o = zi * 4;
+          rgba[o] = Math.min(255, Math.round(baseCol[0] * k));
+          rgba[o + 1] = Math.min(255, Math.round(baseCol[1] * k));
+          rgba[o + 2] = Math.min(255, Math.round(baseCol[2] * k));
+          rgba[o + 3] = 255;
+          zbuf[zi] = depth;
+        }
+      }
+    }
+  }
+
+  // Box downsample to the 256-px-long-side canvas (premultiplied).
+  const out = Buffer.alloc(W * H * 4, 0);
+  for (let y = 0; y < H; y += 1) {
+    for (let x = 0; x < W; x += 1) {
+      let pr = 0;
+      let pg = 0;
+      let pb = 0;
+      let pa = 0;
+      for (let j = 0; j < SS; j += 1) {
+        for (let i = 0; i < SS; i += 1) {
+          const o = ((y * SS + j) * RW + (x * SS + i)) * 4;
+          const a = rgba[o + 3] / 255;
+          pa += a;
+          pr += rgba[o] * a;
+          pg += rgba[o + 1] * a;
+          pb += rgba[o + 2] * a;
+        }
+      }
+      pa /= SS * SS;
+      const o = (y * W + x) * 4;
+      if (pa > 1e-6) {
+        out[o] = Math.round(pr / (SS * SS) / pa);
+        out[o + 1] = Math.round(pg / (SS * SS) / pa);
+        out[o + 2] = Math.round(pb / (SS * SS) / pa);
+      }
+      out[o + 3] = Math.round(pa * 255);
+    }
+  }
+  return { w: W, h: H, rgba: out };
+}
+
 const MODELS = [
-  {
-    id: "rug_160x230",
-    sizeCm: [160, 1, 230],
-    thumb: [
-      [214, 200, 182],
-      [172, 158, 140],
-    ],
-    build: () => rugModel(160, 230, "Carpet012"),
-  },
-  {
-    id: "rug_200x300",
-    sizeCm: [200, 1, 300],
-    thumb: [
-      [198, 196, 190],
-      [150, 148, 142],
-    ],
-    build: () => rugModel(200, 300, "Carpet015"),
-  },
-  {
-    id: "rug_240x340",
-    sizeCm: [240, 1, 340],
-    thumb: [
-      [188, 182, 176],
-      [140, 134, 128],
-    ],
-    build: () => rugModel(240, 340, "Carpet016"),
-  },
-  {
-    id: "fitroom_floor_lamp",
-    sizeCm: [40, 160, 40],
-    thumb: [
-      [90, 88, 86],
-      [40, 38, 36],
-    ],
-    build: floorLampModel,
-  },
-  {
-    id: "fitroom_wardrobe",
-    sizeCm: [100, 200, 60],
-    thumb: [
-      [172, 140, 108],
-      [120, 92, 64],
-    ],
-    build: wardrobeModel,
-  },
-  {
-    id: "fitroom_platform_bed",
-    sizeCm: [160, 100, 200],
-    thumb: [
-      [170, 138, 106],
-      [118, 90, 62],
-    ],
-    build: bedModel,
-  },
-  {
-    id: "fitroom_sofa_3seat",
-    sizeCm: [220, 80, 90],
-    thumb: [
-      [120, 116, 150],
-      [70, 66, 100],
-    ],
-    build: sofaModel,
-  },
+  { id: "rug_160x230", sizeCm: [160, 1, 230], build: () => rugModel(160, 230, "Carpet012") },
+  { id: "rug_200x300", sizeCm: [200, 1, 300], build: () => rugModel(200, 300, "Carpet015") },
+  { id: "rug_240x340", sizeCm: [240, 1, 340], build: () => rugModel(240, 340, "Carpet016") },
+  { id: "fitroom_floor_lamp", sizeCm: [40, 160, 40], build: floorLampModel },
+  { id: "fitroom_wardrobe", sizeCm: [100, 200, 60], build: wardrobeModel },
+  { id: "fitroom_platform_bed", sizeCm: [160, 100, 200], build: bedModel },
+  { id: "fitroom_sofa_3seat", sizeCm: [220, 80, 90], build: sofaModel },
 ];
 
 let failed = 0;
@@ -655,7 +845,9 @@ for (const spec of MODELS) {
   mkdirSync(dir, { recursive: true });
   writeFileSync(join(dir, `${spec.id}_1k.gltf`), `${JSON.stringify(json, null, 2)}\n`);
   writeFileSync(join(dir, `${spec.id}.bin`), bin);
-  writeFileSync(join(dir, "thumb.png"), thumbnail(spec.thumb[0], spec.thumb[1]));
+  const view = await renderThumbnail(parts, materials);
+  console.log(`${spec.id}: thumbnail ${view.w}x${view.h} RGBA`);
+  writeFileSync(join(dir, "thumb.png"), writePngRGBA(view.w, view.h, view.rgba));
 }
 if (failed > 0) process.exit(1);
 console.log(`Wrote ${MODELS.length} models under ${outRoot}.`);
