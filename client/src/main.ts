@@ -1221,6 +1221,7 @@ class FitRoomApp {
     document.body.appendChild(flow.element);
     this.refreshMenu();
     this.updateTopBar();
+    this.updateUndoRedo();
     this.updateGuide();
   }
 
@@ -1228,6 +1229,7 @@ class FitRoomApp {
     this.photoFlow?.element.remove();
     this.photoFlow = null;
     this.updateTopBar();
+    this.updateUndoRedo();
     this.updateGuide();
   }
 
@@ -1296,6 +1298,7 @@ class FitRoomApp {
     this.showSidePanel("none");
     this.editor?.element.removeAttribute("hidden");
     this.updateTopBar();
+    this.updateUndoRedo();
     this.updateEmptyHint(this.store.state.items.length);
   }
 
@@ -1303,6 +1306,7 @@ class FitRoomApp {
     this.editing = false;
     this.editor?.element.setAttribute("hidden", "");
     this.updateTopBar();
+    this.updateUndoRedo();
     this.updateEmptyHint(this.store.state.items.length);
     this.updateGuide();
   }

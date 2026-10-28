@@ -84,6 +84,63 @@ check(
 check("unviewed chip invites one tap", confirm.includes("Select to view it"), "photo-confirm.ts");
 check("viewed walls keep Active/Done", confirm.includes("wallCardStatus"), "photo-confirm.ts");
 
+// ---- Item 3: the header's Undo and Redo hide on every photo-flow screen ----
+{
+  const app = src("main.ts");
+  // The header hides both buttons while the photo flow (photo, tape and
+  // build screens) or the confirm view (the plan editor) is open.
+  const hideBlock = app.includes("const inFlow = this.photoFlow !== null || this.editing");
+  check(
+    "the header hides Undo and Redo in the flow and in the confirm view",
+    hideBlock &&
+      app.includes('el.style.display = inFlow ? "none" : ""') &&
+      app.includes("tool-undo") &&
+      app.includes("tool-redo"),
+    "main.ts updateUndoRedo",
+  );
+  // Each screen transition refreshes the header: opening/closing the flow
+  // (photo and tape steps) and opening/closing the editor (confirm view).
+  const openFlowAt = app.indexOf("private openPhotoFlow");
+  const openFlowBlock = openFlowAt >= 0 ? app.slice(openFlowAt, openFlowAt + 1200) : "";
+  check(
+    "opening the photo flow refreshes the header",
+    openFlowBlock.includes("this.updateUndoRedo()"),
+    "main.ts openPhotoFlow",
+  );
+  const closeFlowAt = app.indexOf("private closePhotoFlow");
+  const closeFlowBlock = closeFlowAt >= 0 ? app.slice(closeFlowAt, closeFlowAt + 600) : "";
+  check(
+    "closing the photo flow refreshes the header",
+    closeFlowBlock.includes("this.updateUndoRedo()"),
+    "main.ts closePhotoFlow",
+  );
+  const openEditorAt = app.indexOf("private openEditor");
+  const openEditorBlock = openEditorAt >= 0 ? app.slice(openEditorAt, openEditorAt + 900) : "";
+  check(
+    "opening the confirm view refreshes the header",
+    openEditorBlock.includes("this.updateUndoRedo()"),
+    "main.ts openEditor",
+  );
+  const closeEditorAt = app.indexOf("private closeEditor");
+  const closeEditorBlock =
+    closeEditorAt >= 0 ? app.slice(closeEditorAt, closeEditorAt + 600) : "";
+  check(
+    "closing the confirm view refreshes the header",
+    closeEditorBlock.includes("this.updateUndoRedo()"),
+    "main.ts closeEditor",
+  );
+  // The confirm view keeps its own Undo: the editor hides only the second
+  // Leave in the confirm view, never the Undo button.
+  const editorSrc = src("editor/editor.ts");
+  check(
+    "the confirm view keeps its own Undo",
+    editorSrc.includes("this.undoBtn") &&
+      !editorSrc.includes("undoBtn.style.display") &&
+      editorSrc.includes("cancelBtn.style.display"),
+    "editor.ts",
+  );
+}
+
 const editor = src("editor/editor.ts");
 check(
   "Build my room stays one click",
