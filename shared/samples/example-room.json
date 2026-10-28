@@ -90,13 +90,13 @@
   "fixtures": [],
   "existing": [],
   "surfaces": {
-    "floor": "oak-light",
+    "floor": "WoodFloor071",
     "wall": "PaintedPlaster017",
     "wallTint": "#DEDEDC"
   },
   "style": {
-    "tags": [],
-    "dominantColors": []
+    "tags": ["minimalist", "scandinavian", "bright"],
+    "dominantColors": ["#f2eee6", "#d9c19a", "#8a6742"]
   },
   "source": "photos",
   "confidence": 0.7

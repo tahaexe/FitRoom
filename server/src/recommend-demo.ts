@@ -29,6 +29,7 @@ import {
   type RoomLayout,
   type SceneState,
 } from "@fitroom/shared";
+import { readExampleRoom } from "./assistant-demo.js";
 
 function serverRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -148,7 +149,7 @@ export function buildRecommendDemoRequests(): RecommendRequest[] {
  */
 export function buildExampleRecommendDemoRequests(): RecommendRequest[] {
   const sharedDir = resolve(serverRoot(), "..", "shared");
-  const room = readJson(resolve(sharedDir, "samples", "example-room.json")) as RoomLayout;
+  const room = readExampleRoom();
   const scene = {
     roomId: "photos-room",
     items: [],

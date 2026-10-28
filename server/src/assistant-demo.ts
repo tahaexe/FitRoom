@@ -77,14 +77,33 @@ export function buildAssistantDemoRequests(): AssistantRequest[] {
 }
 
 /**
- * The example room's built layout (photo-solved, as the photo flow builds
- * it: A taped 420, B estimated, default label style, paint + oak finishes),
- * and its empty start scene (the photo build opens with no pieces and the
- * default camera, like `emptyScene` in the client).
+ * The example room's built layout, exactly as the client builds it after
+ * "Build my room" (`client/src/photo-room/flow.ts` build + applyLabel):
+ * photo-solved with A taped 420 and B estimated, then the recorded label
+ * answer's style tags and colours
+ * (`server/data/demo/label/27e8386c9a009618b9d692c360fb969723c6c1ee4b74d7e5b7d34a6fc56c8886.json`:
+ * minimalist/scandinavian/bright, #f2eee6/#d9c19a/#8a6742), the wood-family
+ * floor pick `WoodFloor071` (`pickFloorTexture` closest wood by floor
+ * albedo over the photo pixels + SAM masks), paint `PaintedPlaster017`
+ * (`pickWallTexture`) and the blended wall tint `#DEDEDC`
+ * (`blendWallTints` over the per-photo tints in `surfaceColors`).
+ * The fixture `shared/samples/example-room.json` already holds this
+ * post-build room; the overlay below keeps the builders exact even if the
+ * fixture geometry is re-solved.
  */
 export function readExampleRoom(): RoomLayout {
   const sharedDir = resolve(serverRoot(), "..", "shared");
-  return readJson(resolve(sharedDir, "samples", "example-room.json")) as RoomLayout;
+  const room = readJson(resolve(sharedDir, "samples", "example-room.json")) as RoomLayout;
+  room.style = {
+    tags: ["minimalist", "scandinavian", "bright"],
+    dominantColors: ["#f2eee6", "#d9c19a", "#8a6742"],
+  };
+  room.surfaces = {
+    floor: "WoodFloor071",
+    wall: "PaintedPlaster017",
+    wallTint: "#DEDEDC",
+  };
+  return room;
 }
 
 export function emptyExampleScene(): SceneState {
@@ -108,9 +127,9 @@ export const EXAMPLE_ASSISTANT_DEMO_CHIPS: string[] = [
   ASSISTANT_DEMO_REQUESTS[5] as string,
 ];
 
-/** The example brief recorded for the demo: the first of the three briefs. */
+/** The example brief recorded for the demo: seats 2, modern, under $1,500. */
 export const EXAMPLE_ASSISTANT_DEMO_BRIEF: AssistantBrief = {
-  ...(ASSISTANT_DEMO_BRIEFS[0] as AssistantBrief),
+  ...(ASSISTANT_DEMO_BRIEFS[1] as AssistantBrief),
 };
 
 /**

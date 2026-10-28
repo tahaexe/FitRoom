@@ -75,7 +75,7 @@ import {
   readExampleRoom,
 } from "../src/assistant-demo.js";
 import { DEMO_REQUESTS } from "../src/demo-requests.js";
-import { gatewayKey } from "../src/meta/keys.js";
+import { canonicalize, gatewayKey } from "../src/meta/keys.js";
 import { assistantKeyInput } from "../src/routes/assistant.js";
 
 const PORT = 8790;
@@ -896,13 +896,77 @@ async function main(): Promise<void> {
       }
     }
 
-    // The example room, built exactly as the client builds it after "Try
-    // the example room" (photo-solved with tape A 420 and wall B estimated,
-    // the `shared/samples/example-room.json` fixture, empty start scene):
+    // The example room, built exactly as the client builds it after
+    // "Build my room" (`client/src/photo-room/flow.ts` build + applyLabel:
+    // photo-solved with tape A 420 and wall B estimated, then the recorded
+    // label answer's style tags and colours, the wood-family floor
+    // `WoodFloor071`, paint `PaintedPlaster017` and the blended wall tint
+    // `#DEDEDC`; the empty start scene is the photo build's no-piece draft):
     // its two Arrange chips replay from the store with zero upstream calls,
     // and every round's request key equals the recorded file's key.
+    // The client's first Arrange request for the example room is captured in
+    // `.inbox/demo-keys/example-arrange-request.json`; the rebuilt request
+    // must equal it (request, room and scene) after the store keys'
+    // normalisation (`assistantKeyInput` + `canonicalize`, which drops the
+    // pixel-blended wall tint like the gateway keys do).
     const exampleRoom = readExampleRoom();
     const exampleScene = emptyExampleScene();
+    check(
+      "example room carries the recorded label style",
+      JSON.stringify(exampleRoom.style?.tags ?? []) ===
+        JSON.stringify(["minimalist", "scandinavian", "bright"]) &&
+        JSON.stringify(exampleRoom.style?.dominantColors ?? []) ===
+          JSON.stringify(["#f2eee6", "#d9c19a", "#8a6742"]),
+      JSON.stringify(exampleRoom.style ?? null),
+    );
+    check(
+      "example room carries the client floor, wall and tint",
+      exampleRoom.surfaces?.floor === "WoodFloor071" &&
+        exampleRoom.surfaces?.wall === "PaintedPlaster017" &&
+        exampleRoom.surfaces?.wallTint === "#DEDEDC",
+      JSON.stringify(exampleRoom.surfaces ?? null),
+    );
+    try {
+      const inboxRaw = readFileSync(
+        join(repoRoot, ".inbox", "demo-keys", "example-arrange-request.json"),
+        "utf8",
+      );
+      const inbox = JSON.parse(inboxRaw) as {
+        request?: unknown;
+        room?: unknown;
+        scene?: unknown;
+      };
+      const firstArrange = (exampleRebuilt.find((first) => first.brief === undefined) ??
+        null) as AssistantRequest | null;
+      const norm = (value: unknown): string =>
+        JSON.stringify(canonicalize(assistantKeyInput(value)));
+      const wantParts =
+        firstArrange === null
+          ? null
+          : {
+              request: firstArrange.request,
+              messages: firstArrange.messages,
+              room: firstArrange.room,
+              scene: firstArrange.scene,
+            };
+      const gotParts = {
+        request: inbox.request,
+        messages: [{ role: "user", content: inbox.request }],
+        room: inbox.room,
+        scene: inbox.scene,
+      };
+      check(
+        "example first arrange equals the inbox browser request after key normalisation",
+        wantParts !== null && norm(wantParts) === norm(gotParts),
+        wantParts === null ? "no example arrange built" : undefined,
+      );
+    } catch {
+      check(
+        "example first arrange equals the inbox browser request after key normalisation",
+        false,
+        "no inbox file",
+      );
+    }
     const exampleProducts: FitProducts = new Map(
       replayCatalog.map((c) => [c.id, { size: c.size, category: c.category, name: c.name }]),
     );
@@ -953,19 +1017,40 @@ async function main(): Promise<void> {
     } catch {
       check("demo store holds the example recorded segment answers", false, "no segment store");
     }
-    // The example Furnish brief has no recording yet: its first round misses
-    // the store (the client shows the miss card), so nothing is asserted
-    // about its answers.
+    // The example Furnish brief (seats 2, modern, under $1,500) replays
+    // from the store like the sample briefs: no fit error, seats and budget
+    // as asked, on the built empty layout.
     const exampleBrief = exampleRebuilt.find((first) => first.brief !== undefined);
     if (exampleBrief !== undefined) {
-      const probe = await replayTurn(exampleBrief as AssistantRequest, exampleScene, new Set());
-      check("example furnish brief has no recording yet", !probe.ok);
+      const briefReplay = await replayTurn(exampleBrief as AssistantRequest, exampleScene, reached);
+      check(
+        "example furnish replays from the store to a text answer",
+        briefReplay.ok,
+        briefReplay.rounds === 0 ? "turn not recorded yet" : `rounds=${String(briefReplay.rounds)}`,
+      );
+      if (briefReplay.ok) {
+        const errs = errorsOf(exampleRoom, briefReplay.draft, exampleProducts);
+        check("example furnish: no fit error", errs.length === 0, errs.join(","));
+        const seats = briefReplay.draft.items.reduce(
+          (sum, item) => sum + (replayCatalog.find((c) => c.id === item.productId)?.seats ?? 0),
+          0,
+        );
+        const total = briefReplay.draft.items.reduce(
+          (sum, item) => sum + (replayCatalog.find((c) => c.id === item.productId)?.price ?? 0),
+          0,
+        );
+        check("example furnish: seats as asked", seats >= 2, `seats=${String(seats)} asked=2`);
+        check(
+          "example furnish: within budget",
+          total <= 1500,
+          `total=$${String(total)} budget=$1500`,
+        );
+      }
     }
 
     // Every stored assistant answer is reached by the sample turns plus the
-    // example arrange turns; anything else is a leftover of an earlier
-    // recording (like the old turn-6 rounds) and must be removed from the
-    // committed store.
+    // example arrange and furnish turns; anything else is a leftover of an
+    // earlier recording and must be removed from the committed store.
     const stored = readdirSync(join(dataDir, "demo", "assistant"))
       .filter((name) => name.endsWith(".json"))
       .map((name) => name.slice(0, -".json".length));
