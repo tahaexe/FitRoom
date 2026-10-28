@@ -221,6 +221,8 @@ export class CatalogPanel {
       const dimsEl = document.createElement("span");
       dimsEl.className = "catalog-dims";
       dimsEl.textContent = dims;
+      const priceRow = document.createElement("span");
+      priceRow.className = "catalog-price-row";
       const price = document.createElement("span");
       price.className = "catalog-price";
       price.textContent = formatCatalogPrice(item.price);
@@ -228,10 +230,10 @@ export class CatalogPanel {
       add.className = "catalog-add";
       add.textContent = "+ Add";
       add.setAttribute("aria-hidden", "true");
-      meta.append(name, dimsEl, price);
+      priceRow.append(price, add);
+      meta.append(name, dimsEl, priceRow);
       card.appendChild(thumb);
       card.appendChild(meta);
-      card.appendChild(add);
       card.title = `Add ${item.name} (${dims})`;
       card.setAttribute(
         "aria-label",

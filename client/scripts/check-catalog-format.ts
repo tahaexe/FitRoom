@@ -3,10 +3,12 @@
  * no Meta calls).
  *
  * - The category chips sit in one horizontally scrolling row (never a
- *   wrapping block), so the first card row sits in the first screen at
+ *   wrapping block, never shrinking in the flex column — like the search
+ *   field above them), so the first card row sits in the first screen at
  *   1366 × 768 and in the phone sheet's first view (computed from the CSS:
  *   panel/sheet heights minus search, chip row and gaps);
- * - every card shows "+ Add";
+ * - every card shows "+ Add" on the price line (price left, "+ Add" right),
+ *   with the size on one line and the name on at most two lines;
  * - every catalog size reads "181 × 82 × 71 cm" and every price "$1,490",
  *   through the one formatter in `client/src/catalog-ui.ts`
  *   (`formatCatalogSize` / `formatCatalogPrice`, also behind the cart
@@ -142,9 +144,19 @@ check(
   "inspector/recommend/assistant/main",
 );
 
-// One horizontally scrolling chip row.
+// One horizontally scrolling chip row that never shrinks in the column.
 check("chips never wrap", /\.chips\s*\{[^}]*flex-wrap:\s*nowrap/.test(css), ".chips");
 check("chips scroll horizontally", /\.chips\s*\{[^}]*overflow-x:\s*auto/.test(css), ".chips");
+check(
+  "chips keep their height",
+  /\.chips\s*\{[^}]*(?:flex-shrink:\s*0|flex:\s*none)/.test(css),
+  ".chips",
+);
+check(
+  "search field keeps its height",
+  /#catalog input\[type="search"\]\s*\{[^}]*(?:flex-shrink:\s*0|flex:\s*none)/.test(css),
+  "#catalog search",
+);
 check(
   "chip buttons keep one row",
   /\.chips button\s*\{[^}]*flex:\s*0 0 auto/.test(css),
@@ -161,6 +173,28 @@ check(
   "+ Add is a coral pill",
   /\.catalog-add\s*\{[^}]*background:\s*var\(--coral\)/.test(css),
   ".catalog-add",
+);
+check(
+  "price and + Add share one row",
+  catalogUi.includes("catalog-price-row") &&
+    /priceRow\.append\(\s*price\s*,\s*add\s*\)/.test(catalogUi),
+  "catalog-ui.ts",
+);
+check(
+  "price row lays price left and + Add right",
+  /\.catalog-price-row\s*\{[^}]*display:\s*flex/.test(css) &&
+    /\.catalog-add\s*\{[^}]*margin-left:\s*auto/.test(css),
+  ".catalog-price-row",
+);
+check(
+  "sizes stay on one line",
+  /\.catalog-dims\s*\{[^}]*white-space:\s*nowrap/.test(css),
+  ".catalog-dims",
+);
+check(
+  "names clamp to at most two lines",
+  /\.catalog-name\s*\{[^}]*-webkit-line-clamp:\s*2/.test(css),
+  ".catalog-name",
 );
 
 // First card row in the first screen: desktop and phone sheet, from the CSS.
