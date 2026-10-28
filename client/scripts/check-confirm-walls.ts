@@ -74,6 +74,35 @@ check(
 );
 const leaveUses = (confirm.match(/LEAVE/g) ?? []).length;
 check("the confirm view carries one Leave", leaveUses === 2, `LEAVE × ${String(leaveUses)}`);
+// ---- Item 5: the step bar reads first ----
+{
+  const editorSrc = src("editor/editor.ts");
+  // Bar: the view's first row is the step bar with Leave, above the
+  // estimate banner and the action row — the confirm host sits before
+  // both in the scrolling body.
+  const hostAt = editorSrc.indexOf("this.confirmHost");
+  const createdAt = editorSrc.indexOf("scroll.insertBefore(this.confirmHost, scroll.firstChild)");
+  check(
+    "the confirm host reads before the estimate banner and the action row",
+    createdAt >= 0 && hostAt >= 0,
+    "editor.ts",
+  );
+  // The step bar itself is the confirm view's first child and first grid
+  // row, with Leave at its right.
+  const topBuilt = confirm.indexOf("this.element.appendChild(top)");
+  const colsBuilt = confirm.indexOf("this.element.append(left, centre, right)");
+  check(
+    "the step bar is the confirm view's first row",
+    topBuilt >= 0 && colsBuilt > topBuilt,
+    "photo-confirm.ts",
+  );
+  const cssAreas = src("editor/editor.css").replace(/\s+/g, " ");
+  check(
+    "the step bar spans the first grid row",
+    /"top top"/.test(cssAreas) && cssAreas.indexOf('"top top"') < cssAreas.indexOf('"walls plan"'),
+    "editor.css",
+  );
+}
 check(
   "the action row's second Leave hides in the confirm view (its Undo stays)",
   src("editor/editor.ts").includes("cancelBtn.style.display") &&

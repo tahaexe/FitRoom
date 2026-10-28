@@ -144,10 +144,13 @@ export class RoomEditor {
     grid.appendChild(fieldsCard);
     scroll.appendChild(grid);
 
+    // The confirm view's step bar reads first: its host sits before the
+    // estimate banner and the action row, so the view's first row is the
+    // step bar with Leave. Hidden while the plain plan editor is open.
     this.confirmHost = document.createElement("div");
     this.confirmHost.className = "photo-confirm-host";
     this.confirmHost.setAttribute("hidden", "");
-    scroll.appendChild(this.confirmHost);
+    scroll.insertBefore(this.confirmHost, scroll.firstChild);
     this.element.appendChild(scroll);
     this.confirmView = new PhotoConfirmView(
       this.store,
