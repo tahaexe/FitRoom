@@ -11,10 +11,7 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { wallChipFound, wallFoundSummary } from "../src/copy.js";
-import {
-  MINI_PLAN_FRAME_MARGIN,
-  miniPlanData,
-} from "../src/editor/photo-confirm.js";
+import { MINI_PLAN_FRAME_MARGIN, miniPlanData } from "../src/editor/photo-confirm.js";
 import { createRectangleRoom } from "@fitroom/shared";
 import { LETTER_TO_WALL_ID } from "@fitroom/shared";
 
@@ -183,8 +180,7 @@ check("viewed walls keep Active/Done", confirm.includes("wallCardStatus"), "phot
     "main.ts openEditor",
   );
   const closeEditorAt = app.indexOf("private closeEditor");
-  const closeEditorBlock =
-    closeEditorAt >= 0 ? app.slice(closeEditorAt, closeEditorAt + 600) : "";
+  const closeEditorBlock = closeEditorAt >= 0 ? app.slice(closeEditorAt, closeEditorAt + 600) : "";
   check(
     "closing the confirm view refreshes the header",
     closeEditorBlock.includes("this.updateUndoRedo()"),
@@ -266,11 +262,10 @@ check(
   // inside the photo's positioned box (confirm stage or flow preview);
   // the caption sits in normal flow just above it.
   const stageAt = confirm.indexOf("private async renderStage");
-  const stageBlock =
-    stageAt >= 0 ? confirm.slice(stageAt, stageAt + 2500) : "";
+  const stageBlock = stageAt >= 0 ? confirm.slice(stageAt, stageAt + 2500) : "";
   const captionAbove =
     stageBlock.includes("photo-example-caption") &&
-    stageBlock.indexOf("photo-example-caption") < stageBlock.indexOf("className = \"photo-stage\"") &&
+    stageBlock.indexOf("photo-example-caption") < stageBlock.indexOf('className = "photo-stage"') &&
     !stageBlock.includes("photo-example-badge");
   check(
     "the confirm badge is not inside the photo's positioned box",
@@ -279,8 +274,7 @@ check(
   );
   const flowSrc = src("photo-room/flow.ts");
   const previewAt = flowSrc.indexOf("private preview(");
-  const previewBlock =
-    previewAt >= 0 ? flowSrc.slice(previewAt, previewAt + 2500) : "";
+  const previewBlock = previewAt >= 0 ? flowSrc.slice(previewAt, previewAt + 2500) : "";
   const flowCaptionAbove =
     previewBlock.includes("photo-example-caption") &&
     previewBlock.includes("host.appendChild(caption)") &&
@@ -409,10 +403,7 @@ check(
         `${boxW.toFixed(2)}×${boxH.toFixed(2)} vs ${textW.toFixed(2)}×${textH.toFixed(2)}`,
       );
       const inside =
-        bx0 >= vx - 1e-9 &&
-        by0 >= vy - 1e-9 &&
-        bx1 <= vx + vw + 1e-9 &&
-        by1 <= vy + vh + 1e-9;
+        bx0 >= vx - 1e-9 && by0 >= vy - 1e-9 && bx1 <= vx + vw + 1e-9 && by1 <= vy + vh + 1e-9;
       check(`wall ${edge.letter} label sits inside the plan frame`, inside, edge.label);
     }
     // The frame fits the room plus its labels with a small margin: every
@@ -441,7 +432,11 @@ check(
       Math.abs(vy - (need.y0 - m)) < 0.01 &&
       Math.abs(vx + vw - (need.x1 + m)) < 0.01 &&
       Math.abs(vy + vh - (need.y1 + m)) < 0.01;
-    check("the plan frame fits the room plus its labels with a margin", tight, data.viewBox.join(","));
+    check(
+      "the plan frame fits the room plus its labels with a margin",
+      tight,
+      data.viewBox.join(","),
+    );
   }
 }
 

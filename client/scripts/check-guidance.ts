@@ -1052,7 +1052,8 @@ const editorCss = readFileSync(
 );
 check(
   "confirm:foot-outside-scroll",
-  editorSource.includes("scroll.appendChild(this.confirmHost)") &&
+  (editorSource.includes("scroll.appendChild(this.confirmHost)") ||
+    editorSource.includes("scroll.insertBefore(this.confirmHost")) &&
     editorSource.includes("this.element.appendChild(scroll)") &&
     editorSource.includes("this.element.appendChild(foot)"),
   "the scrolling body holds the confirm view; the foot with the build button sits outside it",
