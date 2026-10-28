@@ -63,6 +63,8 @@ const coralPressed = token("--coral-pressed");
 const coralBright = token("--coral-bright");
 const green = token("--green");
 const muted = token("--muted");
+const amber = token("--amber");
+const amberText = token("--amber-text");
 const panelBg = token("--panel-bg") ?? "#f2f1f0";
 const white = "#ffffff";
 
@@ -71,6 +73,9 @@ check("coral hover token is readable", coralHover !== null, coralHover ?? "missi
 check("coral pressed token is readable", coralPressed !== null, coralPressed ?? "missing");
 check("green token is readable", green !== null, green ?? "missing --green");
 check("muted token is readable", muted !== null, muted ?? "missing --muted");
+check("amber icon token is readable", amber !== null, amber ?? "missing --amber");
+check("amber text token is readable", amberText !== null, amberText ?? "missing --amber-text");
+check("bright amber stays for icons and fills", amber === "#e59500", amber ?? "missing");
 check("light coral accent is kept", coralBright === "#f54e49", coralBright ?? "missing");
 
 interface Pair {
@@ -81,7 +86,12 @@ interface Pair {
 }
 
 const pairs: Pair[] =
-  coral === null || coralHover === null || coralPressed === null || green === null || muted === null
+  coral === null ||
+  coralHover === null ||
+  coralPressed === null ||
+  green === null ||
+  muted === null ||
+  amberText === null
     ? []
     : [
         {
@@ -132,11 +142,23 @@ const pairs: Pair[] =
           background: panelBg,
           usedBy: ".live-option inactive Live AI, .chips context",
         },
+        {
+          name: "amber text on white",
+          text: amberText,
+          background: white,
+          usedBy: ".fit-badge warn, warning labels, .photo-check-amber, .furnish-seats-warn",
+        },
+        {
+          name: "amber text on side-panel grey",
+          text: amberText,
+          background: panelBg,
+          usedBy: "warning text on the side-panel grey",
+        },
       ];
 
 check(
   "contrast pairs cover buttons, chips, badges, pills and header",
-  pairs.length === 8,
+  pairs.length === 10,
   `${String(pairs.length)} pairs`,
 );
 
@@ -150,6 +172,19 @@ for (const pair of pairs) {
 }
 
 check("guide ring keeps the light coral accent", css.includes("var(--coral-bright)"), "style.css");
+check(
+  "bright amber stays for icons and fills",
+  css.includes("var(--amber)") && !css.includes("color: var(--amber)"),
+  "style.css + photo-room.css",
+);
+check(
+  "warning text uses the deeper amber",
+  css.includes("color: var(--amber-text)") &&
+    readFileSync(join(root, "src", "photo-room", "photo-room.css"), "utf8").includes(
+      "color: var(--amber-text)",
+    ),
+  "style.css + photo-room.css",
+);
 check("toolbar markup exists for the width bar", html.includes("bottom-toolbar"), "index.html");
 
 if (failures > 0) {

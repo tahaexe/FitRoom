@@ -317,7 +317,7 @@
   margin: 0;
   font-size: 15px;
   font-weight: 700;
-  color: var(--amber);
+  color: var(--amber-text);
 }
 
 .photo-check-bad {

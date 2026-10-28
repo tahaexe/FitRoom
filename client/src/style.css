@@ -22,6 +22,7 @@
   --green: #0a8167;
   --red: #b3261e;
   --amber: #e59500;
+  --amber-text: #8a5a00;
   --radius: 14px;
   --shadow: 0 4px 16px rgba(30, 30, 40, 0.08);
 }
@@ -660,7 +661,7 @@ button.danger {
 
 .fit-badge[data-state="warn"] {
   background: #ffffff;
-  color: var(--amber);
+  color: var(--amber-text);
   border: 1.5px solid var(--amber);
 }
 
@@ -708,7 +709,7 @@ button.danger {
 }
 
 .fit-list button[data-severity="warning"] {
-  color: var(--amber);
+  color: var(--amber-text);
   border: 1.5px solid var(--amber);
 }
 
@@ -742,7 +743,7 @@ button.danger {
 }
 
 .fit-issue-label[data-severity="warning"] {
-  color: var(--amber);
+  color: var(--amber-text);
   border: 1.5px solid var(--amber);
 }
 
@@ -766,7 +767,7 @@ button.danger {
 }
 
 .fit-dim-label[data-severity="warning"] {
-  color: var(--amber);
+  color: var(--amber-text);
   border: 1px solid var(--amber);
 }
 
@@ -1897,7 +1898,7 @@ button.danger {
 }
 
 .furnish-seats-warn {
-  color: var(--amber);
+  color: var(--amber-text);
 }
 
 .furnish-rows {
