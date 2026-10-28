@@ -937,6 +937,14 @@
   cursor: ns-resize;
 }
 
+/* Resize grips read 20 px but answer 44 px: the invisible hit area covers
+   the rest, so every handle meets the phone target size. */
+.photo-grip::after {
+  content: "";
+  position: absolute;
+  inset: -12px;
+}
+
 /* The generated-example credit reads as a caption line just above the
    photo — never on the image, so no corner handle or grip sits under it. */
 .photo-example-caption {

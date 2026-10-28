@@ -57,6 +57,12 @@ function check(name: string, pass: boolean, detail?: string): void {
   }
 }
 
+const editorCss = readFileSync(join(root, "src", "editor", "editor.css"), "utf8");
+const assistantSrc = readFileSync(join(root, "src", "assistant", "panel.ts"), "utf8");
+const recommendSrc = readFileSync(join(root, "src", "recommend", "panel.ts"), "utf8");
+const inspectorSrc = readFileSync(join(root, "src", "inspector.ts"), "utf8");
+const guideSrc = readFileSync(join(root, "src", "guide.ts"), "utf8");
+
 const toolbarHtml = html.slice(html.indexOf("bottom-toolbar"), html.indexOf("measure-readout"));
 
 // Groups with names, in order: AI actions, view switch, view tools, selection.
@@ -326,6 +332,71 @@ check(
     `buttons ${String(Math.round(buttonsWidth))}px, cart ${String(Math.round(cartWidth))}px`,
   );
 }
+
+// Every button, chip, toggle and handle answers in at least 44 x 44 px at
+// 390 px: one blanket rule covers every button by tag on a phone, and each
+// non-button target carries its own 44 px rule or hit area.
+const phoneCss = (() => {
+  const start = css.indexOf("@media (max-width: 720px), (max-height: 500px)");
+  return start < 0 ? "" : css.slice(start);
+})();
+check(
+  "every phone button answers 44 x 44 px",
+  /button\s*\{[^}]*min-height:\s*44px[^}]*min-width:\s*44px/.test(phoneCss),
+  "style.css phone button rule",
+);
+check(
+  "phone fields stay 44 px tall",
+  /input,\s*select,\s*textarea\s*\{[^}]*min-height:\s*44px/.test(phoneCss),
+  "style.css phone input rule",
+);
+check(
+  "the sheet handle answers 44 px",
+  /\.sheet-handle\s*\{[^}]*min-height:\s*44px/.test(phoneCss),
+  "style.css .sheet-handle",
+);
+check(
+  "the labelled keep toggle answers 44 px tall",
+  /\.furnish-keep\s*\{[^}]*min-height:\s*44px/.test(phoneCss),
+  "style.css .furnish-keep",
+);
+check(
+  "the details toggle answers 44 px tall",
+  /\.assistant-did summary\s*\{[^}]*min-height:\s*44px/.test(phoneCss),
+  "style.css .assistant-did summary",
+);
+check(
+  "corner handles keep their 28 px dot with a 44 px hit area",
+  /\.photo-handle\s*\{[^}]*width:\s*28px/.test(phoneCss) &&
+    /\.photo-handle::after\s*\{[^}]*inset:\s*-8px/s.test(editorCss),
+  "style.css + editor.css .photo-handle",
+);
+check(
+  "resize grips keep their 20 px look with a 44 px hit area",
+  /\.photo-grip::after\s*\{[^}]*inset:\s*-12px/s.test(editorCss),
+  "editor.css .photo-grip::after",
+);
+// The previously small targets are buttons, so the blanket rule covers
+// them: header Undo/Redo, the fit badge, the guide Next/Skip, every panel
+// ×, chips, style chips, seat steppers, swatches and catalog cards.
+for (const [name, src, token] of [
+  ["recommend close", recommendSrc, "recommend-close"],
+  ["assistant close", assistantSrc, "assistant-close"],
+  ["variant swatch", inspectorSrc, '"swatch"'],
+  ["guide next", guideSrc, "guide-next"],
+  ["guide skip", guideSrc, "guide-skip"],
+] as const) {
+  check(
+    `the ${name} is a button (blanket 44 px rule covers it)`,
+    src.includes('document.createElement("button")') && src.includes(token),
+    token,
+  );
+}
+check(
+  "the fit badge is a button (blanket 44 px rule covers it)",
+  html.includes('id="fit-badge"') && html.includes("<button"),
+  "index.html fit-badge",
+);
 
 if (failures > 0) {
   console.log(`check:toolbar: ${String(failures)} check(s) failed`);

@@ -2668,7 +2668,8 @@ button.danger {
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 24px;
+    min-height: 44px;
+    min-width: 44px;
     touch-action: none;
     cursor: grab;
   }
@@ -2747,6 +2748,43 @@ button.danger {
   .inspector-actions button {
     flex: 1 1 0;
     min-height: 44px;
+  }
+
+  /* Every control answers in at least 44 x 44 px on a phone (390 px):
+   * one blanket rule for every button, 44 px height for fields, and the
+   * sheet handle itself. */
+  button {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* The drawn corner dot stays 28 px; its invisible hit area covers 44 px. */
+  .photo-handle {
+    min-height: 0;
+    min-width: 0;
+    width: 28px;
+    height: 28px;
+  }
+
+  input,
+  select,
+  textarea {
+    min-height: 44px;
+  }
+
+  .furnish-keep {
+    min-height: 44px;
+  }
+
+  .furnish-keep input[type="checkbox"] {
+    width: 28px;
+    height: 28px;
+  }
+
+  .assistant-did summary {
+    min-height: 44px;
+    display: flex;
+    align-items: center;
   }
 }
 
