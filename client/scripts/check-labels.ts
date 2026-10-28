@@ -180,6 +180,56 @@ check(
   directName.startsWith("Door · 145 cm"),
   directName,
 );
+// ---- Item 4: names, not ids ----
+const surfacesPath = join(clientRoot, "..", "shared", "src", "photo-room", "surfaces.ts");
+const surfaces = readFileSync(surfacesPath, "utf8");
+const finishIdPattern =
+  /"(WoodFloor\d+|Tiles\d+|Carpet\d+|Concrete\d+|PaintedPlaster\d+|Wallpaper[A-Z0-9]+)"/g;
+const finishIds = [...surfaces.matchAll(finishIdPattern)].map((m) => m[1] as string);
+check("finish ids found for the name check", finishIds.length >= 12, String(finishIds.length));
+let namesSection = "";
+const namesAt = surfaces.indexOf("FINISH_NAMES");
+if (namesAt >= 0) namesSection = surfaces.slice(namesAt, namesAt + 2000);
+for (const id of finishIds) {
+  const named = new RegExp(`${id}:\\s*"([^"]+)"`).exec(namesSection);
+  check(
+    `finish ${id} has a short readable name`,
+    named !== null &&
+      (named[1] ?? "").length > 0 &&
+      (named[1] ?? "") !== id &&
+      !/\d/.test(named[1] ?? ""),
+    named?.[1] ?? "missing",
+  );
+}
+const finishesSrc = src("editor/finishes.ts");
+const mainSrc = src("main.ts");
+check(
+  "floor swatches render names, never asset ids",
+  finishesSrc.includes("`Floor: ${finishName(id)}`") &&
+    !finishesSrc.includes("`Floor finish ${id}`"),
+  "finishes.ts",
+);
+check(
+  "wall swatches render names, never asset ids",
+  finishesSrc.includes("`Wall: ${finishName(id)}`") && !finishesSrc.includes("`Wall finish ${id}`"),
+  "finishes.ts",
+);
+check(
+  "swatch tooltips and accessible names carry no asset id",
+  !finishesSrc.includes("finish ${id}") &&
+    !finishesSrc.includes("Floor finish") &&
+    !finishesSrc.includes("Wall finish") &&
+    !/title = `[^`]*\$\{id\}[^`]*`/.test(finishesSrc) &&
+    !/aria-label", `[^`]*\$\{id\}[^`]*`/.test(finishesSrc),
+  "finishes.ts",
+);
+check(
+  "the header hides Undo and Redo in the photo flow",
+  mainSrc.includes("this.photoFlow !== null || this.editing") &&
+    mainSrc.includes('el.style.display = inFlow ? "none" : ""'),
+  "main.ts",
+);
+
 const tint = resetTintLabel();
 check(
   "Reset tint name starts with its visible words",

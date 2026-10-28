@@ -45,6 +45,7 @@ import type {
   Wall,
 } from "./types.js";
 import { wallDisplayName } from "./recommend/walls.js";
+import { LETTER_TO_WALL_ID, type WallLetter } from "./photo-room/types.js";
 
 /** Product size plus the category and display name the verdicts need. */
 export interface FitProduct {
@@ -495,6 +496,31 @@ function lowerFirst(value: string): string {
 /** Shopper-words wall name without the "(window)" suffix. */
 function wallShortName(room: RoomLayout, wallId: string): string {
   return lowerFirst(wallDisplayName(room, wallId).replace(/ \(window\)$/, ""));
+}
+
+/**
+ * One wall identity for the tape step and the confirm view:
+ * "Wall A · door wall". With a room, the words are the rest of the app's
+ * words for that wall (`wallDisplayName`, lowercased first letter, window
+ * suffix kept); without a room (the tape step runs before the solve) the
+ * words follow the photo-room convention (door on A, left B, back C,
+ * right D). Pure.
+ */
+export function wallLetterLabel(room: RoomLayout | null, letter: WallLetter): string {
+  if (room === null) {
+    const words =
+      letter === "A"
+        ? "door wall"
+        : letter === "B"
+          ? "left wall"
+          : letter === "C"
+            ? "back wall"
+            : "right wall";
+    return `Wall ${letter} · ${words}`;
+  }
+  const wallId = LETTER_TO_WALL_ID[letter];
+  if (wallId === undefined) return `Wall ${letter}`;
+  return `Wall ${letter} · ${lowerFirst(wallDisplayName(room, wallId))}`;
 }
 
 /** "the door" (or "the door on the left wall" when several could clash). */

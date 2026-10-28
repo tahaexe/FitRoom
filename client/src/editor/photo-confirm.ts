@@ -20,11 +20,12 @@ import {
   exampleMeasuredLine,
   isExampleRoom,
 } from "../photo-room/example";
+import { wallLetterLabel } from "@fitroom/shared";
 import type { EditorStore, PhotoSession } from "./editor-store";
 import { renderFinishesPicker } from "./finishes";
 import type { PhotoDraftMeta } from "../photo-room/flow";
 import { photoBandText } from "./source-mark";
-import { FLOW_STEPS, confirmOpeningLabel, wallChipFound } from "../copy";
+import { FLOW_STEPS, LEAVE, confirmOpeningLabel, wallChipFound } from "../copy";
 
 export type WallLetter = "A" | "B" | "C" | "D";
 export const WALL_ORDER: WallLetter[] = ["A", "B", "C", "D"];
@@ -143,6 +144,7 @@ export function wallCardStatus(active: boolean, seen: boolean): "Active" | "Done
 }
 
 export interface PhotoConfirmActions {
+  onLeave(): void;
   onSelectWall(wall: WallLetter): void;
   onCornersDrag(
     wall: WallLetter,
@@ -346,7 +348,9 @@ export function miniPlanData(
   ];
   const edges: MiniPlanEdgeDatum[] = raw.map((e) => {
     const lengthCm = lenOf(e.letter);
-    const label = `${e.letter} · ${String(lengthCm)} cm`;
+    // Letter plus the rest of the app's words for the wall, from the one
+    // naming function in `shared/src/fit.ts`.
+    const label = `${wallLetterLabel(room, e.letter)} · ${String(lengthCm)} cm`;
     const midX = (e.x1 + e.x2) / 2;
     const midY = (e.y1 + e.y2) / 2;
     const labelX = e.side === "right" ? midX + 3 : e.side === "left" ? midX - 3 : midX;
@@ -490,8 +494,11 @@ export class PhotoConfirmView {
   ) {
     this.element = document.createElement("div");
     this.element.className = "photo-confirm";
-    // Same stepper as the photo flow (Confirm is current here), so the
+    // Same full-width stepper as the photo flow (Confirm is current here),
+    // at the top and outside every column, with Leave at its right — so the
     // three steps read the same on every screen of the flow.
+    const top = document.createElement("div");
+    top.className = "photo-confirm-top";
     const steps = document.createElement("ol");
     steps.className = "photo-steps";
     steps.setAttribute("aria-label", "Progress");
@@ -509,7 +516,14 @@ export class PhotoConfirmView {
         steps.appendChild(arrow);
       }
     }
-    this.element.appendChild(steps);
+    top.appendChild(steps);
+    const leave = document.createElement("button");
+    leave.type = "button";
+    leave.className = "photo-leave";
+    leave.textContent = LEAVE;
+    leave.addEventListener("click", () => this.actions.onLeave());
+    top.appendChild(leave);
+    this.element.appendChild(top);
     const left = document.createElement("aside");
     left.className = "photo-confirm-walls";
     left.setAttribute("aria-label", "Walls");
@@ -646,7 +660,9 @@ export class PhotoConfirmView {
       }
       const name = document.createElement("span");
       name.className = "photo-wall-name";
-      name.textContent = `Wall ${letter}`;
+      // Letter plus the rest of the app's words for the wall, from the one
+      // naming function in `shared/src/fit.ts`.
+      name.textContent = wallLetterLabel(this.store.room, letter);
       const status = document.createElement("span");
       const active = session.activeWall === letter;
       const seen = session.seen.includes(letter);
@@ -656,9 +672,12 @@ export class PhotoConfirmView {
         const { doors, windows } = this.openingsOn(letter);
         const found = wallChipFound(doors, windows);
         status.className = "photo-wall-status todo";
-        status.textContent = `Wall ${letter} · ${found}`;
+        status.textContent = `${wallLetterLabel(this.store.room, letter)} · ${found}`;
         card.append(thumb, name, status);
-        card.setAttribute("aria-label", `Wall ${letter} · ${found}. Select to view it.`);
+        card.setAttribute(
+          "aria-label",
+          `${wallLetterLabel(this.store.room, letter)} · ${found}. Select to view it.`,
+        );
       } else {
         const state = wallCardStatus(active, seen);
         status.className =
@@ -669,7 +688,10 @@ export class PhotoConfirmView {
               : "photo-wall-status todo";
         status.textContent = state;
         card.append(thumb, name, status);
-        card.setAttribute("aria-label", `Wall ${letter}, ${state.toLowerCase()}`);
+        card.setAttribute(
+          "aria-label",
+          `${wallLetterLabel(this.store.room, letter)}, ${state.toLowerCase()}`,
+        );
       }
       card.addEventListener("click", () => this.actions.onSelectWall(letter));
       this.wallsEl.appendChild(card);
@@ -868,6 +890,10 @@ export class PhotoConfirmView {
       tag.className = "photo-opening-tag";
       const widthPm = opening.width.source === "taped" ? undefined : opening.width.plusMinus;
       tag.textContent = openingBoxTextWithPm(kind, widthCm, heightCm, widthPm);
+      // The label sits above the box's top edge, clear of the box's own
+      // top handle; with no room above it flips inside the box instead, so
+      // no handle ever sits on its own label.
+      if (minY / Math.max(1, size.height) < 0.15) tag.classList.add("inside");
       box.setAttribute(
         "aria-label",
         openingBoxLabel(kind, session.activeWall, widthCm, heightCm, tag.textContent),

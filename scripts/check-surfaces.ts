@@ -36,6 +36,9 @@ import {
   CARPET_FLOORS,
   conceptMask,
   CONCRETE_FLOORS,
+  FINISH_NAMES,
+  finishName,
+  FLOOR_FINISHES,
   floorAlbedoColor,
   litMedianMaskColor,
   medianMaskColor,
@@ -45,6 +48,7 @@ import {
   SAMPLE_FLOOR_SURFACE,
   TEXTURE_MEAN_COLORS,
   TILE_FLOORS,
+  WALL_FINISHES,
   wallAlbedoColor,
   wallDisplayHex,
   wallDisplayLinear,
@@ -405,6 +409,30 @@ const WARM_WALL = "#E3CFA5";
       wallDisplayLinear("nope", "PaintedPlaster017") === null,
   );
 }
+
+// ---- Item 4: every finish id has a short readable name ----
+for (const id of [...FLOOR_FINISHES, ...WALL_FINISHES]) {
+  const name = FINISH_NAMES[id] ?? "";
+  check(
+    `finish ${id} has a name`,
+    typeof name === "string" &&
+      name.length > 0 &&
+      name !== id &&
+      !/\d/.test(name) &&
+      finishName(id) === name,
+    name === "" ? "missing" : name,
+  );
+}
+check(
+  "floor finish reads Light oak",
+  finishName("WoodFloor070") === "Light oak",
+  finishName("WoodFloor070"),
+);
+check(
+  "wall finish reads Warm white plaster",
+  finishName("PaintedPlaster017") === "Warm white plaster",
+  finishName("PaintedPlaster017"),
+);
 
 if (failures > 0) {
   console.log(`FAIL surfaces: ${String(failures)} check(s) failed`);

@@ -37,6 +37,31 @@ import textureMeans from "./texture-means.json" with { type: "json" };
 export const WALL_TEXTURE_PAINT = "PaintedPlaster017";
 export const WALL_TEXTURE_WALLPAPER = "Wallpaper002A";
 
+/**
+ * Short readable name per finish id, for tooltips and accessible names
+ * ("Floor: Light oak"). Every id in `FLOOR_FINISHES` and `WALL_FINISHES`
+ * has exactly one entry; no name carries an asset id.
+ */
+export const FINISH_NAMES: Readonly<Record<string, string>> = {
+  WoodFloor070: "Light oak",
+  WoodFloor051: "Honey oak",
+  WoodFloor064: "Smoked oak",
+  WoodFloor071: "Pale ash",
+  Tiles107: "Grey stone tiles",
+  Tiles139: "Sand stone tiles",
+  Carpet012: "Oatmeal carpet",
+  Carpet015: "Pebble carpet",
+  Carpet016: "Slate carpet",
+  Concrete034: "Polished concrete",
+  PaintedPlaster017: "Warm white plaster",
+  Wallpaper002A: "Botanical wallpaper",
+};
+
+/** Readable name for a finish id (falls back to the id, never empty). */
+export function finishName(id: string): string {
+  return FINISH_NAMES[id] ?? id;
+}
+
 /** Every wall finish the pickers offer. */
 export const WALL_FINISHES: readonly string[] = [WALL_TEXTURE_PAINT, WALL_TEXTURE_WALLPAPER];
 

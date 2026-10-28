@@ -27,6 +27,7 @@ import {
   type SamInstance,
   type Uncertain,
   type WallLetter,
+  wallLetterLabel,
 } from "@fitroom/shared";
 import { isLive, postLabel, setLive } from "../api";
 import {
@@ -76,6 +77,60 @@ import {
 } from "./segment";
 
 export const WALL_ORDER: WallLetter[] = ["A", "B", "C", "D"];
+
+export interface TapeSketchEdge {
+  letter: WallLetter;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  lx: number;
+  ly: number;
+  rotate: number;
+  text: string;
+  side: "top" | "left";
+}
+
+export interface TapeSketchLayout {
+  floor: { x: number; y: number; width: number; height: number };
+  a: TapeSketchEdge;
+  b: TapeSketchEdge;
+}
+
+/**
+ * Tape sketch drawing positions: wall A along the top, wall B down the left
+ * side — drawn like both plans (A at the top, B on the left). Pure,
+ * headless-testable; `tapeDrawing` renders from this.
+ */
+export function tapeSketchLayout(): TapeSketchLayout {
+  return {
+    floor: { x: 50, y: 34, width: 110, height: 66 },
+    a: {
+      letter: "A",
+      x1: 50,
+      y1: 20,
+      x2: 160,
+      y2: 20,
+      lx: 105,
+      ly: 12,
+      rotate: 0,
+      text: wallLetterLabel(null, "A"),
+      side: "top",
+    },
+    b: {
+      letter: "B",
+      x1: 36,
+      y1: 34,
+      x2: 36,
+      y2: 100,
+      lx: 24,
+      ly: 67,
+      rotate: -90,
+      text: wallLetterLabel(null, "B"),
+      side: "left",
+    },
+  };
+}
 
 const WALL_BLURB: Record<WallLetter, string> = {
   A: "Wall A · the wall with the entrance door",
@@ -1088,12 +1143,12 @@ export class PhotoFlow {
     const form = document.createElement("div");
     form.className = "photo-tape-form";
     form.appendChild(
-      this.tapeField("Wall A length (cm)", this.tapeA, (value) => {
+      this.tapeField(`${wallLetterLabel(null, "A")} length (cm)`, this.tapeA, (value) => {
         this.tapeA = value;
       }),
     );
     form.appendChild(
-      this.tapeField("Wall B length (cm)", this.tapeB, (value) => {
+      this.tapeField(`${wallLetterLabel(null, "B")} length (cm)`, this.tapeB, (value) => {
         this.tapeB = value;
       }),
     );
@@ -1141,50 +1196,46 @@ export class PhotoFlow {
     return wrap;
   }
 
-  /** Which wall, at floor level, corner to corner: A along the bottom, B up the side. */
+  /** Which wall, at floor level, corner to corner: A along the top, B down the left side. */
   private tapeDrawing(): SVGSVGElement {
     const NS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(NS, "svg");
+    const layout = tapeSketchLayout();
     svg.setAttribute("viewBox", "0 0 200 130");
     svg.setAttribute("class", "photo-tape-drawing");
     svg.setAttribute("role", "img");
     svg.setAttribute(
       "aria-label",
-      "Measure wall A along the bottom and wall B up the side, at floor level",
+      `Measure ${wallLetterLabel(null, "A")} along the top and ${wallLetterLabel(null, "B")} down the left side, at floor level`,
     );
     const floor = document.createElementNS(NS, "rect");
-    floor.setAttribute("x", "50");
-    floor.setAttribute("y", "20");
-    floor.setAttribute("width", "110");
-    floor.setAttribute("height", "70");
+    floor.setAttribute("x", String(layout.floor.x));
+    floor.setAttribute("y", String(layout.floor.y));
+    floor.setAttribute("width", String(layout.floor.width));
+    floor.setAttribute("height", String(layout.floor.height));
     floor.setAttribute("class", "photo-tape-room");
     svg.appendChild(floor);
-    const lineA1 = document.createElementNS(NS, "line");
-    lineA1.setAttribute("x1", "50");
-    lineA1.setAttribute("y1", "104");
-    lineA1.setAttribute("x2", "160");
-    lineA1.setAttribute("y2", "104");
-    lineA1.setAttribute("class", "photo-tape-line");
-    const labelA = document.createElementNS(NS, "text");
-    labelA.setAttribute("x", "105");
-    labelA.setAttribute("y", "120");
-    labelA.setAttribute("text-anchor", "middle");
-    labelA.setAttribute("class", "photo-tape-label");
-    labelA.textContent = "A · corner to corner";
-    const lineB1 = document.createElementNS(NS, "line");
-    lineB1.setAttribute("x1", "174");
-    lineB1.setAttribute("y1", "90");
-    lineB1.setAttribute("x2", "174");
-    lineB1.setAttribute("y2", "20");
-    lineB1.setAttribute("class", "photo-tape-line");
-    const labelB = document.createElementNS(NS, "text");
-    labelB.setAttribute("x", "182");
-    labelB.setAttribute("y", "58");
-    labelB.setAttribute("text-anchor", "middle");
-    labelB.setAttribute("class", "photo-tape-label");
-    labelB.setAttribute("transform", "rotate(-90 182 58)");
-    labelB.textContent = "B · corner to corner";
-    svg.append(lineA1, labelA, lineB1, labelB);
+    for (const edge of [layout.a, layout.b]) {
+      const line = document.createElementNS(NS, "line");
+      line.setAttribute("x1", String(edge.x1));
+      line.setAttribute("y1", String(edge.y1));
+      line.setAttribute("x2", String(edge.x2));
+      line.setAttribute("y2", String(edge.y2));
+      line.setAttribute("class", "photo-tape-line");
+      const label = document.createElementNS(NS, "text");
+      label.setAttribute("x", String(edge.lx));
+      label.setAttribute("y", String(edge.ly));
+      label.setAttribute("text-anchor", "middle");
+      label.setAttribute("class", "photo-tape-label");
+      if (edge.rotate !== 0) {
+        label.setAttribute(
+          "transform",
+          `rotate(${String(edge.rotate)} ${String(edge.lx)} ${String(edge.ly)})`,
+        );
+      }
+      label.textContent = edge.text;
+      svg.append(line, label);
+    }
     return svg;
   }
 

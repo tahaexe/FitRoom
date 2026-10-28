@@ -35,6 +35,7 @@ import * as THREE from "three";
 import type { Opening, RoomLayout } from "@fitroom/shared";
 import type { PhotoSession } from "../src/editor/editor-store.js";
 import { miniPlanData, type WallLetter } from "../src/editor/photo-confirm.js";
+import { wallLetterLabel } from "../../shared/src/fit.js";
 import { planWallSide } from "../src/plan.js";
 import { buildRoom } from "../src/room.js";
 import {
@@ -340,7 +341,10 @@ function main(): void {
         wall === undefined
           ? 0
           : Math.round(Math.hypot(wall.end.x - wall.start.x, wall.end.z - wall.start.z));
-      if (edge.lengthCm !== want || edge.label !== `${edge.letter} · ${String(want)} cm`) {
+      if (
+        edge.lengthCm !== want ||
+        edge.label !== `${wallLetterLabel(sample, edge.letter)} · ${String(want)} cm`
+      ) {
         lengthsOk = false;
       }
     }

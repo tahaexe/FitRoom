@@ -73,6 +73,7 @@ export class RoomEditor {
   private readonly wallsEl: HTMLElement;
   private readonly fieldsEl: HTMLElement;
   private readonly undoBtn: HTMLButtonElement;
+  private readonly cancelBtn: HTMLButtonElement;
   private readonly buildBtn: HTMLButtonElement;
   private readonly noteEl: HTMLElement;
   private readonly summaryEl: HTMLElement;
@@ -111,8 +112,8 @@ export class RoomEditor {
     const addWindow = this.pill("Add window", () => this.addOpening("window"));
     const addPiece = this.pill("Add my own piece", () => this.addPiece());
     this.undoBtn = this.pill("Undo", () => this.store.undo());
-    const cancel = this.pill(LEAVE, () => this.callbacks.onCancel());
-    actions.append(addDoor, addWindow, addPiece, this.undoBtn, cancel);
+    this.cancelBtn = this.pill(LEAVE, () => this.callbacks.onCancel());
+    actions.append(addDoor, addWindow, addPiece, this.undoBtn, this.cancelBtn);
     scroll.appendChild(actions);
 
     const grid = document.createElement("div");
@@ -151,6 +152,7 @@ export class RoomEditor {
     this.confirmView = new PhotoConfirmView(
       this.store,
       {
+        onLeave: () => this.callbacks.onCancel(),
         onSelectWall: (wall) => this.selectPhotoWall(wall),
         onCornersDrag: (wall, corners, phase) => this.dragPhotoCorners(wall, corners, phase),
         onOpeningMove: (openingId, offsetCm, phase) =>
@@ -653,6 +655,10 @@ export class RoomEditor {
   private renderPanels(): void {
     const room = this.store.room;
     const photo = this.store.photo !== null;
+    // The confirm view's own step bar carries the one Leave, so the action
+    // row's second Leave hides while the confirm view is open (its own
+    // Undo stays).
+    this.cancelBtn.style.display = photo ? "none" : "";
     this.gridEl.style.display = photo ? "none" : "";
     if (photo) this.confirmHost.removeAttribute("hidden");
     else this.confirmHost.setAttribute("hidden", "");

@@ -4,7 +4,7 @@
  * Every change commits exactly one undo step through the editor store.
  */
 
-import { FLOOR_FINISHES, TEXTURE_MEAN_COLORS, WALL_FINISHES } from "@fitroom/shared";
+import { FLOOR_FINISHES, TEXTURE_MEAN_COLORS, WALL_FINISHES, finishName } from "@fitroom/shared";
 import type { RoomLayout } from "@fitroom/shared";
 import { resetTintLabel } from "../copy";
 import type { EditorStore } from "./editor-store";
@@ -50,7 +50,7 @@ export function renderFinishesPicker(store: EditorStore, host: HTMLElement): HTM
   for (const id of FLOOR_FINISHES) {
     floorRow.appendChild(
       swatchButton(
-        `Floor finish ${id}`,
+        `Floor: ${finishName(id)}`,
         TEXTURE_MEAN_COLORS[id] ?? "#999999",
         room.surfaces.floor === id,
         () => {
@@ -72,7 +72,7 @@ export function renderFinishesPicker(store: EditorStore, host: HTMLElement): HTM
   for (const id of WALL_FINISHES) {
     wallRow.appendChild(
       swatchButton(
-        `Wall finish ${id}`,
+        `Wall: ${finishName(id)}`,
         TEXTURE_MEAN_COLORS[id] ?? "#999999",
         room.surfaces.wall === id,
         () => {

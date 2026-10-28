@@ -52,6 +52,16 @@ import {
   type RoomDraft,
 } from "../shared/src/photo-room/index.js";
 import { validateRoomLayout } from "../shared/src/validate.js";
+import {
+  miniPlanData,
+  openingBoxTextWithPm,
+  wallPhotoMapping,
+  type CornerId,
+} from "../client/src/editor/photo-confirm.js";
+import { tapeSketchLayout } from "../client/src/photo-room/flow.js";
+import { planWallSide } from "../client/src/plan.js";
+import { wallLetterLabel } from "../shared/src/fit.js";
+import { planWallLabel } from "../shared/src/recommend/walls.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -390,6 +400,181 @@ async function main(): Promise<void> {
       Math.abs(est.value - TAPE_A) <= est.plusMinus,
       `${String(est.value)} ± ${String(est.plusMinus)} vs ${String(TAPE_A)}`,
     );
+  }
+
+  // ---- Item 5: one wall identity (letter + the rest of the app's words) ----
+  {
+    const room = draft.layout;
+    for (const letter of LETTERS) {
+      const pair = wallLetterLabel(room, letter);
+      const wallId = LETTER_TO_WALL_ID[letter];
+      const plan = planWallLabel(room, wallId);
+      const pairWords = (pair.split("·")[1] ?? "").trim().toLowerCase();
+      const planWords = (plan.split("·")[0] ?? "").trim().toLowerCase();
+      check(
+        `confirm pair matches the Plan view label for wall ${letter}`,
+        pairWords.length > 0 && pairWords === planWords,
+        `${pair} vs ${plan}`,
+      );
+    }
+    // The tape sketch is drawn like both plans: A at the top, B on the left.
+    const sketch = tapeSketchLayout();
+    const sketchA = sketch.a.y1 < sketch.floor.y ? "top" : "other";
+    const sketchB = sketch.b.x1 < sketch.floor.x ? "left" : "other";
+    check(
+      "tape sketch draws wall A at the top",
+      sketch.a.side === "top" && sketchA === "top",
+      `A y=${String(sketch.a.y1)} floor y=${String(sketch.floor.y)}`,
+    );
+    check(
+      "tape sketch draws wall B on the left",
+      sketch.b.side === "left" && sketchB === "left",
+      `B x=${String(sketch.b.x1)} floor x=${String(sketch.floor.x)}`,
+    );
+    const sessionLike = {
+      draft,
+      sizes: {
+        A: { width: 1280, height: 960 },
+        B: { width: 1280, height: 960 },
+        C: { width: 1280, height: 960 },
+        D: { width: 1280, height: 960 },
+      },
+      activeWall: "A",
+      seen: ["A"],
+    };
+    const mini = miniPlanData(
+      room,
+      sessionLike as unknown as Parameters<typeof miniPlanData>[1],
+      null,
+    );
+    const miniSide = (letter: WallLetter): string =>
+      mini?.edges.find((e) => e.letter === letter)?.side ?? "missing";
+    check("confirm plan draws wall A at the top", miniSide("A") === "top", miniSide("A"));
+    check("confirm plan draws wall B on the left", miniSide("B") === "left", miniSide("B"));
+    check(
+      "tape sketch wall positions equal the confirm plan",
+      sketchA === miniSide("A") && sketchB === miniSide("B"),
+      `sketch ${sketchA}/${sketchB} vs plan ${miniSide("A")}/${miniSide("B")}`,
+    );
+    const mainA = planWallSide(room, LETTER_TO_WALL_ID["A"]);
+    const mainB = planWallSide(room, LETTER_TO_WALL_ID["B"]);
+    check("the main Plan view draws wall A at the top", mainA === "top", mainA ?? "missing");
+    check("the main Plan view draws wall B on the left", mainB === "left", mainB ?? "missing");
+  }
+
+  // ---- Item 3: no handle sits on the badge or its own label ----
+  // Geometry in seg pixels (1280 × 951), the photo frame the confirm view
+  // renders from, with CSS-fixed sizes taken 1:1. Labels are also checked
+  // doubled (k=2), modelling a half-size render; the badge is checked at
+  // the natural frame, where its fixed pixels sit (a half-size render
+  // relatively doubles every fixed-px chrome, badge included).
+  {
+    const H = EXAMPLE_SEG_SIZE.height;
+    interface Rect {
+      x0: number;
+      y0: number;
+      x1: number;
+      y1: number;
+    }
+    const overlaps = (a: Rect, b: Rect): boolean =>
+      Math.min(a.x1, b.x1) > Math.max(a.x0, b.x0) && Math.min(a.y1, b.y1) > Math.max(a.y0, b.y0);
+    const WALL_ID_TO_LETTER: Record<string, WallLetter> = {
+      [LETTER_TO_WALL_ID["A"]]: "A",
+      [LETTER_TO_WALL_ID["B"]]: "B",
+      [LETTER_TO_WALL_ID["C"]]: "C",
+      [LETTER_TO_WALL_ID["D"]]: "D",
+    };
+    for (const letter of LETTERS) {
+      const photo = draft.photos.find((p) => p.wall === letter);
+      if (photo === undefined) {
+        check(`wall ${letter} handle geometry`, false, "no photo");
+        continue;
+      }
+      const corners = photo.corners;
+      // Handles are the 28 px corner dots with a centred 44 px invisible
+      // hit area each. The badge is checked at the natural frame; labels
+      // are also checked doubled (k=2), modelling a half-size render.
+      const handlesAt = (k: number): Rect[] =>
+        (Object.keys(corners) as CornerId[]).map((id) => {
+          const [x, y] = corners[id];
+          const half = (44 * k) / 2;
+          return { x0: x - half, y0: y - half, x1: x + half, y1: y + half };
+        });
+      // Badge metrics from its CSS: 12 px type with 4 px + 12 px padding
+      // ("Generated example" ≈ 140 × 26).
+      const badge: Rect = { x0: 8, y0: H - 8 - 26, x1: 8 + 140, y1: H - 8 };
+      check(
+        `wall ${letter} badge clears every handle`,
+        !handlesAt(1).some((h) => overlaps(h, badge)),
+        `badge ${String(badge.x0)},${String(badge.y0)} ${String(badge.x1 - badge.x0)}x${String(badge.y1 - badge.y0)}`,
+      );
+      const wallLen = draft.wallLengths[letter]?.value ?? 0;
+      const ceil = Math.max(200, draft.ceilingHeight.value);
+      const mapping = wallPhotoMapping(corners, wallLen, ceil);
+      if (mapping === null) {
+        check(`wall ${letter} opening geometry`, false, "no mapping");
+        continue;
+      }
+      for (const k of [1, 2]) {
+        const handles = handlesAt(k);
+        const labels: Rect[] = [];
+        for (const opening of draft.layout.openings) {
+          if (WALL_ID_TO_LETTER[opening.wallId] !== letter) continue;
+          const draftOpening = draft.openings.find((o) => o.id === opening.id);
+          const widthPm =
+            draftOpening !== undefined && draftOpening.width.source === "taped"
+              ? undefined
+              : draftOpening?.width.plusMinus;
+          const tag =
+            draftOpening === undefined
+              ? `${opening.type === "door" ? "Door" : "Window"} ${String(Math.round(opening.width))} × ${String(Math.round(opening.height))}`
+              : openingBoxTextWithPm(opening.type, opening.width, opening.height, widthPm);
+          const { offset, width, sillHeight, height } = opening;
+          const quad = [
+            mapping.toPhoto(offset, sillHeight),
+            mapping.toPhoto(offset + width, sillHeight),
+            mapping.toPhoto(offset + width, sillHeight + height),
+            mapping.toPhoto(offset, sillHeight + height),
+          ];
+          const xs = quad.map(([x]) => x);
+          const ys = quad.map(([, y]) => y);
+          const boxTop = Math.min(...ys);
+          const boxCx = (Math.min(...xs) + Math.max(...xs)) / 2;
+          const boxW = Math.max(...xs) - Math.min(...xs);
+          // Rendered pill width: the box or the tag text (12 px Nunito at
+          // ~7 px per character plus the pill padding), whichever is wider.
+          const textW = Math.max(boxW, (tag.length * 7 + 20) * k);
+          const labelH = 24 * k;
+          if (boxTop / H < 0.15) {
+            labels.push({
+              x0: boxCx - textW / 2,
+              y0: boxTop + 12 * k,
+              x1: boxCx + textW / 2,
+              y1: boxTop + 12 * k + labelH,
+            });
+          } else {
+            labels.push({
+              x0: boxCx - textW / 2,
+              y0: boxTop - 14 * k - labelH,
+              x1: boxCx + textW / 2,
+              y1: boxTop - 14 * k,
+            });
+          }
+        }
+        const labelHitsHandle = labels.some((label) => handles.some((h) => overlaps(h, label)));
+        check(
+          `wall ${letter} labels clear every handle (k=${String(k)})`,
+          !labelHitsHandle,
+          `${String(labels.length)} label(s)`,
+        );
+        const labelHitsBadge = labels.some((label) => overlaps(label, badge));
+        check(
+          `wall ${letter} labels clear the badge (k=${String(k)})`,
+          !labelHitsBadge,
+          `${String(labels.length)} label(s)`,
+        );
+      }
+    }
   }
 
   const vd = validateRoomDraft(draft);

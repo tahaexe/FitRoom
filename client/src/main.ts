@@ -1639,6 +1639,13 @@ class FitRoomApp {
     const redo = document.getElementById("tool-redo");
     if (undo instanceof HTMLButtonElement) undo.disabled = !this.store.canUndo();
     if (redo instanceof HTMLButtonElement) redo.disabled = !this.store.canRedo();
+    // The header's Undo and Redo hide while the photo flow or the confirm
+    // view is open (the confirm view keeps its own Undo in its action row).
+    const inFlow = this.photoFlow !== null || this.editing;
+    for (const id of ["tool-undo", "tool-redo"]) {
+      const el = document.getElementById(id);
+      if (el instanceof HTMLButtonElement) el.style.display = inFlow ? "none" : "";
+    }
   }
 
   private showDeleteToast(label: string): void {
