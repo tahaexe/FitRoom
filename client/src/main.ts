@@ -1201,6 +1201,18 @@ class FitRoomApp {
     }
   }
 
+  /**
+   * Landscape short screens (844 x 390): sheets stay closed unless the
+   * shopper opens one, so the catalog never covers most of the 3D view.
+   */
+  private isLandscapeShort(): boolean {
+    try {
+      return window.matchMedia("(max-height: 500px) and (orientation: landscape)").matches;
+    } catch {
+      return false;
+    }
+  }
+
   /** The phone bar hides while the photo flow or the confirm view is open. */
   private syncFlowChrome(): void {
     const inFlow = this.photoFlow !== null || this.editing;
@@ -1351,9 +1363,10 @@ class FitRoomApp {
     this.rebuildRoom();
     this.refreshMenu();
     // The catalog sheet stayed closed through the photo flow and the
-    // confirm view; after the build it comes back on phones, so the next
-    // step (adding furniture) is one tap away.
-    if (this.sheets !== null && isPhoneViewport()) {
+    // confirm view; after the build it comes back on portrait phones, so
+    // the next step (adding furniture) is one tap away. In landscape it
+    // stays closed, one "Catalog" tap away.
+    if (this.sheets !== null && isPhoneViewport() && !this.isLandscapeShort()) {
       this.sheets.open("catalog");
     }
     this.syncPhoneBar();
@@ -1382,8 +1395,9 @@ class FitRoomApp {
     this.closeEditor();
     this.refreshMenu();
     // The catalog sheet stayed closed through the photo flow and the
-    // confirm view; cancelling brings it back on phones, like a build.
-    if (this.sheets !== null && isPhoneViewport()) {
+    // confirm view; cancelling brings it back on portrait phones, like a
+    // build. In landscape it stays closed, one "Catalog" tap away.
+    if (this.sheets !== null && isPhoneViewport() && !this.isLandscapeShort()) {
       this.sheets.open("catalog");
     }
     this.syncPhoneBar();

@@ -398,6 +398,36 @@ check(
   "index.html fit-badge",
 );
 
+// Landscape (844 x 390): the catalog sheet starts closed (a "Catalog"
+// button opens it) or peeks at most 25 % of the height.
+{
+  const landscapeAt = css.indexOf("@media (max-height: 500px) and (orientation: landscape)");
+  const landscape = landscapeAt < 0 ? "" : css.slice(landscapeAt, landscapeAt + 800);
+  const peek = /--sheet-peek:\s*(\d+)dvh/.exec(landscape)?.[1];
+  check(
+    "the landscape sheet peeks at most 25% of the height",
+    peek !== undefined && Number(peek) <= 25,
+    `--sheet-peek: ${peek ?? "?"}dvh`,
+  );
+  check(
+    "the landscape guard keeps auto-open sheets closed",
+    main.includes("private isLandscapeShort()") &&
+      main.includes("(max-height: 500px) and (orientation: landscape)") &&
+      (main.match(/!this\.isLandscapeShort\(\)/g) ?? []).length >= 2,
+    "main.ts isLandscapeShort",
+  );
+  check(
+    "crossing to a phone hides the catalog until Catalog opens it",
+    main.includes('document.getElementById("catalog")?.setAttribute("hidden", "")'),
+    "main.ts syncBreakpoint",
+  );
+  check(
+    "the phone bar still offers Catalog in landscape",
+    html.includes('id="phone-catalog"'),
+    "index.html phone-catalog",
+  );
+}
+
 if (failures > 0) {
   console.log(`check:toolbar: ${String(failures)} check(s) failed`);
   process.exitCode = 1;

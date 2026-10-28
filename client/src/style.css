@@ -2788,6 +2788,14 @@ button.danger {
   }
 }
 
+/* Landscape phones (844 x 390): sheets peek at most a quarter of the
+ * height, so the catalog starts closed and never covers most of the view. */
+@media (max-height: 500px) and (orientation: landscape) {
+  :root {
+    --sheet-peek: 25dvh;
+  }
+}
+
 /* Inspector "More" toggle: desktop shows every field, so it stays hidden. */
 .inspector-more {
   display: none;
