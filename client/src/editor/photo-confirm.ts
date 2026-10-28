@@ -27,6 +27,14 @@ import { photoBandText } from "./source-mark";
 
 export type WallLetter = "A" | "B" | "C" | "D";
 export const WALL_ORDER: WallLetter[] = ["A", "B", "C", "D"];
+
+/**
+ * Model credit in the confirm plan legend: the corners, floor line, doors
+ * and windows came from SAM 3.1 segmentation and the labels from Muse
+ * Spark. Same small credit style as the Visualise dialog's model line.
+ */
+export const PHOTO_MODEL_LINE =
+  "Corners, floor line, door and windows found by SAM 3.1 · labels by Muse Spark";
 export type CornerId = "m1" | "m2" | "m3" | "m4";
 export const CORNER_IDS: CornerId[] = ["m1", "m2", "m3", "m4"];
 
@@ -1106,6 +1114,10 @@ export class PhotoConfirmView {
     estimated.textContent = "Estimated: from the photos";
     legend.append(measured, estimated);
     this.planEl.appendChild(legend);
+    const models = document.createElement("p");
+    models.className = "photo-model-line render-model";
+    models.textContent = PHOTO_MODEL_LINE;
+    this.planEl.appendChild(models);
     if (isExampleRoom(this.store.room.name)) {
       const truth = document.createElement("p");
       truth.className = "photo-example-note";

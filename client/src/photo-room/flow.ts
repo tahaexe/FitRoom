@@ -44,6 +44,7 @@ import { processPhotoFile, type IntakePhoto } from "./intake";
 import { clearPhoto, loadPhoto, savePhoto, type StoredPhoto } from "./photo-store";
 import {
   EDGE_AT_DOOR_COPY,
+  SAM_FOUND_LINE,
   TWO_WALLS_COPY,
   bothCornersOk,
   errorRecovery,
@@ -845,6 +846,12 @@ export class PhotoFlow {
     sheet.appendChild(
       this.checkRow(floor, "Floor line found", "Floor line hidden — clear the view and retake"),
     );
+    // Model credit under the checks, in the same small credit style as the
+    // Visualise dialog's model line (`render-model`).
+    const found = document.createElement("p");
+    found.className = "render-model";
+    found.textContent = SAM_FOUND_LINE;
+    sheet.appendChild(found);
     if (edgeAtDoor) sheet.appendChild(this.checkRow(null, EDGE_AT_DOOR_COPY));
     if (tilt > TILT_AMBER_DEG) sheet.appendChild(this.checkRow(null, "Hold the phone level"));
     const tapFlag =

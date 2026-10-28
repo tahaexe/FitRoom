@@ -12,6 +12,9 @@
  *   decodes as floor instances;
  * - "Next wall" is primary only when every check passes; any ✕ makes
  *   "Retake" primary and "Next wall" secondary.
+ * - the capture card credits SAM 3.1 under its checks and the confirm
+ *   legend credits SAM 3.1 with the Muse Spark labels, both rendered from
+ *   the same view code in the Visualise dialog's small credit style.
  * - the guide's B/D sides match the wall table through rule 4 (B on the
  *   left as you face wall A, D on the right), and rule 2 reads the same in
  *   `types.ts` and the README.
@@ -30,12 +33,14 @@ import {
   FLOOR_FALLBACK_CONCEPT,
   NO_FLOOR_MESSAGE,
   NO_WALL_MESSAGE,
+  SAM_FOUND_LINE,
   TWO_WALLS_COPY,
   bothCornersOk,
   errorRecovery,
   isEmptyAnswerText,
   nextIsPrimary,
 } from "../src/photo-room/cards.js";
+import { PHOTO_MODEL_LINE } from "../src/editor/photo-confirm.js";
 
 let failures = 0;
 
@@ -168,6 +173,39 @@ const RULE_2 =
   );
   check("types.ts rule 2 names the counter-clockwise letters", typesSource.includes(RULE_2));
   check("README rule 2 names the counter-clockwise letters", readme.includes(RULE_2));
+}
+
+// Model credits render from the same view code the shopper sees: the
+// capture card names SAM 3.1 under its checks, and the confirm legend names
+// SAM 3.1 with the Muse Spark labels, both in the Visualise dialog's small
+// credit style (`render-model`).
+check("capture card credits SAM 3.1", SAM_FOUND_LINE === "Found by SAM 3.1", SAM_FOUND_LINE);
+check(
+  "confirm legend credits SAM 3.1 and Muse Spark",
+  PHOTO_MODEL_LINE ===
+    "Corners, floor line, door and windows found by SAM 3.1 · labels by Muse Spark",
+  PHOTO_MODEL_LINE,
+);
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const repoRoot = join(here, "..", "..");
+  const flowSource = readFileSync(join(repoRoot, "client", "src", "photo-room", "flow.ts"), "utf8");
+  const confirmSource = readFileSync(
+    join(repoRoot, "client", "src", "editor", "photo-confirm.ts"),
+    "utf8",
+  );
+  check(
+    "capture card renders the SAM credit in the Visualise credit style",
+    flowSource.includes("SAM_FOUND_LINE") &&
+      flowSource.includes('found.className = "render-model"'),
+    "flow.ts must render SAM_FOUND_LINE with the render-model class",
+  );
+  check(
+    "confirm legend renders the model line in the Visualise credit style",
+    confirmSource.includes("PHOTO_MODEL_LINE") &&
+      confirmSource.includes('models.className = "photo-model-line render-model"'),
+    "photo-confirm.ts must render PHOTO_MODEL_LINE with the render-model class",
+  );
 }
 
 console.log(

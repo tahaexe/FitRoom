@@ -69,6 +69,12 @@ export function errorRecovery(message: string): "retry" | "retake" {
 /** Corner row copy when the solver sees two walls in one frame. */
 export const TWO_WALLS_COPY = "Two walls in view: stand square to one wall";
 
+/**
+ * Model credit under the capture card's checks: the corners, floor line,
+ * door and windows the checks report come from SAM 3.1 segmentation.
+ */
+export const SAM_FOUND_LINE = "Found by SAM 3.1";
+
 /** Amber row copy when the range edge lands on a door's jamb. */
 export const EDGE_AT_DOOR_COPY = "A door is at the wall's edge: check that corner in the next step";
 
