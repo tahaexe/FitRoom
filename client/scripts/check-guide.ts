@@ -550,10 +550,28 @@ check(
     styleSource.includes("0 4px 16px rgba(30, 30, 40, 0.08)"),
   "white bubble, card radius/shadow, coral ring",
 );
+function srgbToLinear(channel: number): number {
+  const c = channel / 255;
+  return c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4);
+}
+
+function coralContrastOnWhite(hex: string): number {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = 0.2126 * srgbToLinear(r) + 0.7152 * srgbToLinear(g) + 0.0722 * srgbToLinear(b);
+  return 1.05 / (luminance + 0.05);
+}
+
+const coralToken = /:root\s*\{[^}]*--coral:\s*(#[0-9a-fA-F]{6})/.exec(styleSource)?.[1] ?? "";
+const progressUsesCoralToken = /\.guide-progress\s*\{[^}]*color:\s*var\(--coral\)/.test(
+  styleSource,
+);
+const coralContrast = coralToken ? coralContrastOnWhite(coralToken) : 0;
 check(
   "guide:progress-coral",
-  /\.guide-progress\s*\{[^}]*#[Ff]54[Ee]49/.test(styleSource),
-  "the progress mark reads coral",
+  progressUsesCoralToken && coralContrast >= 4.5,
+  `the progress mark reads coral (${coralToken || "no --coral"}, ${coralContrast.toFixed(2)}:1 on white)`,
 );
 check(
   "guide:page-stays-usable",
