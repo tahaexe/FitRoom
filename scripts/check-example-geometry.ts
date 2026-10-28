@@ -22,11 +22,14 @@
  * `.inbox/truth/living-420x360-*.json` on the walls the example maps them
  * to (example C shows truth's north window 160 cm at 80 cm on wall-3,
  * example D truth's east window 120 cm at 120 cm on wall-2, example B has
- * no openings). Bars: taped walls exact, estimated walls within ±5 %,
- * ceiling within ±5 % (the example room is built from generated photos,
- * not exact renders, so it gets the same tolerance as its estimated
- * walls), every opening on the right wall in the right order, offset
- * ±15 cm, width ±10 cm.
+ * no openings). The example prefills only wall A (420); wall B stays
+ * empty so the solver estimates it from the photos, exactly like the
+ * flow. Bars: taped walls A/C exact, estimated walls B/D within ±5 % with
+ * a ± that covers the truth (same for the B-only probes on A/C), ceiling
+ * within ±5 % (the example room is built from generated photos, not exact
+ * renders, so it gets the same tolerance as its estimated walls), every
+ * opening on the right wall in the right order, offset ±15 cm, width
+ * ±10 cm.
  */
 
 /* global console, process */
@@ -165,13 +168,14 @@ async function photoFor(
  * `client/src/photo-room/flow.ts`): with one tape unknown, the first pass
  * solves with the known tape on both axes and the missing wall scales by
  * the solved width/height ratios (both walls share one ceiling height).
+ * Returns the estimate with its ±, exactly like the flow.
  */
 function estimateMissingTape(
   draft: RoomDraft,
   known: number,
   missingLetter: WallLetter,
   knownLetter: WallLetter,
-): number {
+): { value: number; plusMinus: number } {
   const missing = draft.photos.find((s) => s.wall === missingLetter);
   const knownSol = draft.photos.find((s) => s.wall === knownLetter);
   const ratioM = missing?.ratio ?? NaN;
@@ -184,9 +188,12 @@ function estimateMissingTape(
     ratioM <= 0 ||
     ratioK <= 0
   ) {
-    return known;
+    return { value: known, plusMinus: 15 };
   }
-  return Math.max(50, Math.min(2000, Math.round((known * ratioM) / ratioK)));
+  const value = Math.max(50, Math.min(2000, Math.round((known * ratioM) / ratioK)));
+  const rel =
+    Math.abs(missing.ratioPlusMinus / ratioM) + Math.abs(knownSol.ratioPlusMinus / ratioK);
+  return { value, plusMinus: Math.max(4, Math.round(value * rel + 2)) };
 }
 
 function printTable(title: string, draft: RoomDraft): void {
@@ -266,15 +273,39 @@ async function main(): Promise<void> {
     process.exitCode = 1;
     return;
   }
-  const draft = solveRoomFromPhotos({ photos, tapeA: TAPE_A, tapeB: TAPE_B });
-  printTable("example room from demo-store replay", draft);
+  // The example prefills only wall A (420); wall B stays empty so the
+  // solver estimates it from the photos, exactly like the flow's build step
+  // with one missing tape: first pass with A on both axes, then the final
+  // pass with the estimated B.
+  const firstPass = solveRoomFromPhotos({ photos, tapeA: TAPE_A, tapeB: TAPE_A });
+  const estB = estimateMissingTape(firstPass, TAPE_A, "B", "A");
+  const estD = estimateMissingTape(firstPass, TAPE_A, "D", "C");
+  const draft = solveRoomFromPhotos({ photos, tapeA: TAPE_A, tapeB: estB.value });
+  printTable("example room from demo-store replay (A taped, B estimated)", draft);
+  console.log(
+    `example wall B estimate: ${String(estB.value)} ± ${String(estB.plusMinus)} cm (truth ${String(TAPE_B)})`,
+  );
 
-  for (const letter of LETTERS) {
-    const want = letter === "A" || letter === "C" ? TAPE_A : TAPE_B;
+  for (const letter of ["A", "C"] as const) {
     check(
       `example: taped wall ${letter} exact`,
-      draft.wallLengths[letter].value === want,
-      `${String(draft.wallLengths[letter].value)} vs ${String(want)}`,
+      draft.wallLengths[letter].value === TAPE_A,
+      `${String(draft.wallLengths[letter].value)} vs ${String(TAPE_A)}`,
+    );
+  }
+  for (const [letter, est] of [
+    ["B", estB],
+    ["D", estD],
+  ] as const) {
+    check(
+      `example: estimated wall ${letter} within ±5 %`,
+      Math.abs(est.value - TAPE_B) <= TAPE_B * 0.05,
+      `${String(est.value)} vs ${String(TAPE_B)}`,
+    );
+    check(
+      `example: estimated wall ${letter} ± covers 360`,
+      Math.abs(est.value - TAPE_B) <= est.plusMinus,
+      `${String(est.value)} ± ${String(est.plusMinus)} vs ${String(TAPE_B)}`,
     );
   }
   const cErrPct = Math.abs(draft.ceilingHeight.value - TRUTH_HEIGHT) / TRUTH_HEIGHT;
@@ -337,28 +368,13 @@ async function main(): Promise<void> {
 
   // Missing-tape probes: the flow estimates an unknown tape from the other
   // tape through the solved ratios (see `estimateMissingTape` above), so a
-  // shopper measuring one wall still lands within ±5 % on the others.
-  const firstB = solveRoomFromPhotos({ photos, tapeA: TAPE_A, tapeB: TAPE_A });
-  const estB = estimateMissingTape(firstB, TAPE_A, "B", "A");
-  const estD = estimateMissingTape(firstB, TAPE_A, "D", "C");
-  console.log(
-    `estimated with tape A only: B ${String(estB)}cm (truth 360), D ${String(estD)}cm (truth 360)`,
-  );
-  for (const [letter, est] of [
-    ["B", estB],
-    ["D", estD],
-  ] as const) {
-    check(
-      `example: estimated wall ${letter} within ±5 %`,
-      Math.abs(est - TAPE_B) <= TAPE_B * 0.05,
-      `${String(est)} vs ${String(TAPE_B)}`,
-    );
-  }
+  // shopper measuring one wall still lands within ±5 % on the others, with
+  // a ± that covers the truth.
   const firstA = solveRoomFromPhotos({ photos, tapeA: TAPE_B, tapeB: TAPE_B });
   const estA = estimateMissingTape(firstA, TAPE_B, "A", "B");
   const estC = estimateMissingTape(firstA, TAPE_B, "C", "D");
   console.log(
-    `estimated with tape B only: A ${String(estA)}cm (truth 420), C ${String(estC)}cm (truth 420)`,
+    `estimated with tape B only: A ${String(estA.value)} ± ${String(estA.plusMinus)}cm (truth 420), C ${String(estC.value)} ± ${String(estC.plusMinus)}cm (truth 420)`,
   );
   for (const [letter, est] of [
     ["A", estA],
@@ -366,8 +382,13 @@ async function main(): Promise<void> {
   ] as const) {
     check(
       `example: estimated wall ${letter} within ±5 %`,
-      Math.abs(est - TAPE_A) <= TAPE_A * 0.05,
-      `${String(est)} vs ${String(TAPE_A)}`,
+      Math.abs(est.value - TAPE_A) <= TAPE_A * 0.05,
+      `${String(est.value)} vs ${String(TAPE_A)}`,
+    );
+    check(
+      `example: estimated wall ${letter} ± covers truth`,
+      Math.abs(est.value - TAPE_A) <= est.plusMinus,
+      `${String(est.value)} ± ${String(est.plusMinus)} vs ${String(TAPE_A)}`,
     );
   }
 

@@ -33,7 +33,6 @@ import {
   EXAMPLE_LABEL_SIZE,
   EXAMPLE_SEG_SIZE,
   EXAMPLE_TAPE_A,
-  EXAMPLE_TAPE_B,
   EXAMPLE_TAPE_NOTE,
   EXAMPLE_ROOM_NAME,
   exampleBadge,
@@ -336,15 +335,17 @@ export class PhotoFlow {
 
   /**
    * "Try the example room": load the four generated example photos, prefill
-   * the tapes from the example's tape measurements, and replay every
-   * analysis from the demo store (no upstream call in demo mode).
+   * wall A from the example's tape measurement (wall B stays empty so the
+   * solver estimates it from the photos, as for a shopper who leaves one
+   * empty), and replay every analysis from the demo store (no upstream call
+   * in demo mode).
    */
   async tryExample(): Promise<void> {
     if (this.exampleLoading) return;
     this.exampleLoading = true;
     this.exampleMode = true;
     this.tapeA = EXAMPLE_TAPE_A;
-    this.tapeB = EXAMPLE_TAPE_B;
+    this.tapeB = "";
     this.tapeError = null;
     this.step = "capture";
     this.wallIndex = 0;

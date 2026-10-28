@@ -20,8 +20,9 @@ export const EXAMPLE_ROOM_NAME = "Example room (generated photos)";
 export const EXAMPLE_TAPE_A = "420";
 export const EXAMPLE_TAPE_B = "360";
 
-/** Tape note shown with the prefilled example values. */
-export const EXAMPLE_TAPE_NOTE = "420 and 360 from the example's tape measurements.";
+/** Tape note shown with the prefilled example value (B stays empty to estimate). */
+export const EXAMPLE_TAPE_NOTE =
+  "420 from the example's tape measurement. Wall B stays empty to estimate from the photos.";
 
 /** Confirm-view line naming the example's true size. */
 export const EXAMPLE_TRUE_SIZE_LINE = "the example room is 420 × 360 cm";

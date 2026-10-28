@@ -4,14 +4,22 @@
  *
  * Left: four wall cards (thumbnail, wall name, Active/Done). Centre: the
  * active wall's photo large with round white corner handles, four edge lines,
- * coral opening boxes labelled "Window 120 × 140" and wall-length pills
- * under it. Right: the plan as a compact card (active wall highlighted,
- * measured/estimated legend, amber band under it). "Build my room" stays in
- * the editor foot. Rooms without photos keep today's editor.
+ * coral opening boxes labelled "Window 120 ± 3 × 140" (measured openings
+ * read "Window 120 × 140") and wall-length pills with each wall's source
+ * and ± under it ("Wall B · estimated 362 ± 9 cm", plus "· truth 360 cm"
+ * in the example). Right: the plan as a compact card (active wall
+ * highlighted, measured/estimated legend, amber band under it). "Build my
+ * room" stays in the editor foot. Rooms without photos keep today's editor.
  */
 
 import { applyHomography, wallHomography, type RoomLayout } from "@fitroom/shared";
-import { exampleBadge, exampleMeasuredLine, isExampleRoom } from "../photo-room/example";
+import {
+  EXAMPLE_TAPE_A,
+  EXAMPLE_TAPE_B,
+  exampleBadge,
+  exampleMeasuredLine,
+  isExampleRoom,
+} from "../photo-room/example";
 import type { EditorStore, PhotoSession } from "./editor-store";
 import { renderFinishesPicker } from "./finishes";
 import type { PhotoDraftMeta } from "../photo-room/flow";
@@ -63,6 +71,49 @@ export function openingBoxLabel(
 export function openingBoxText(type: "door" | "window", widthCm: number, heightCm: number): string {
   const kind = type === "door" ? "Door" : "Window";
   return `${kind} ${String(Math.round(widthCm))} × ${String(Math.round(heightCm))}`;
+}
+
+/**
+ * Opening box text with its width ±: "Door 100 ± 3 × 210". A measured
+ * opening (no width ±) reads exactly like `openingBoxText`. Pure.
+ */
+export function openingBoxTextWithPm(
+  type: "door" | "window",
+  widthCm: number,
+  heightCm: number,
+  widthPm?: number,
+): string {
+  if (widthPm === undefined) return openingBoxText(type, widthCm, heightCm);
+  const kind = type === "door" ? "Door" : "Window";
+  return `${kind} ${String(Math.round(widthCm))} ± ${String(Math.round(widthPm))} × ${String(Math.round(heightCm))}`;
+}
+
+/**
+ * Wall pill text with its source and ±, and in the example the truth beside
+ * it: "Wall B · estimated 362 ± 9 cm · truth 360 cm". A measured wall reads
+ * "Wall A · measured 420 cm" (plus " · truth 420 cm" in the example). Pure.
+ */
+export function wallPillText(
+  letter: WallLetter,
+  lengthCm: number,
+  source: "measured" | "estimated",
+  plusMinus?: number,
+  truthCm?: number,
+): string {
+  const len = String(Math.round(lengthCm));
+  const base =
+    source === "estimated" && plusMinus !== undefined
+      ? `Wall ${letter} · estimated ${len} ± ${String(Math.round(plusMinus))} cm`
+      : `Wall ${letter} · ${source} ${len} cm`;
+  if (truthCm === undefined) return base;
+  return `${base} · truth ${String(Math.round(truthCm))} cm`;
+}
+
+/** The example's true wall length per letter (A/C 420, B/D 360). Pure. */
+export function exampleTruthFor(letter: WallLetter): number {
+  const tapeA = Number(EXAMPLE_TAPE_A);
+  const tapeB = Number(EXAMPLE_TAPE_B);
+  return letter === "A" || letter === "C" ? tapeA : tapeB;
 }
 
 /**
@@ -426,20 +477,24 @@ export class PhotoConfirmView {
     wrap.appendChild(lens);
     this.stageEl.appendChild(wrap);
     this.attachStagePointer(wrap, lens, session, corners);
-    this.renderPills(session);
+    this.renderPills(session, this.store.draft);
   }
 
-  private renderPills(session: PhotoSession): void {
+  private renderPills(session: PhotoSession, meta: PhotoDraftMeta | null): void {
     const pills = document.createElement("div");
     pills.className = "photo-pills";
+    const example = isExampleRoom(this.store.room.name);
     for (const letter of WALL_ORDER) {
       const wallId = letterToWallId(letter, session);
       const len = Math.round(wallLengthOf(this.store.room, wallId));
+      const mark = meta?.walls[wallId];
+      const source = mark?.source ?? "measured";
+      const truth = example ? exampleTruthFor(letter) : undefined;
       const pill = document.createElement("button");
       pill.type = "button";
       pill.className = letter === session.activeWall ? "photo-pill selected" : "photo-pill";
-      pill.textContent = `Wall ${letter} · ${String(len)} cm`;
-      pill.setAttribute("aria-label", `Show wall ${letter}, ${String(len)} centimetres`);
+      pill.textContent = wallPillText(letter, len, source, mark?.plusMinus, truth);
+      pill.setAttribute("aria-label", pill.textContent);
       pill.addEventListener("click", () => this.actions.onSelectWall(letter));
       pills.appendChild(pill);
     }
@@ -488,10 +543,10 @@ export class PhotoConfirmView {
         id: string;
         wall: string;
         type: "door" | "window";
-        offset: { value: number };
-        width: { value: number };
-        height: { value: number };
-        sillHeight: { value: number };
+        offset: { value: number; plusMinus: number; source: string };
+        width: { value: number; plusMinus: number; source: string };
+        height: { value: number; plusMinus: number; source: string };
+        sillHeight: { value: number; plusMinus: number; source: string };
       }>;
       wallLengths: Record<string, { value: number }>;
       ceilingHeight: { value: number };
@@ -545,7 +600,8 @@ export class PhotoConfirmView {
       box.dataset["opening"] = opening.id;
       const tag = document.createElement("span");
       tag.className = "photo-opening-tag";
-      tag.textContent = openingBoxText(kind, widthCm, heightCm);
+      const widthPm = opening.width.source === "taped" ? undefined : opening.width.plusMinus;
+      tag.textContent = openingBoxTextWithPm(kind, widthCm, heightCm, widthPm);
       box.appendChild(tag);
       for (const side of ["left", "right", "top", "bottom"] as const) {
         const grip = document.createElement("span");

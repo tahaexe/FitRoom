@@ -2,16 +2,19 @@
  * `npm run check:example-room` — headless example-room check (no browser,
  * no Meta calls).
  *
- * - the example tapes are 420 and 360 with the example note, the built room
- *   is named "Example room (generated photos)", and every example badge is
- *   "Generated example";
+ * - the example truth is 420 and 360 with the example note (only wall A is
+ *   prefilled; wall B stays empty so the solver estimates it from the
+ *   photos), the built room is named "Example room (generated photos)", and
+ *   every example badge is "Generated example";
  * - the example urls are local assets (no upstream fetch) and `tryExample`
  *   replays every analysis from the demo store (its block holds no `/api/`
  *   call and never forces Live);
  * - the confirm view names the truth with the app's own numbers
- *   (`Measured 4xx × 3xx cm · the example room is 420 × 360 cm`);
+ *   (`Measured 4xx × 3xx cm · the example room is 420 × 360 cm`), shows
+ *   each wall's source and ± with the truth beside it in the example, and
+ *   shows each opening's width ±;
  * - the demo store holds segment and label answers for the replay, and the
- *   taped 420 × 360 cm room sits within 5 % of 420 × 360 cm.
+ *   taped 420 cm wall sits within 5 % of 420 cm.
  *
  * Prints PASS or FAIL per check and exits non-zero on any FAIL.
  */
@@ -37,6 +40,12 @@ import {
   isExampleRoom,
   type WallLetter,
 } from "../src/photo-room/example.js";
+import {
+  exampleTruthFor,
+  openingBoxText,
+  openingBoxTextWithPm,
+  wallPillText,
+} from "../src/editor/photo-confirm.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const clientDir = resolve(here, "..");
@@ -61,10 +70,10 @@ function withinFivePercent(measured: number, truth: number): boolean {
 
 function main(): void {
   check("example tape A is 420", EXAMPLE_TAPE_A === "420", EXAMPLE_TAPE_A);
-  check("example tape B is 360", EXAMPLE_TAPE_B === "360", EXAMPLE_TAPE_B);
+  check("example truth B is 360", EXAMPLE_TAPE_B === "360", EXAMPLE_TAPE_B);
   check(
-    "example tape note names the measurements",
-    EXAMPLE_TAPE_NOTE.includes("420") && EXAMPLE_TAPE_NOTE.includes("360"),
+    "example tape note names the taped wall and the estimate",
+    EXAMPLE_TAPE_NOTE.includes("420") && EXAMPLE_TAPE_NOTE.toLowerCase().includes("estimate"),
     EXAMPLE_TAPE_NOTE,
   );
   check(
@@ -143,9 +152,46 @@ function main(): void {
   const tapeA = Number(EXAMPLE_TAPE_A);
   const tapeB = Number(EXAMPLE_TAPE_B);
   check(
-    "the taped 420 × 360 cm room is within 5 % of 420 × 360 cm",
+    "the example truth sits within 5 % of 420 × 360 cm",
     withinFivePercent(tapeA, 420) && withinFivePercent(tapeB, 360),
     `${EXAMPLE_TAPE_A} × ${EXAMPLE_TAPE_B}`,
+  );
+  // The confirm view renders these strings from the same view code the
+  // shopper sees (`photo-confirm.ts`): each wall with its source and ± and
+  // the truth beside it in the example, each opening with its width ±.
+  check(
+    "confirm pill shows a measured wall",
+    wallPillText("A", 420, "measured", undefined, 420) ===
+      "Wall A · measured 420 cm · truth 420 cm",
+    wallPillText("A", 420, "measured", undefined, 420),
+  );
+  check(
+    "confirm pill shows an estimated wall with its ± and truth",
+    wallPillText("B", 362, "estimated", 9, 360) === "Wall B · estimated 362 ± 9 cm · truth 360 cm",
+    wallPillText("B", 362, "estimated", 9, 360),
+  );
+  check(
+    "confirm pill shows the source away from the example",
+    wallPillText("B", 362, "estimated", 9) === "Wall B · estimated 362 ± 9 cm",
+    wallPillText("B", 362, "estimated", 9),
+  );
+  check(
+    "example truth is 420 on A/C and 360 on B/D",
+    exampleTruthFor("A") === 420 &&
+      exampleTruthFor("C") === 420 &&
+      exampleTruthFor("B") === 360 &&
+      exampleTruthFor("D") === 360,
+    `A ${String(exampleTruthFor("A"))} B ${String(exampleTruthFor("B"))}`,
+  );
+  check(
+    "confirm opening tag shows its width ±",
+    openingBoxTextWithPm("door", 100, 210, 3) === "Door 100 ± 3 × 210",
+    openingBoxTextWithPm("door", 100, 210, 3),
+  );
+  check(
+    "a measured opening tag keeps the plain shape",
+    openingBoxTextWithPm("window", 120, 140) === openingBoxText("window", 120, 140),
+    openingBoxTextWithPm("window", 120, 140),
   );
 
   const flowSource = readFileSync(join(clientDir, "src", "photo-room", "flow.ts"), "utf8");
@@ -154,8 +200,10 @@ function main(): void {
   const tryBlock = tryAt >= 0 && tryEnd > tryAt ? flowSource.slice(tryAt, tryEnd) : "";
   check("the flow offers Try the example room", flowSource.includes("Try the example room"));
   check(
-    "tryExample prefills the example tapes",
-    tryBlock.includes("EXAMPLE_TAPE_A") && tryBlock.includes("EXAMPLE_TAPE_B"),
+    "tryExample prefills only wall A and leaves B empty to estimate",
+    tryBlock.includes("EXAMPLE_TAPE_A") &&
+      tryBlock.includes("this.tapeB = ") &&
+      !tryBlock.includes("EXAMPLE_TAPE_B"),
   );
   check(
     "the example build names the example room",

@@ -497,7 +497,7 @@ check(
   "confirm:box-label-follows-resolve",
   confirmSource.includes("roomOpening?.width") &&
     confirmSource.includes("roomOpening?.height") &&
-    confirmSource.includes("openingBoxText(kind, widthCm, heightCm)") &&
+    confirmSource.includes("openingBoxTextWithPm(kind, widthCm, heightCm, widthPm)") &&
     confirmSource.includes("openingBoxLabel(kind, session.activeWall, widthCm)"),
   "box tag and accessible name must read the re-solved room numbers",
 );
