@@ -744,6 +744,7 @@ export class RoomEditor {
       input.step = "5";
       input.value = String(Math.round(wallLengthOf(room, wall.id)));
       input.dataset["key"] = `wall-${wall.id}`;
+      input.name = `wall-${wall.id}`;
       input.setAttribute("aria-label", `Length of wall ${String(index + 1)} in centimetres`);
       input.addEventListener("change", () => this.setWallLength(wall.id, Number(input.value)));
       const unit = document.createElement("span");
@@ -775,6 +776,7 @@ export class RoomEditor {
     input.step = "1";
     input.value = String(Math.round(height));
     input.dataset["key"] = "ceiling-height";
+    input.name = "ceiling-height";
     input.setAttribute("aria-label", "Ceiling height in centimetres");
     input.addEventListener("change", () => this.setCeilingHeight(Number(input.value)));
     const unit = document.createElement("span");
@@ -1144,6 +1146,7 @@ export class RoomEditor {
     input.step = min >= 50 ? "5" : "1";
     input.value = String(Math.round(value));
     input.dataset["key"] = key;
+    input.name = key;
     input.setAttribute("aria-label", label);
     input.addEventListener("change", () => {
       const parsed = Number(input.value);
@@ -1170,6 +1173,7 @@ export class RoomEditor {
     input.type = "text";
     input.value = value;
     input.dataset["key"] = key;
+    input.name = key;
     input.setAttribute("aria-label", label);
     input.addEventListener("change", () => onChange(input.value));
     lab.appendChild(input);

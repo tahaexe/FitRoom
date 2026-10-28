@@ -1151,14 +1151,24 @@ export class PhotoFlow {
     const form = document.createElement("div");
     form.className = "photo-tape-form";
     form.appendChild(
-      this.tapeField(`${wallLetterLabel(null, "A")} length (cm)`, this.tapeA, (value) => {
-        this.tapeA = value;
-      }),
+      this.tapeField(
+        "tape-wall-a",
+        `${wallLetterLabel(null, "A")} length (cm)`,
+        this.tapeA,
+        (value) => {
+          this.tapeA = value;
+        },
+      ),
     );
     form.appendChild(
-      this.tapeField(`${wallLetterLabel(null, "B")} length (cm)`, this.tapeB, (value) => {
-        this.tapeB = value;
-      }),
+      this.tapeField(
+        "tape-wall-b",
+        `${wallLetterLabel(null, "B")} length (cm)`,
+        this.tapeB,
+        (value) => {
+          this.tapeB = value;
+        },
+      ),
     );
     host.appendChild(form);
     if (this.tapeError !== null) {
@@ -1185,7 +1195,12 @@ export class PhotoFlow {
     host.appendChild(actions);
   }
 
-  private tapeField(label: string, value: string, onInput: (value: string) => void): HTMLElement {
+  private tapeField(
+    name: string,
+    label: string,
+    value: string,
+    onInput: (value: string) => void,
+  ): HTMLElement {
     const wrap = document.createElement("label");
     wrap.className = "photo-tape-field";
     const icon = tapeIcon();
@@ -1193,6 +1208,7 @@ export class PhotoFlow {
     text.textContent = label;
     const input = document.createElement("input");
     input.type = "number";
+    input.name = name;
     input.min = "50";
     input.max = "2000";
     input.step = "1";

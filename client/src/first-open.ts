@@ -218,6 +218,9 @@ export class FirstOpen {
     const label = el("label", "size-label", labelText);
     const input = document.createElement("input");
     input.type = "text";
+    input.id = errorId.replace(/-error$/, "");
+    input.name = errorId.replace(/-error$/, "");
+    label.htmlFor = input.id;
     input.placeholder = placeholder;
     input.autocomplete = "off";
     input.spellcheck = false;

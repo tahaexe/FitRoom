@@ -19,7 +19,7 @@
  */
 
 /* global console, process */
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -245,6 +245,95 @@ check(
     !finishes.includes('chip.setAttribute("aria-label"'),
   "finishes.ts",
 );
+
+// ---- Form fields carry a stable id or name ----
+// Every `input`, `select` and `textarea` the client creates (templates and
+// `createElement` calls) carries a stable `id` or `name`, so the browser's
+// Issues panel reports no form-field problem. Where a field has an `id`,
+// its label points at it with `for`; otherwise the wrapping label or
+// accessible name applies.
+const fieldSourceFiles: string[] = [];
+{
+  const walk = (dir: string): void => {
+    for (const entry of readdirSync(dir)) {
+      const full = join(dir, entry);
+      if (statSync(full).isDirectory()) walk(full);
+      else if (entry.endsWith(".ts")) fieldSourceFiles.push(full);
+    }
+  };
+  walk(join(clientRoot, "src"));
+}
+const createFieldRe = /document\.createElement\(\s*["'](input|select|textarea)["']\s*\)/g;
+const methodStartRe =
+  /^ {2}(?:private |protected |public |static |async |get |set |constructor)*[A-Za-z_$][\w$]*\s*\(/;
+for (const file of fieldSourceFiles) {
+  const body = readFileSync(file, "utf8");
+  const lines = body.split("\n");
+  const rel = file.slice(clientRoot.length + 1).replace(/\\/g, "/");
+  let match: RegExpExecArray | null;
+  createFieldRe.lastIndex = 0;
+  while ((match = createFieldRe.exec(body)) !== null) {
+    const offset = match.index;
+    const matchLine = body.slice(0, offset).split("\n").length - 1;
+    const varOnLine = /(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=/.exec(lines[matchLine] ?? "");
+    if (varOnLine === null) {
+      check(`field creation assigns to a named variable`, false, `${rel}:${matchLine + 1}`);
+      continue;
+    }
+    const name = varOnLine[1] as string;
+    let methodStart = 0;
+    for (let i = matchLine; i >= 0; i -= 1) {
+      if (methodStartRe.test(lines[i] ?? "")) {
+        methodStart = i;
+        break;
+      }
+      if (/^}/.test(lines[i] ?? "") && i !== matchLine) break;
+    }
+    let methodEnd = lines.length - 1;
+    for (let i = matchLine; i < lines.length; i += 1) {
+      if (/^ {2}\}$/.test(lines[i] ?? "")) {
+        methodEnd = i;
+        break;
+      }
+    }
+    const scope = lines.slice(methodStart, methodEnd + 1).join("\n");
+    const idAssigned = new RegExp(`\\b${name}\\s*\\.\\s*id\\s*=`).test(scope);
+    const nameAssigned = new RegExp(`\\b${name}\\s*\\.\\s*name\\s*=`).test(scope);
+    const attrAssigned = new RegExp(
+      `\\b${name}\\s*\\.\\s*setAttribute\\s*\\(\\s*["'](?:id|name)["']`,
+    ).test(scope);
+    check(
+      `${rel}:${matchLine + 1} field carries an id or name`,
+      idAssigned || nameAssigned || attrAssigned,
+      `${rel}:${matchLine + 1}`,
+    );
+    if (idAssigned || attrAssigned) {
+      check(
+        `${rel}:${matchLine + 1} label points at the field id`,
+        /\.htmlFor\s*=|setAttribute\(\s*["']for["']/.test(scope),
+        `${rel}:${matchLine + 1}`,
+      );
+    }
+  }
+}
+const templateTagRe = /<(input|select|textarea)(?=[\s/>])[^>]*>/g;
+for (const file of [...fieldSourceFiles, join(clientRoot, "index.html")]) {
+  const body = readFileSync(file, "utf8");
+  const rel =
+    file === join(clientRoot, "index.html")
+      ? "index.html"
+      : file.slice(clientRoot.length + 1).replace(/\\/g, "/");
+  let tag: RegExpExecArray | null;
+  templateTagRe.lastIndex = 0;
+  while ((tag = templateTagRe.exec(body)) !== null) {
+    const line = body.slice(0, tag.index).split("\n").length;
+    check(
+      `${rel}:${line} template field carries an id or name`,
+      /\s(?:id|name)=/.test(tag[0]),
+      `${rel}:${line} ${tag[0].slice(0, 60)}`,
+    );
+  }
+}
 
 if (failures > 0) process.exit(1);
 console.log("labels ok");

@@ -612,6 +612,7 @@ export class EditorPlanView {
       input.step = "5";
       input.value = String(Math.round(wallLen(wall)));
       input.dataset["key"] = `plan-wall-${wall.id}`;
+      input.name = `plan-wall-${wall.id}`;
       input.setAttribute("aria-label", `Length of ${wall.id} in centimetres`);
       input.addEventListener("pointerdown", (event) => event.stopPropagation());
       input.addEventListener("click", (event) => event.stopPropagation());
