@@ -101,10 +101,10 @@
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [81.4, 238.6],
-          "runLength_cm": 157.2,
-          "spare_cm": 0,
-          "centre_cm": [41, 200],
+          "run_cm": [69.7, 250.4],
+          "runLength_cm": 180.7,
+          "spare_cm": 23.6,
+          "centre_cm": [33, 200],
           "rotationY": 90
         }
       },
@@ -118,10 +118,10 @@
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [63.7, 256.3],
-          "runLength_cm": 192.6,
-          "spare_cm": 0,
-          "centre_cm": [41, 200],
+          "run_cm": [69.7, 250.4],
+          "runLength_cm": 180.7,
+          "spare_cm": -11.9,
+          "centre_cm": [31.1, 200],
           "rotationY": 90
         }
       },
@@ -135,10 +135,27 @@
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [76.5, 243.5],
-          "runLength_cm": 167,
-          "spare_cm": 0,
-          "centre_cm": [41, 200],
+          "run_cm": [69.7, 250.4],
+          "runLength_cm": 180.7,
+          "spare_cm": 13.8,
+          "centre_cm": [36.3, 200],
+          "rotationY": 90
+        }
+      },
+      {
+        "productId": "fitroom_sofa_3seat",
+        "name": "Oslo Three-Seat Sofa",
+        "size_cm": [220, 90, 80],
+        "price_usd": 1190,
+        "styleTags": ["modern", "Scandinavian"],
+        "colors": ["slate fabric", "warm grey"],
+        "spot": {
+          "kind": "run",
+          "wall": "Left wall",
+          "run_cm": [69.7, 250.4],
+          "runLength_cm": 180.7,
+          "spare_cm": -39.3,
+          "centre_cm": [45.1, 200],
           "rotationY": 90
         }
       }
@@ -148,20 +165,15 @@
     "recommendations": [
       {
         "productId": "Sofa_01",
-        "reason": "Fits Left wall in 157.2 cm run with 0 cm to spare; stone fabric suits neutral modern room.",
+        "reason": "Fits Left wall 180.7 cm run with 23.6 cm to spare; stone fabric suits neutral tones.",
         "styleMatch": 0.45
       },
       {
         "productId": "vintage_day_bed",
-        "reason": "Fits Left wall in 167 cm run with 0 cm to spare; dark wood echoes placed items but vintage style clashes.",
+        "reason": "Fits Left wall 180.7 cm run with 13.8 cm to spare; dark wood echoes existing pieces.",
         "styleMatch": 0.3
-      },
-      {
-        "productId": "painted_wooden_sofa",
-        "reason": "Fits Left wall in 192.6 cm run with 0 cm to spare; rustic vintage striped look clashes with modern neutral.",
-        "styleMatch": 0.2
       }
     ]
   },
-  "time": "2026-10-27T19:38:26.991Z"
+  "time": "2026-10-28T10:33:02.629Z"
 }

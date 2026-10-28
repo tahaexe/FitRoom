@@ -34,6 +34,8 @@ import {
   recommendIgnoreIds,
   replacementOfferFor,
   smallestOfCategory,
+  vacatedSlot,
+  wallDisplayName,
   type CandidateQuery,
   type CatalogItem,
   type FitProducts,
@@ -44,7 +46,10 @@ import {
 import { META_MODELS } from "../src/config.js";
 import { DEMO_REQUESTS } from "../src/demo-requests.js";
 import { gatewayKey } from "../src/meta/keys.js";
-import { buildExampleRecommendDemoRequests, buildRecommendDemoRequests } from "../src/recommend-demo.js";
+import {
+  buildExampleRecommendDemoRequests,
+  buildRecommendDemoRequests,
+} from "../src/recommend-demo.js";
 import { emptyExampleScene, readExampleRoom } from "../src/assistant-demo.js";
 
 const PORT = 8789;
@@ -201,6 +206,111 @@ async function main(): Promise<void> {
     (replacement?.candidates.length ?? 0) >= 1,
     `candidates=${String(replacement?.candidates.length ?? 0)}`,
   );
+  if (replacement !== undefined) {
+    const oldEntry = catalog.find((c) => c.id === replacement.request.replace?.productId);
+    const chester = scene.items.find((i) => i.productId === "sofa_02");
+    const slot =
+      oldEntry === undefined || chester === undefined
+        ? null
+        : vacatedSlot(room, oldEntry, {
+            position: { ...chester.position },
+            rotationY: chester.rotationY,
+          });
+    check("replacement vacated slot resolves", slot !== null);
+    if (slot !== null && oldEntry !== undefined) {
+      const wantWall = wallDisplayName(room, slot.wallId);
+      const seenWalls = new Set(
+        replacement.candidates.map((c) => (c.spot.kind === "run" ? String(c.spot.wall) : "")),
+      );
+      check(
+        "replacement candidates anchor to the old wall",
+        replacement.candidates.length > 0 &&
+          replacement.candidates.every((c) => c.spot.kind === "run" && c.spot.wall === wantWall),
+        [...seenWalls].join(" | "),
+      );
+      check(
+        "replacement never suggests the slot's current product",
+        replacement.candidates.every((c) => c.productId !== oldEntry.id),
+        replacement.candidates.map((c) => c.productId).join(","),
+      );
+      let slotOk = true;
+      let spareOk = true;
+      let backOk = true;
+      const wall = room.walls.find((w) => w.id === slot.wallId);
+      for (const c of replacement.candidates) {
+        if (c.spot.kind !== "run") {
+          slotOk = false;
+          continue;
+        }
+        if (
+          Math.abs(c.spot.run_cm[0] - slot.start_cm) > 0.06 ||
+          Math.abs(c.spot.run_cm[1] - slot.end_cm) > 0.06 ||
+          Math.abs(c.spot.runLength_cm - slot.length_cm) > 0.06
+        ) {
+          slotOk = false;
+        }
+        // Same orientation as the old piece, so the along-wall extent is
+        // the catalog width; spare is the vacated slot minus that width.
+        const wantSpare = Math.round((slot.length_cm - c.size_cm[0]) * 10) / 10;
+        if (Math.abs(c.spot.spare_cm - wantSpare) > 0.06) spareOk = false;
+      }
+      check(
+        "replacement spots report the vacated slot",
+        slotOk,
+        JSON.stringify(replacement.candidates.map((c) => c.spot)),
+      );
+      check(
+        "replacement spare equals slot length minus candidate width",
+        spareOk,
+        JSON.stringify(
+          replacement.candidates.map((c) => ({
+            id: c.productId,
+            spare: c.spot.kind === "run" ? c.spot.spare_cm : null,
+            size: c.size_cm,
+          })),
+        ),
+      );
+      // Back-edge anchor: every candidate centre sits one across-extent
+      // inward from the old back edge on the old wall.
+      if (wall !== undefined) {
+        const centroid = {
+          x:
+            room.walls.reduce((x, w) => x + w.start.x + w.end.x, 0) /
+            Math.max(1, room.walls.length * 2),
+          z:
+            room.walls.reduce((z, w) => z + w.start.z + w.end.z, 0) /
+            Math.max(1, room.walls.length * 2),
+        };
+        const mid = {
+          x: (wall.start.x + wall.end.x) / 2,
+          z: (wall.start.z + wall.end.z) / 2,
+        };
+        let ox = mid.x - centroid.x;
+        let oz = mid.z - centroid.z;
+        const olen = Math.hypot(ox, oz) || 1;
+        ox /= olen;
+        oz /= olen;
+        const inx = -ox;
+        const inz = -oz;
+        for (const c of replacement.candidates) {
+          if (c.spot.kind !== "run") {
+            backOk = false;
+            continue;
+          }
+          const [px, pz] = c.spot.centre_cm;
+          const inward = (px - wall.start.x) * inx + (pz - wall.start.z) * inz;
+          const rad = (c.spot.rotationY * Math.PI) / 180;
+          const cos = Math.abs(Math.cos(rad)) < 1e-9 ? 0 : Math.cos(rad);
+          const sin = Math.abs(Math.sin(rad)) < 1e-9 ? 0 : Math.sin(rad);
+          const hx = (c.size_cm[0] / 2) * Math.abs(cos) + (c.size_cm[1] / 2) * Math.abs(sin);
+          const hz = (c.size_cm[0] / 2) * Math.abs(sin) + (c.size_cm[1] / 2) * Math.abs(cos);
+          const across = hx * Math.abs(inx) + hz * Math.abs(inz);
+          if (Math.abs(inward - across - slot.backEdge_cm) > 0.15) backOk = false;
+        }
+        check("replacement spots anchor to the old back edge", backOk);
+      }
+    }
+  }
 
   // Nothing fits: a sofa request for the demo room has no candidates, so the
   // panel answers locally with sizes plus the replacement offer — no model

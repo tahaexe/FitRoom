@@ -357,15 +357,85 @@ interface SlideTry {
   along: number;
   halfAlong: number;
   wallId: string;
+  slotStart_cm: number;
+  slotEnd_cm: number;
+  slotLength_cm: number;
+}
+
+/** Vacated slot of a replacement query: old wall, run and back edge. */
+export interface VacatedSlot {
+  wallId: string;
+  start_cm: number;
+  end_cm: number;
+  length_cm: number;
+  /** Old back edge inward distance from the wall start line, plan cm. */
+  backEdge_cm: number;
+  /** Old centre along-wall position, plan cm. */
+  along_cm: number;
 }
 
 /**
- * Where the selected item stands, plus slides along its wall run: the wall
- * behind the item (its back direction), the same inward offset and
- * orientation, offsets 0, +5, −5, … while the footprint stays on the wall.
+ * The slot a replacement vacates: the wall behind the selected item (its
+ * back direction) and the old piece's own along-wall footprint, anchored to
+ * its back edge. Exported for the `check:recommend` bar.
+ */
+export function vacatedSlot(
+  room: RoomLayout,
+  oldItem: CatalogItem,
+  selected: { position: { x: number; z: number }; rotationY: number },
+): VacatedSlot | null {
+  const rad = (selected.rotationY * Math.PI) / 180;
+  const { cos, sin } = snappedTrig(rad);
+  const back = { x: -sin, z: -cos };
+  const centroid = centroidOf(room);
+  let wall = room.walls[0];
+  let best = Number.NEGATIVE_INFINITY;
+  for (const w of room.walls) {
+    const o = outwardOf(w, centroid);
+    const score = o.x * back.x + o.z * back.z;
+    if (wall === undefined || score > best) {
+      wall = w;
+      best = score;
+    }
+  }
+  if (wall === undefined) return null;
+  const len = wallLengthCm(wall.start, wall.end) || 1;
+  const ux = (wall.end.x - wall.start.x) / len;
+  const uz = (wall.end.z - wall.start.z) / len;
+  const outward = outwardOf(wall, centroid);
+  const nx = -outward.x;
+  const nz = -outward.z;
+  const rel = {
+    x: selected.position.x - wall.start.x,
+    z: selected.position.z - wall.start.z,
+  };
+  const a0 = rel.x * ux + rel.z * uz;
+  const off0 = rel.x * nx + rel.z * nz;
+  const oldHx = (oldItem.size.w / 2) * Math.abs(cos) + (oldItem.size.d / 2) * Math.abs(sin);
+  const oldHz = (oldItem.size.w / 2) * Math.abs(sin) + (oldItem.size.d / 2) * Math.abs(cos);
+  const oldHalfAlong = oldHx * Math.abs(ux) + oldHz * Math.abs(uz);
+  const oldAcross = oldHx * Math.abs(nx) + oldHz * Math.abs(nz);
+  return {
+    wallId: wall.id,
+    start_cm: round1(a0 - oldHalfAlong),
+    end_cm: round1(a0 + oldHalfAlong),
+    length_cm: round1(oldHalfAlong * 2),
+    backEdge_cm: round1(off0 - oldAcross),
+    along_cm: round1(a0),
+  };
+}
+
+/**
+ * Where the selected item stands, plus slides along its wall: the wall
+ * behind the item (its back direction), anchored to the old piece's back
+ * edge with the same orientation, offsets 0, +5, −5, … while the footprint
+ * stays on the wall. The vacated slot is the old piece's own along-wall
+ * footprint; every candidate reports that slot (not its own footprint) so
+ * spare reads slot length minus the candidate's width.
  */
 function replacementTries(
   room: RoomLayout,
+  oldItem: CatalogItem,
   item: CatalogItem,
   selected: { position: { x: number; z: number }; rotationY: number },
 ): SlideTry[] {
@@ -396,10 +466,20 @@ function replacementTries(
   };
   const a0 = rel.x * ux + rel.z * uz;
   const off0 = rel.x * nx + rel.z * nz;
+  const oldHx = (oldItem.size.w / 2) * Math.abs(cos) + (oldItem.size.d / 2) * Math.abs(sin);
+  const oldHz = (oldItem.size.w / 2) * Math.abs(sin) + (oldItem.size.d / 2) * Math.abs(cos);
+  const oldHalfAlong = oldHx * Math.abs(ux) + oldHz * Math.abs(uz);
+  const oldAcross = oldHx * Math.abs(nx) + oldHz * Math.abs(nz);
+  const backEdge = off0 - oldAcross;
   const hx = (item.size.w / 2) * Math.abs(cos) + (item.size.d / 2) * Math.abs(sin);
   const hz = (item.size.w / 2) * Math.abs(sin) + (item.size.d / 2) * Math.abs(cos);
   const halfAlong = hx * Math.abs(ux) + hz * Math.abs(uz);
+  const across = hx * Math.abs(nx) + hz * Math.abs(nz);
+  const inward = backEdge + across;
   const rotationY = normDeg(selected.rotationY);
+  const slotStart = round1(a0 - oldHalfAlong);
+  const slotEnd = round1(a0 + oldHalfAlong);
+  const slotLength = round1(oldHalfAlong * 2);
   const out: SlideTry[] = [];
   const offsets: number[] = [0];
   for (let step = 5; step <= len; step += 5) {
@@ -409,12 +489,15 @@ function replacementTries(
     const a = a0 + o;
     if (a < halfAlong + 2 - 1e-9 || a > len - halfAlong - 2 + 1e-9) continue;
     out.push({
-      x: round1(wall.start.x + ux * a + nx * off0),
-      z: round1(wall.start.z + uz * a + nz * off0),
+      x: round1(wall.start.x + ux * a + nx * inward),
+      z: round1(wall.start.z + uz * a + nz * inward),
       rotationY,
       along: round1(a),
       halfAlong: round1(halfAlong),
       wallId: wall.id,
+      slotStart_cm: slotStart,
+      slotEnd_cm: slotEnd,
+      slotLength_cm: slotLength,
     });
   }
   return out;
@@ -425,6 +508,9 @@ function candidateOnReplacementSlide(
   item: CatalogItem,
   slide: SlideTry,
 ): RecommendCandidate {
+  void room;
+  // Back-to-wall orientation puts the catalog width along the wall.
+  const spare = round1(slide.slotLength_cm - item.size.w);
   return {
     productId: item.id,
     name: item.name,
@@ -435,9 +521,9 @@ function candidateOnReplacementSlide(
     spot: {
       kind: "run",
       wall: slide.wallId,
-      run_cm: [round1(slide.along - slide.halfAlong), round1(slide.along + slide.halfAlong)],
-      runLength_cm: round1(slide.halfAlong * 2),
-      spare_cm: 0,
+      run_cm: [slide.slotStart_cm, slide.slotEnd_cm],
+      runLength_cm: slide.slotLength_cm,
+      spare_cm: spare,
       centre_cm: [slide.x, slide.z],
       rotationY: slide.rotationY,
     },
@@ -500,10 +586,12 @@ export function buildCandidates(
 
   if (query.replace !== undefined) {
     const selected = query.replace;
+    const oldEntry = catalogById.get(selected.productId);
+    if (oldEntry === undefined) return [];
     const out: RecommendCandidate[] = [];
     for (const item of pool) {
       if (!inBudget(item)) continue;
-      for (const slide of replacementTries(room, item, selected)) {
+      for (const slide of replacementTries(room, oldEntry, item, selected)) {
         const candidate = candidateOnReplacementSlide(room, item, slide);
         if (kept(candidate)) {
           out.push(candidate);
