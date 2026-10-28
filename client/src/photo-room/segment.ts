@@ -107,7 +107,7 @@ async function requestFloorFallback(
   segUrl: string,
   dims: { width: number; height: number },
   onProgress: SegmentProgress,
-): Promise<SamInstance[] | { demoMiss: true } | null> {
+): Promise<SamInstance[] | { demoMiss: true } | { capped: true } | null> {
   onProgress(SEGMENT_CONCEPTS.length, SEGMENT_CONCEPTS.length + 1);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SEGMENT_TIMEOUT_MS);
@@ -118,11 +118,10 @@ async function requestFloorFallback(
     );
     onProgress(SEGMENT_CONCEPTS.length + 1, SEGMENT_CONCEPTS.length + 1);
     if (result.status === "demo-miss") return { demoMiss: true };
+    if (result.status === "capped") return { capped: true };
     if (result.status !== "ok") {
       throw new Error(
-        result.status === "error" || result.status === "capped"
-          ? result.message
-          : "The AI service is unreachable.",
+        result.status === "error" ? result.message : "The AI service is unreachable.",
       );
     }
     const text = textOf(result.data);
@@ -143,7 +142,7 @@ async function requestFloorFallback(
 async function requestFloorSecondTry(
   large: LargerPhoto,
   onProgress: SegmentProgress,
-): Promise<SamInstance[] | { demoMiss: true } | null> {
+): Promise<SamInstance[] | { demoMiss: true } | { capped: true } | null> {
   onProgress(SEGMENT_CONCEPTS.length + 1, SEGMENT_CONCEPTS.length + 2);
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), SEGMENT_TIMEOUT_MS);
@@ -154,6 +153,7 @@ async function requestFloorSecondTry(
     );
     onProgress(SEGMENT_CONCEPTS.length + 2, SEGMENT_CONCEPTS.length + 2);
     if (result.status === "demo-miss") return { demoMiss: true };
+    if (result.status === "capped") return { capped: true };
     if (result.status !== "ok") return null;
     const text = textOf(result.data);
     if (text === null || isEmptyAnswerText(text)) return null;
@@ -172,7 +172,9 @@ async function requestFloorSecondTry(
  * Segment one 1280 px photo and solve it for the instant check.
  * Placeholder tapes only scale the height readout (corners, lines and
  * tilt never depend on them). Throws a plain-English error, except
- * `demo-miss` which resolves to `{ demoMiss: true }`.
+ * `demo-miss` which resolves to `{ demoMiss: true }` and a spent or refused
+ * credit which resolves to `{ capped: true }` (the resting line, never an
+ * error on screen).
  */
 export async function analyseWallPhoto(
   wall: WallLetter,
@@ -183,7 +185,7 @@ export async function analyseWallPhoto(
   doorTap: DoorTap | null,
   onProgress: SegmentProgress,
   large?: LargerPhoto | null,
-): Promise<WallAnalysis | { demoMiss: true }> {
+): Promise<WallAnalysis | { demoMiss: true } | { capped: true }> {
   const total = SEGMENT_CONCEPTS.length;
   let done = 0;
   onProgress(0, total);
@@ -200,15 +202,17 @@ export async function analyseWallPhoto(
   });
   const answers = await Promise.all(perConcept);
   for (const { result } of answers) {
+    if (result.status === "capped") return { capped: true };
+  }
+  for (const { result } of answers) {
     if (result.status === "demo-miss") return { demoMiss: true };
   }
   const instances: SamInstance[] = [];
   for (const { concept, result } of answers) {
+    if (result.status === "capped") return { capped: true };
     if (result.status !== "ok") {
       throw new Error(
-        result.status === "error" || result.status === "capped"
-          ? result.message
-          : "The AI service is unreachable.",
+        result.status === "error" ? result.message : "The AI service is unreachable.",
       );
     }
     const text = textOf(result.data);
@@ -228,6 +232,7 @@ export async function analyseWallPhoto(
         );
         if (fallback !== null) {
           if ("demoMiss" in fallback) return { demoMiss: true };
+          if ("capped" in fallback) return { capped: true };
           instances.push(...fallback);
           continue;
         }
@@ -236,6 +241,7 @@ export async function analyseWallPhoto(
           const second = await requestFloorSecondTry(large, onProgress);
           if (second !== null) {
             if ("demoMiss" in second) return { demoMiss: true };
+            if ("capped" in second) return { capped: true };
             instances.push(...second);
             continue;
           }

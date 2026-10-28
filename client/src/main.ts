@@ -60,7 +60,13 @@ import {
   TOOLBAR_VISUALISE,
 } from "./copy";
 import { Guide, GuideView, queryGuideTarget, type GuideScreen } from "./guide";
-import { CatalogPanel, formatCatalogPrice, formatCatalogSize, formatMeasure, formatTopBar } from "./catalog-ui";
+import {
+  CatalogPanel,
+  formatCatalogPrice,
+  formatCatalogSize,
+  formatMeasure,
+  formatTopBar,
+} from "./catalog-ui";
 import { RecommendPanel } from "./recommend/panel";
 import { AssistantPanel } from "./assistant/panel";
 import { applyVariant, loadModel } from "./models";
@@ -1239,6 +1245,12 @@ class FitRoomApp {
         ) {
           this.firstOpen?.showCards();
         }
+      },
+      onUseSample: () => {
+        this.closePhotoFlow();
+        this.resetDemoRoom();
+        this.menuChoice = "sample";
+        this.refreshMenu();
       },
     });
     this.photoFlow = flow;

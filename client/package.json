@@ -21,6 +21,7 @@
     "check:scene-sync": "tsx scripts/check-scene-sync.ts",
     "check:contrast": "tsx scripts/check-contrast.ts",
     "check:toolbar": "tsx scripts/check-toolbar.ts",
+    "check:capped": "tsx scripts/check-capped.ts",
     "check:catalog-format": "tsx scripts/check-catalog-format.ts",
     "check:footprints": "node scripts/check-model-footprints.mjs",
     "preview": "vite preview --port 5173 --strictPort",

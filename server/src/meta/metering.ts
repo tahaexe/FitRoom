@@ -84,8 +84,12 @@ export function appendCostLine(logsDir: string, line: CostLine): void {
   appendFileSync(file, `${row}\n`, "utf8");
 }
 
-/** Sum of upstream USD in costs.csv (0 when the file is missing). */
-export function readUpstreamTotalUsd(logsDir: string): number {
+/**
+ * Sum of `upstream` USD in costs.csv (0 when the file is missing). When
+ * `fromIso` is set, only rows with `time` at or after it count: both forms
+ * are `toISOString`, so the comparison is lexicographic.
+ */
+export function readUpstreamTotalUsd(logsDir: string, fromIso?: string | null): number {
   const file = costsFile(logsDir);
   if (!existsSync(file)) return 0;
   let total = 0;
@@ -94,6 +98,9 @@ export function readUpstreamTotalUsd(logsDir: string): number {
     if (line.trim() === "") continue;
     const cells = splitCsv(line);
     if (cells[4] !== "upstream") continue;
+    if (fromIso !== undefined && fromIso !== null && fromIso !== "") {
+      if ((cells[0] ?? "") < fromIso) continue;
+    }
     const usd = Number(cells[9]);
     if (Number.isFinite(usd) && usd > 0) total += usd;
   }

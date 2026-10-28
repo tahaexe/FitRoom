@@ -76,8 +76,8 @@ export interface GatewayStore {
   ): Promise<void>;
   /** Append one metering line. */
   appendCost(line: CostLine): Promise<void>;
-  /** Sum of `upstream` USD (the global budget). */
-  upstreamTotalUsd(): Promise<number>;
+  /** Sum of `upstream` USD (the global budget), optionally from an ISO start. */
+  upstreamTotalUsd(fromIso?: string | null): Promise<number>;
   /** Sliding-window per-IP rate check; records the weighted hit when allowed. */
   checkRateLimit(
     ip: string,
@@ -92,6 +92,7 @@ export interface GatewayStore {
     sessionMaxCalls: number,
     sessionMaxUsd: number,
     globalBudgetUsd: number,
+    budgetFromIso?: string | null,
     weight?: number,
   ): Promise<CapVerdict>;
   /** Count one generation toward the session caps (USD always in full). */
@@ -138,9 +139,14 @@ export function createNodeStore(options: NodeStoreOptions): GatewayStore {
   // closure only, so it is never logged or sent to a client.
   const rateSalt = newSalt();
   // Cached upstream total, loaded from costs.csv on first use so the
-  // budget survives restarts (mirrors the previous caps behaviour).
+  // budget survives restarts (mirrors the previous caps behaviour). The
+  // cache only covers the unfiltered (today's) total; a dated window reads
+  // the file fresh through the same shared query as `metering.ts`.
   let upstreamTotalUsd: number | null = null;
-  const loadUpstreamTotal = (): number => {
+  const loadUpstreamTotal = (fromIso?: string | null): number => {
+    if (fromIso !== undefined && fromIso !== null && fromIso !== "") {
+      return readUpstreamTotalUsd(logsDir, fromIso);
+    }
     if (upstreamTotalUsd === null) upstreamTotalUsd = readUpstreamTotalUsd(logsDir);
     return upstreamTotalUsd;
   };
@@ -169,8 +175,8 @@ export function createNodeStore(options: NodeStoreOptions): GatewayStore {
       appendCostLine(logsDir, line);
       return Promise.resolve();
     },
-    upstreamTotalUsd(): Promise<number> {
-      return Promise.resolve(loadUpstreamTotal());
+    upstreamTotalUsd(fromIso?: string | null): Promise<number> {
+      return Promise.resolve(loadUpstreamTotal(fromIso));
     },
     async checkRateLimit(ip, limitPerMinute, nowMs, weight = 1): Promise<boolean> {
       // Hash first: the raw address never reaches the map (nor any log).
@@ -190,6 +196,7 @@ export function createNodeStore(options: NodeStoreOptions): GatewayStore {
       sessionMaxCalls,
       sessionMaxUsd,
       globalBudgetUsd,
+      budgetFromIso?: string | null,
       weight = 1,
     ): Promise<CapVerdict> {
       return Promise.resolve(
@@ -199,7 +206,7 @@ export function createNodeStore(options: NodeStoreOptions): GatewayStore {
             sessionMaxCalls,
             sessionMaxUsd,
             globalBudgetUsd,
-            upstreamTotalUsd: loadUpstreamTotal(),
+            upstreamTotalUsd: loadUpstreamTotal(budgetFromIso),
           },
           sessionId,
           isMock,
@@ -359,6 +366,26 @@ async function d1RateSalt(db: D1DatabaseLike): Promise<string> {
   return newSalt();
 }
 
+/**
+ * One shared upstream-sum query for both the cap check and the total: when
+ * `fromIso` is set, only rows with `time` at or after it count (both sides
+ * are `toISOString`, so the comparison is lexicographic).
+ */
+async function upstreamTotalFor(db: D1DatabaseLike, fromIso?: string | null): Promise<number> {
+  const hasFrom = fromIso !== undefined && fromIso !== null && fromIso !== "";
+  const query = hasFrom
+    ? "SELECT COALESCE(SUM(usd), 0) AS total FROM costs WHERE source = 'upstream' AND time >= ?"
+    : "SELECT COALESCE(SUM(usd), 0) AS total FROM costs WHERE source = 'upstream'";
+  const statement = db.prepare(query);
+  const row = hasFrom
+    ? await statement.bind(fromIso as string).first<{ total: number }>()
+    : await statement.first<{ total: number }>();
+  const total = row?.total ?? 0;
+  return typeof total === "number" && Number.isFinite(total)
+    ? Math.round(total * 1_000_000) / 1_000_000
+    : 0;
+}
+
 export function createD1Store(db: D1DatabaseLike, bundled: BundledGatewayData): GatewayStore {
   return {
     readDemo(route, model, key): Promise<DemoStoreFile | null> {
@@ -428,14 +455,8 @@ export function createD1Store(db: D1DatabaseLike, bundled: BundledGatewayData): 
         )
         .run();
     },
-    async upstreamTotalUsd(): Promise<number> {
-      const row = await db
-        .prepare("SELECT COALESCE(SUM(usd), 0) AS total FROM costs WHERE source = 'upstream'")
-        .first<{ total: number }>();
-      const total = row?.total ?? 0;
-      return typeof total === "number" && Number.isFinite(total)
-        ? Math.round(total * 1_000_000) / 1_000_000
-        : 0;
+    async upstreamTotalUsd(fromIso?: string | null): Promise<number> {
+      return upstreamTotalFor(db, fromIso);
     },
     async checkRateLimit(ip, limitPerMinute, nowMs, weight = 1): Promise<boolean> {
       // Hash first: the raw address never reaches the row (nor any log).
@@ -461,6 +482,7 @@ export function createD1Store(db: D1DatabaseLike, bundled: BundledGatewayData): 
       sessionMaxCalls,
       sessionMaxUsd,
       globalBudgetUsd,
+      budgetFromIso?: string | null,
       weight = 1,
     ): Promise<CapVerdict> {
       const session = parseSessionCounter(await readCounter(db, "session", sessionId));
@@ -469,10 +491,7 @@ export function createD1Store(db: D1DatabaseLike, bundled: BundledGatewayData): 
       }
       if (session.usd >= sessionMaxUsd) return { ok: false, reason: "session-usd" };
       if (!isMock) {
-        const row = await db
-          .prepare("SELECT COALESCE(SUM(usd), 0) AS total FROM costs WHERE source = 'upstream'")
-          .first<{ total: number }>();
-        const total = typeof row?.total === "number" ? row.total : 0;
+        const total = await upstreamTotalFor(db, budgetFromIso);
         if (total >= globalBudgetUsd) return { ok: false, reason: "global-budget" };
       }
       return { ok: true };

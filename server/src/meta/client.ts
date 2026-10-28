@@ -24,7 +24,7 @@
  */
 
 import { META_BASE_URL, META_MODELS } from "./models.js";
-import { UpstreamFriendlyError } from "./errors.js";
+import { UpstreamFriendlyError, UpstreamQuotaError } from "./errors.js";
 import { base64ToBytes, bytesToBase64 } from "./base64.js";
 import { usageFromUpstream, type TokenUsage } from "./pricing.js";
 
@@ -69,6 +69,15 @@ function authHeaders(apiKey: string): Record<string, string> {
   };
 }
 
+/**
+ * True when an upstream error body names a spent or refused credit: a quota,
+ * a credit or a billing limit. Matched case-insensitively on the raw text.
+ */
+function isQuotaBodyText(text: string): boolean {
+  const lower = text.toLowerCase();
+  return lower.includes("quota") || lower.includes("credit") || lower.includes("billing");
+}
+
 async function postJson(
   apiKey: string,
   path: string,
@@ -80,6 +89,18 @@ async function postJson(
     body: JSON.stringify(body),
   });
   if (!res.ok) {
+    if (res.status === 401 || res.status === 402 || res.status === 429) {
+      throw new UpstreamQuotaError();
+    }
+    let bodyText = "";
+    try {
+      bodyText = await res.text();
+    } catch {
+      /* keep bodyText empty so the HTTP error below applies */
+    }
+    if (bodyText !== "" && isQuotaBodyText(bodyText)) {
+      throw new UpstreamQuotaError();
+    }
     throw new Error(`Meta API ${path} answered HTTP ${tostr(res.status)}`);
   }
   return (await res.json()) as unknown;
@@ -385,6 +406,18 @@ export async function callSam(apiKey: string, options: SamCallOptions): Promise<
     }),
   });
   if (!res.ok) {
+    if (res.status === 401 || res.status === 402 || res.status === 429) {
+      throw new UpstreamQuotaError();
+    }
+    let bodyText = "";
+    try {
+      bodyText = await res.text();
+    } catch {
+      /* keep bodyText empty so the HTTP error below applies */
+    }
+    if (bodyText !== "" && isQuotaBodyText(bodyText)) {
+      throw new UpstreamQuotaError();
+    }
     throw new Error(`Meta API /responses answered HTTP ${String(res.status)}`);
   }
   const text = extractSamOutputText(await res.text());

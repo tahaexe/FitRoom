@@ -24,9 +24,9 @@ import { getCookie, setCookie } from "hono/cookie";
 import type { GatewayConfig } from "../config.js";
 import { newSessionId } from "./caps.js";
 import type { UpstreamResult } from "./client.js";
-import { UpstreamFriendlyError } from "./errors.js";
+import { UpstreamFriendlyError, UpstreamQuotaError } from "./errors.js";
 
-export { UpstreamFriendlyError };
+export { UpstreamFriendlyError, UpstreamQuotaError };
 import { gatewayKey } from "./keys.js";
 import { costUsd, emptyUsage } from "./pricing.js";
 import type { GatewayStore } from "./store.js";
@@ -241,12 +241,26 @@ export async function serveGatewayRequest(
     return c.json(capped(), 429);
   }
   const isMock = config.mock;
+  // Judging-window budget: `META_BUDGET_USD` takes effect only from
+  // `META_BUDGET_FROM`. Before that moment (or when the variable is empty
+  // or invalid) the cap is today's: every `upstream` row counts against the
+  // code default USD 5, so nothing opens early.
+  const nowMs = Date.now();
+  const fromIso = config.globalBudgetFromIso ?? null;
+  const fromPassed =
+    fromIso !== null &&
+    fromIso !== "" &&
+    !Number.isNaN(Date.parse(fromIso)) &&
+    Date.parse(fromIso) <= nowMs;
+  const effectiveBudgetUsd = fromPassed ? config.globalBudgetUsd : 5;
+  const effectiveFromIso = fromPassed ? fromIso : null;
   const cap = await store.checkGenerationCap(
     sessionId,
     isMock,
     config.sessionMaxCalls,
     config.sessionMaxUsd,
-    config.globalBudgetUsd,
+    effectiveBudgetUsd,
+    effectiveFromIso,
     weight,
   );
   if (!cap.ok) {
@@ -274,6 +288,11 @@ export async function serveGatewayRequest(
     try {
       result = await def.upstream(config.apiKey, parsed.input);
     } catch (error) {
+      if (error instanceof UpstreamQuotaError) {
+        // A refused or spent credit rests like a reached cap: HTTP 429 with
+        // the resting line, no cost line (not billed) and no counter change.
+        return c.json(capped(), 429);
+      }
       if (error instanceof UpstreamFriendlyError) {
         // The model answered but unusably (no image, invalid JSON after
         // the retry): Meta still billed the call, so its `upstream` line

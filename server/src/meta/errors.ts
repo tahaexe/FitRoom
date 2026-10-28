@@ -17,3 +17,17 @@ export class UpstreamFriendlyError extends Error {
     if (usage !== undefined) this.usage = usage;
   }
 }
+
+/**
+ * A refused or spent credit: the upstream answered 401, 402 or 429, or its
+ * error body names a quota, credit or billing limit. The pipeline answers it
+ * like a reached cap (HTTP 429 `capped` with the resting line): no cost line
+ * (the call was not billed) and no session-counter change.
+ */
+export class UpstreamQuotaError extends Error {
+  override name = "UpstreamQuotaError";
+
+  constructor(message = "The live AI is resting.") {
+    super(message);
+  }
+}

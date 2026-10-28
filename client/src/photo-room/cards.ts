@@ -60,7 +60,8 @@ export function isEmptyAnswerText(text: string | null): boolean {
 /**
  * After an error the card offers "retry" (re-send the same request) or
  * "retake" (a new photo) only. Empty wall/floor answers are retake-only;
- * time-outs, network errors, caps and anything else keep the retry.
+ * time-outs, network errors and anything else keep the retry (a spent or
+ * refused credit never reaches this card: it shows the resting line).
  */
 export function errorRecovery(message: string): "retry" | "retake" {
   return message === NO_WALL_MESSAGE || message === NO_FLOOR_MESSAGE ? "retake" : "retry";

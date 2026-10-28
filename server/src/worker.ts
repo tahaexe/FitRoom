@@ -39,6 +39,7 @@ export interface WorkerEnv {
   META_SESSION_MAX_CALLS?: string;
   META_SESSION_MAX_USD?: string;
   META_BUDGET_USD?: string;
+  META_BUDGET_FROM?: string;
   META_RATE_PER_MIN?: string;
 }
 
@@ -46,6 +47,13 @@ function numVar(raw: string | undefined, fallback: number): number {
   if (raw === undefined || raw.trim() === "") return fallback;
   const parsed = Number(raw);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
+}
+
+function budgetFromIso(raw: string | undefined): string | null {
+  if (raw === undefined || raw.trim() === "") return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
 }
 
 function workerClientIp(request: Request): string {
@@ -65,6 +73,7 @@ function gatewayDeps(env: WorkerEnv): PipelineDeps {
     sessionMaxCalls: numVar(env.META_SESSION_MAX_CALLS, 20),
     sessionMaxUsd: numVar(env.META_SESSION_MAX_USD, 0.5),
     globalBudgetUsd: numVar(env.META_BUDGET_USD, 5),
+    globalBudgetFromIso: budgetFromIso(env.META_BUDGET_FROM),
     ratePerMinutePerIp: numVar(env.META_RATE_PER_MIN, 30),
     dataDir: "",
     logsDir: "",

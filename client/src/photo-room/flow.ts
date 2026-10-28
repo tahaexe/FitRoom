@@ -45,6 +45,7 @@ import { processPhotoFile, type IntakePhoto } from "./intake";
 import { clearPhoto, loadPhoto, savePhoto, type StoredPhoto } from "./photo-store";
 import {
   BUILD_SOLVING,
+  CAPPED_MESSAGE,
   FLOW_STEPS,
   LEAVE,
   PHOTO_ANALYSING,
@@ -57,6 +58,7 @@ import {
   TAPE_NOTE,
   TAPE_TITLE,
   TURN_ON_LIVE,
+  USE_SAMPLE_ROOM,
 } from "../copy";
 import {
   EDGE_AT_DOOR_COPY,
@@ -171,6 +173,7 @@ interface WallState {
   instances: SamInstance[];
   analysis: WallAnalysis | null;
   demoMiss: boolean;
+  capped: boolean;
   error: string | null;
   analysing: boolean;
   reading: boolean;
@@ -188,6 +191,7 @@ function emptyWallState(): WallState {
     instances: [],
     analysis: null,
     demoMiss: false,
+    capped: false,
     error: null,
     analysing: false,
     reading: false,
@@ -356,6 +360,7 @@ export class PhotoFlow {
     private readonly callbacks: {
       onDone: (result: PhotoFlowDone) => void;
       onClose: () => void;
+      onUseSample?: () => void;
     },
   ) {
     for (const letter of WALL_ORDER) this.walls.set(letter, emptyWallState());
@@ -426,6 +431,7 @@ export class PhotoFlow {
       const state = this.stateOf(letter);
       state.error = null;
       state.demoMiss = false;
+      state.capped = false;
       state.reading = true;
     }
     this.render();
@@ -685,6 +691,7 @@ export class PhotoFlow {
     if (state.reading) return;
     state.error = null;
     state.demoMiss = false;
+    state.capped = false;
     state.analysis = null;
     state.tap = null;
     state.doorMarked = false;
@@ -890,6 +897,21 @@ export class PhotoFlow {
       sheet.append(message, live);
       return sheet;
     }
+    if (state.capped) {
+      const message = document.createElement("p");
+      message.className = "photo-sheet-note";
+      message.textContent = CAPPED_MESSAGE;
+      const sample = document.createElement("button");
+      sample.type = "button";
+      sample.className = "photo-primary";
+      sample.textContent = USE_SAMPLE_ROOM;
+      sample.addEventListener("click", () => {
+        if (this.callbacks.onUseSample !== undefined) this.callbacks.onUseSample();
+        else this.callbacks.onClose();
+      });
+      sheet.append(message, sample);
+      return sheet;
+    }
     const analysis = state.analysis;
     if (analysis === null) {
       const start = document.createElement("button");
@@ -1071,6 +1093,7 @@ export class PhotoFlow {
     state.analysing = true;
     state.error = null;
     state.demoMiss = false;
+    state.capped = false;
     state.progress = { done: 0, total: 5 };
     this.render();
     try {
@@ -1100,11 +1123,17 @@ export class PhotoFlow {
       );
       if ("demoMiss" in result) {
         state.demoMiss = true;
+        state.capped = false;
+        state.analysis = null;
+      } else if ("capped" in result) {
+        state.capped = true;
+        state.demoMiss = false;
         state.analysis = null;
       } else {
         state.analysis = result;
         state.instances = result.instances;
         state.demoMiss = false;
+        state.capped = false;
         if (doorTap !== null) {
           state.doorMarked = result.draft.openings.some(
             (opening) => opening.type === "door" && opening.wall === letter,

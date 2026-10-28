@@ -331,6 +331,130 @@ async function main(): Promise<void> {
       );
     }
 
+    // 3b. A refused or spent credit rests like a reached cap: a mocked
+    // upstream answering 401, 402 or 429, or an error body naming a quota,
+    // credit or billing limit, answers 429 `capped` with the resting line
+    // and writes no cost line (the call was not billed).
+    {
+      const { Hono } = await import("hono");
+      const { serveGatewayRequest } = await import("../src/meta/pipeline.js");
+      const { createNodeStore } = await import("../src/meta/store.js");
+      const { UpstreamQuotaError } = await import("../src/meta/errors.js");
+      const { callSpark } = await import("../src/meta/client.js");
+      const { GATEWAY_CAPPED_MESSAGE } = await import("@fitroom/shared");
+      const realFetch = globalThis.fetch;
+      const quotaCases = [
+        { name: "401", status: 401, body: "" },
+        { name: "402", status: 402, body: "" },
+        { name: "429", status: 429, body: "" },
+        {
+          name: "quota body",
+          status: 500,
+          body: JSON.stringify({ error: { message: "You exceeded your billing credit quota" } }),
+        },
+      ];
+      for (const qc of quotaCases) {
+        globalThis.fetch = (async () => ({
+          ok: false,
+          status: qc.status,
+          text: async () => qc.body,
+          json: async () => JSON.parse(qc.body === "" ? "null" : qc.body),
+        })) as unknown as typeof fetch;
+        let threw = false;
+        try {
+          await callSpark("quota-key", { messages: [{ role: "user", content: "hi" }] });
+        } catch (error) {
+          threw = error instanceof UpstreamQuotaError;
+        }
+        check(`upstream ${qc.name} throws the quota error`, threw);
+      }
+      globalThis.fetch = realFetch;
+
+      const quotaDataDir = join(workDir, "quota-data");
+      const quotaLogsDir = join(workDir, "quota-logs");
+      rmSync(quotaDataDir, { recursive: true, force: true });
+      rmSync(quotaLogsDir, { recursive: true, force: true });
+      mkdirSync(quotaDataDir, { recursive: true });
+      mkdirSync(quotaLogsDir, { recursive: true });
+      const quotaConfig = {
+        apiKey: "quota-test-key",
+        mock: false,
+        record: false,
+        sessionMaxCalls: 20,
+        sessionMaxUsd: 0.5,
+        globalBudgetUsd: 10,
+        globalBudgetFromIso: null,
+        ratePerMinutePerIp: 1000,
+        dataDir: quotaDataDir,
+        logsDir: quotaLogsDir,
+      };
+      const quotaStore = createNodeStore({ dataDir: quotaDataDir, logsDir: quotaLogsDir });
+      const quotaCostsFile = join(quotaLogsDir, "costs.csv");
+      const quotaCostsCount = (): number => {
+        if (!existsSync(quotaCostsFile)) return 0;
+        return readFileSync(quotaCostsFile, "utf8")
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line !== "").length;
+      };
+      for (const qc of quotaCases) {
+        const app = new Hono();
+        app.post("/render", (c) =>
+          serveGatewayRequest(
+            c,
+            { config: quotaConfig, store: quotaStore },
+            {
+              route: "render",
+              model: "muse-image-1.0",
+              liveReady: true,
+              parseBody: () => ({ input: { prompt: qc.name } }),
+              keyInput: () => ({ prompt: `quota ${qc.name}` }),
+              upstream: async () => {
+                throw new UpstreamQuotaError();
+              },
+            },
+          ),
+        );
+        const before = quotaCostsCount();
+        const res = await app.request("/render", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-fitroom-live": "1" },
+          body: JSON.stringify({ prompt: `quota ${qc.name}`, live: true }),
+        });
+        let payload: unknown = null;
+        try {
+          payload = (await res.json()) as unknown;
+        } catch {
+          payload = null;
+        }
+        const capped =
+          res.status === 429 &&
+          isRecord(payload) &&
+          payload["status"] === "capped" &&
+          typeof payload["message"] === "string" &&
+          payload["message"] === GATEWAY_CAPPED_MESSAGE &&
+          payload["message"].includes("Use the sample room");
+        check(`quota ${qc.name} answers 429 capped`, capped, `status=${String(res.status)}`);
+        check(`quota ${qc.name} writes no cost line`, quotaCostsCount() === before, qc.name);
+        const setCookie = res.headers.get("set-cookie") ?? "";
+        const sidMatch = /fitroom_sid=([0-9a-f]{32})/.exec(setCookie);
+        if (sidMatch !== null) {
+          const verdict = await quotaStore.checkGenerationCap(
+            sidMatch[1] as string,
+            false,
+            20,
+            0.5,
+            10,
+            null,
+            1,
+          );
+          check(`quota ${qc.name} leaves the session counters alone`, verdict.ok, qc.name);
+        } else {
+          check(`quota ${qc.name} leaves the session counters alone`, false, "no session cookie");
+        }
+      }
+    }
+
     // 4. The built client holds no key material.
     {
       const dist = join(repoRoot, "client", "dist");

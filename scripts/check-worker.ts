@@ -794,6 +794,164 @@ async function main(): Promise<void> {
     await stopWorker(worker);
     worker = null;
 
+    // 8b. Judging-window budget: the start one hour before now. An old
+    // USD 20 row stays outside the window (live requests pass the cap and
+    // reach today's no-key answer); a USD 10 row after the start trips the
+    // USD 10 window (429 capped). A start a day ahead keeps today's USD 5:
+    // a USD 6 old row caps it.
+    {
+      const budgetFromDir = join(workDir, "budget-from-state");
+      const budgetFutureDir = join(workDir, "budget-future-state");
+      for (const dir of [budgetFromDir, budgetFutureDir]) {
+        rmSync(dir, { recursive: true, force: true });
+        mkdirSync(dir, { recursive: true });
+        const applied = await wrangler([
+          "d1",
+          "migrations",
+          "apply",
+          "fitroom",
+          "--local",
+          "--persist-to",
+          dir,
+        ]);
+        check(
+          `budget-from migrations apply (${dir === budgetFromDir ? "window" : "future"})`,
+          applied.exit === 0,
+        );
+      }
+      if (failures > 0) {
+        process.exitCode = 1;
+        return;
+      }
+      const nowMs = Date.now();
+      const startIso = new Date(nowMs - 3_600_000).toISOString();
+      const dayEarlierIso = new Date(nowMs - 86_400_000).toISOString();
+      const afterStartIso = new Date(nowMs - 1_800_000).toISOString();
+      check(
+        "budget-from old row inserted",
+        await d1Exec(
+          budgetFromDir,
+          "INSERT INTO costs (time, session, route, model, source, input_tokens, " +
+            "cached_input_tokens, output_tokens, images, usd) VALUES " +
+            `(${sqlQuote(dayEarlierIso)}, 'budget-from-old', 'render', 'muse-image-1.0', ` +
+            `'upstream', 100, 0, 50, 1, 20)`,
+        ),
+      );
+      let budgetWorker: Unstable_DevWorker | null = null;
+      try {
+        const budgetPort = await freePort();
+        budgetWorker = await startWorker(budgetPort, budgetFromDir, {
+          META_BUDGET_USD: "10",
+          META_BUDGET_FROM: startIso,
+          META_RATE_PER_MIN: "1000",
+        });
+        const budgetBase = `http://127.0.0.1:${String(budgetPort)}`;
+        check(
+          "budget-from worker starts",
+          await waitForHealth(budgetBase),
+          `no /api/health on ${String(budgetPort)}`,
+        );
+        {
+          const liveJar = new Jar(budgetBase);
+          const res = await liveJar.post(
+            "render",
+            { prompt: `worker budget-from old ${runTag}` },
+            { live: true },
+          );
+          check(
+            "old upstream row outside the window leaves live requests uncapped",
+            res.status === 500 &&
+              isRecord(res.json) &&
+              res.json["status"] === "error" &&
+              typeof res.json["message"] === "string" &&
+              res.json["message"].includes("needs a key"),
+            `status=${String(res.status)} ${JSON.stringify(res.json)?.slice(0, 200)}`,
+          );
+        }
+        await stopWorker(budgetWorker);
+        budgetWorker = null;
+        check(
+          "budget-from in-window row inserted",
+          await d1Exec(
+            budgetFromDir,
+            "INSERT INTO costs (time, session, route, model, source, input_tokens, " +
+              "cached_input_tokens, output_tokens, images, usd) VALUES " +
+              `(${sqlQuote(afterStartIso)}, 'budget-from-new', 'render', 'muse-image-1.0', ` +
+              `'upstream', 100, 0, 50, 1, 10)`,
+          ),
+        );
+        const budgetPort2 = await freePort();
+        budgetWorker = await startWorker(budgetPort2, budgetFromDir, {
+          META_BUDGET_USD: "10",
+          META_BUDGET_FROM: startIso,
+          META_RATE_PER_MIN: "1000",
+        });
+        const budgetBase2 = `http://127.0.0.1:${String(budgetPort2)}`;
+        check(
+          "budget-from worker restarts",
+          await waitForHealth(budgetBase2),
+          `no /api/health on ${String(budgetPort2)}`,
+        );
+        {
+          const liveJar = new Jar(budgetBase2);
+          const res = await liveJar.post(
+            "render",
+            { prompt: `worker budget-from new ${runTag}` },
+            { live: true },
+          );
+          check(
+            "in-window upstream total caps live requests",
+            res.status === 429 && isRecord(res.json) && res.json["status"] === "capped",
+            `status=${String(res.status)} ${JSON.stringify(res.json)?.slice(0, 200)}`,
+          );
+        }
+        await stopWorker(budgetWorker);
+        budgetWorker = null;
+      } finally {
+        await stopWorker(budgetWorker);
+      }
+      // A start a day ahead: today's USD 5 counts every row.
+      const futureStartIso = new Date(nowMs + 86_400_000).toISOString();
+      check(
+        "budget future row inserted",
+        await d1Exec(
+          budgetFutureDir,
+          "INSERT INTO costs (time, session, route, model, source, input_tokens, " +
+            "cached_input_tokens, output_tokens, images, usd) VALUES " +
+            `(${sqlQuote(dayEarlierIso)}, 'budget-future', 'render', 'muse-image-1.0', ` +
+            `'upstream', 100, 0, 50, 1, 6)`,
+        ),
+      );
+      let futureWorker: Unstable_DevWorker | null = null;
+      try {
+        const futurePort = await freePort();
+        futureWorker = await startWorker(futurePort, budgetFutureDir, {
+          META_BUDGET_USD: "10",
+          META_BUDGET_FROM: futureStartIso,
+          META_RATE_PER_MIN: "1000",
+        });
+        const futureBase = `http://127.0.0.1:${String(futurePort)}`;
+        check(
+          "budget future worker starts",
+          await waitForHealth(futureBase),
+          `no /api/health on ${String(futurePort)}`,
+        );
+        const liveJar = new Jar(futureBase);
+        const res = await liveJar.post(
+          "render",
+          { prompt: `worker budget-future ${runTag}` },
+          { live: true },
+        );
+        check(
+          "before the start every row counts against USD 5",
+          res.status === 429 && isRecord(res.json) && res.json["status"] === "capped",
+          `status=${String(res.status)} ${JSON.stringify(res.json)?.slice(0, 200)}`,
+        );
+      } finally {
+        await stopWorker(futureWorker);
+      }
+    }
+
     // 9. The D1 rows survived the restart.
     {
       const still = await d1Rows(

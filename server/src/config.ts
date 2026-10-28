@@ -20,6 +20,18 @@ function numEnv(name: string, fallback: number): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : fallback;
 }
 
+/**
+ * Normalise `META_BUDGET_FROM` to the rows' own form (`toISOString`, so a
+ * plain date string compares lexicographically with `costs.time`). Empty or
+ * invalid values yield null, meaning "today's cap" (see `pipeline.ts`).
+ */
+export function normalizeBudgetFromIso(raw: string | undefined): string | null {
+  if (raw === undefined || raw.trim() === "") return null;
+  const parsed = new Date(raw);
+  if (Number.isNaN(parsed.getTime())) return null;
+  return parsed.toISOString();
+}
+
 function serverRoot(): string {
   return resolve(dirname(fileURLToPath(import.meta.url)), "..");
 }
@@ -37,6 +49,8 @@ export interface GatewayConfig {
   sessionMaxUsd: number;
   /** Global upstream USD budget, checked against costs.csv. */
   globalBudgetUsd: number;
+  /** Start of the judging-window budget (`META_BUDGET_FROM`, ISO or null). */
+  globalBudgetFromIso: string | null;
   /** AI requests per minute per IP. */
   ratePerMinutePerIp: number;
   /** Directory holding cache/, demo/, mock/ and recorded/. */
@@ -54,6 +68,7 @@ export function loadGatewayConfig(): GatewayConfig {
     sessionMaxCalls: numEnv("META_SESSION_MAX_CALLS", 20),
     sessionMaxUsd: numEnv("META_SESSION_MAX_USD", 0.5),
     globalBudgetUsd: numEnv("META_BUDGET_USD", 5),
+    globalBudgetFromIso: normalizeBudgetFromIso(process.env["META_BUDGET_FROM"]),
     ratePerMinutePerIp: numEnv("META_RATE_PER_MIN", 30),
     dataDir: process.env["FITROOM_DATA_DIR"] ?? resolve(root, "data"),
     logsDir: process.env["FITROOM_LOGS_DIR"] ?? resolve(root, "logs"),
