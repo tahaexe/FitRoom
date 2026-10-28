@@ -682,7 +682,10 @@ class FitRoomApp {
     });
     document.body.appendChild(this.editor.element);
     document.getElementById("fit-badge")?.addEventListener("click", () => {
-      document.getElementById("fit-list")?.toggleAttribute("hidden");
+      const list = document.getElementById("fit-list");
+      if (list === null) return;
+      if (list.hasAttribute("hidden")) this.openFitList();
+      else list.setAttribute("hidden", "");
     });
 
     window.addEventListener("resize", () => {
@@ -702,6 +705,7 @@ class FitRoomApp {
     this.applyDevGating();
     // Nothing open on first load: the side column starts empty.
     this.showSidePanel("none");
+    this.watchPanelClose();
     void this.syncInstances();
     this.refreshIssues();
     this.updateSelectionTools();
@@ -833,7 +837,7 @@ class FitRoomApp {
     // The fit engine already picked the nearest spot with no problems when
     // one exists; when the best spot still has a problem, show the list.
     if (this.issues.some((issue) => issue.itemIds.includes(instance.instanceId))) {
-      document.getElementById("fit-list")?.removeAttribute("hidden");
+      this.openFitList();
     }
   }
 
@@ -1909,9 +1913,26 @@ class FitRoomApp {
     el.setAttribute("aria-pressed", String(on));
   }
 
+  /** One side panel at a time: opening one closes every other panel. */
+  private openFitList(): void {
+    this.showSidePanel("none");
+    this.renderViewer?.close();
+    if (isPhoneViewport()) this.sheets?.close();
+    else document.getElementById("render-viewer")?.setAttribute("hidden", "");
+    document.getElementById("fit-list")?.removeAttribute("hidden");
+    this.syncPhoneBar();
+  }
+
   /** Right-hand column: one panel at a time (Inspector, Recommend, Arrange). */
   private showSidePanel(name: "inspector" | "recommend" | "assistant" | "none"): void {
     this.sidePanel = name;
+    if (name !== "none") {
+      document.getElementById("fit-list")?.setAttribute("hidden", "");
+      this.renderViewer?.close();
+      if (!isPhoneViewport()) {
+        document.getElementById("render-viewer")?.setAttribute("hidden", "");
+      }
+    }
     // A phone shows the same panels as bottom sheets, one at a time.
     if (this.sheets !== null && isPhoneViewport()) {
       if (name === "none") {
@@ -1949,6 +1970,38 @@ class FitRoomApp {
     // `has-side-panel` in style.css), never over the panel's tabs.
     this.container.classList.toggle("has-side-panel", name !== "none");
     this.resize();
+  }
+
+  /**
+   * A panel's own × button hides its host directly: drop the app's side
+   * state too, so the toggles and the fit-list offset never go stale.
+   */
+  private watchPanelClose(): void {
+    const pairs = [
+      ["recommend-panel", "recommend"],
+      ["assistant-panel", "assistant"],
+      ["inspector", "inspector"],
+    ] as const;
+    for (const [id, name] of pairs) {
+      const el = document.getElementById(id);
+      if (el === null) continue;
+      new MutationObserver(() => {
+        if (el.hasAttribute("hidden") && this.sidePanel === name) {
+          this.sidePanel = "none";
+          this.setToggle("tool-recommend", false);
+          this.setToggle("tool-assistant", false);
+          this.container.classList.toggle("has-side-panel", false);
+          this.syncPhoneBar();
+          this.resize();
+        }
+      }).observe(el, { attributes: true, attributeFilter: ["hidden"] });
+    }
+    const viewer = document.getElementById("render-viewer");
+    if (viewer !== null) {
+      new MutationObserver(() => {
+        if (viewer.hasAttribute("hidden")) this.syncPhoneBar();
+      }).observe(viewer, { attributes: true, attributeFilter: ["hidden"] });
+    }
   }
 
   /** Phone bottom bar: Catalog, AI, Visualise and the cart summary. */
@@ -2060,6 +2113,7 @@ class FitRoomApp {
   /** Visualise: on a phone the viewer opens as a bottom sheet. */
   private openVisualise(): void {
     this.showSidePanel("none");
+    document.getElementById("fit-list")?.setAttribute("hidden", "");
     this.select(null);
     if (isPhoneViewport()) {
       this.sheets?.open("render");

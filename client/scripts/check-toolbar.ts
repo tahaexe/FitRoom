@@ -224,6 +224,59 @@ check(
   `scene ${String(sceneWidth)}px, bar ${String(barWidth)}px`,
 );
 
+// One side panel at a time: opening Recommend, Arrange, Visualise, the
+// Inspector or the fit list closes every other side panel.
+check(
+  "opening a side panel hides the fit list",
+  main.includes('private showSidePanel(name: "inspector" | "recommend" | "assistant" | "none")') &&
+    main.includes('document.getElementById("fit-list")?.setAttribute("hidden", "")'),
+  "main.ts showSidePanel",
+);
+check(
+  "opening a side panel closes Visualise",
+  main.includes("this.renderViewer?.close()"),
+  "main.ts showSidePanel",
+);
+check(
+  "opening Visualise closes the side panels and the fit list",
+  main.includes("private openVisualise()") &&
+    main.includes('document.getElementById("fit-list")?.setAttribute("hidden", "")'),
+  "main.ts openVisualise",
+);
+check(
+  "opening the fit list closes the side panels and Visualise",
+  main.includes("private openFitList()") &&
+    main.includes('this.showSidePanel("none")') &&
+    main.includes('document.getElementById("render-viewer")?.setAttribute("hidden", "")'),
+  "main.ts openFitList",
+);
+check(
+  "the fit badge opens the list exclusively",
+  main.includes("if (list.hasAttribute(\"hidden\")) this.openFitList();"),
+  "main.ts fit-badge",
+);
+check(
+  "a panel close button drops the app side state",
+  main.includes("private watchPanelClose()") &&
+    main.includes('this.setToggle("tool-recommend", false)'),
+  "main.ts watchPanelClose",
+);
+// Panels float over the 3D view: the stage keeps its size, so the room
+// always keeps at least half its width with any panel open.
+check(
+  "side panels float over the stage",
+  /#recommend-panel\s*\{[^}]*position:\s*fixed/.test(css) &&
+    /#assistant-panel\s*\{[^}]*position:\s*fixed/.test(css) &&
+    /#inspector\s*\{[^}]*position:\s*fixed/.test(css),
+  "style.css fixed panels",
+);
+check(
+  "the stage offset never narrows the room under a panel",
+  /Side panels (live|float) over the 3D (stage|view)/.test(main) ||
+    main.includes("Panels float over the 3D view"),
+  "main.ts showSidePanel",
+);
+
 if (failures > 0) {
   console.log(`check:toolbar: ${String(failures)} check(s) failed`);
   process.exitCode = 1;
