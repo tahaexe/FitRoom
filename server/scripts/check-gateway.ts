@@ -247,7 +247,7 @@ async function main(): Promise<void> {
         isRecord(last) &&
           last["status"] === "capped" &&
           typeof last["message"] === "string" &&
-          last["message"].includes("demo room"),
+          last["message"].includes("Use the sample room"),
         JSON.stringify(last)?.slice(0, 200),
       );
     }
@@ -317,7 +317,7 @@ async function main(): Promise<void> {
           isRecord(res.json) &&
           res.json["status"] === "demo-miss" &&
           typeof res.json["message"] === "string" &&
-          res.json["message"].includes("demo room")
+          res.json["message"].includes("Use the sample room")
         ) {
           missOk += 1;
         }

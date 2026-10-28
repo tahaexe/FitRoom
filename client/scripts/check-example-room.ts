@@ -56,6 +56,7 @@ import {
   openingBoxTextWithPm,
   wallPillText,
 } from "../src/editor/photo-confirm.js";
+import { TURN_ON_LIVE, USE_SAMPLE_ROOM } from "../src/copy.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const clientDir = resolve(here, "..");
@@ -330,6 +331,14 @@ function main(): void {
   );
 
   // One miss card each for Furnish and Visualise, same words everywhere.
+  // The panels render from the copy module, so each card must use its
+  // constants (or render their text); the copy values stay pinned below.
+  check(
+    "copy sample-room label is Use the sample room",
+    USE_SAMPLE_ROOM === "Use the sample room",
+    USE_SAMPLE_ROOM,
+  );
+  check("copy live label is Turn on Live AI", TURN_ON_LIVE === "Turn on Live AI", TURN_ON_LIVE);
   const arrangeMiss = region(assistantSource, "private addDemoMiss", "private addAnswer");
   const furnishMiss = region(assistantSource, "private addFurnishDemoMiss", "private logEl");
   const recommendMiss = recommendSource.slice(
@@ -344,7 +353,9 @@ function main(): void {
   ] as const) {
     check(
       `the ${name} miss card offers the sample room and live AI`,
-      card.includes("Use the sample room") && card.includes("Turn on Live AI"),
+      (card.includes("USE_SAMPLE_ROOM") || card.includes(USE_SAMPLE_ROOM)) &&
+        (card.includes("TURN_ON_LIVE") || card.includes(TURN_ON_LIVE)),
+      card.slice(0, 120),
     );
   }
   check(

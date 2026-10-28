@@ -70,6 +70,7 @@ import {
   openingBoxText,
   wallCardStatus,
 } from "../src/editor/photo-confirm.js";
+import { confirmOpeningLabel } from "../src/copy.js";
 import {
   detectDefaultUnit,
   detectSlip,
@@ -581,13 +582,19 @@ check(
 );
 check(
   "confirm:opening-box",
-  openingBoxLabel("window", "C", 120) === "Window on wall C, 120 cm",
+  openingBoxLabel("window", "C", 120) === "Window 120 cm on wall C",
   openingBoxLabel("window", "C", 120),
 );
 check(
   "confirm:opening-door",
-  openingBoxLabel("door", "A", 90) === "Door on wall A, 90 cm",
+  openingBoxLabel("door", "A", 90) === "Door 90 cm on wall A",
   openingBoxLabel("door", "A", 90),
+);
+check(
+  "confirm:opening-box-uses-copy",
+  openingBoxLabel("window", "C", 120, 140, "Window 120 × 140") ===
+    confirmOpeningLabel("window", "C", "Window 120 × 140"),
+  openingBoxLabel("window", "C", 120, 140, "Window 120 × 140"),
 );
 check(
   "confirm:opening-tag",
@@ -641,13 +648,16 @@ check(
   confirmSource.includes("roomOpening?.width") &&
     confirmSource.includes("roomOpening?.height") &&
     confirmSource.includes("openingBoxTextWithPm(kind, widthCm, heightCm, widthPm)") &&
-    confirmSource.includes("openingBoxLabel(kind, session.activeWall, widthCm)"),
+    confirmSource.includes(
+      "openingBoxLabel(kind, session.activeWall, widthCm, heightCm, tag.textContent)",
+    ) &&
+    confirmSource.includes("confirmOpeningLabel"),
   "box tag and accessible name must read the re-solved room numbers",
 );
 // The tag and the accessible name round the same width.
 check(
   "confirm:label-tag-agree",
-  openingBoxLabel("door", "A", 94) === "Door on wall A, 94 cm" &&
+  openingBoxLabel("door", "A", 94) === "Door 94 cm on wall A" &&
     openingBoxText("door", 94, 210) === "Door 94 × 210",
   `${openingBoxLabel("door", "A", 94)} / ${openingBoxText("door", 94, 210)}`,
 );

@@ -358,7 +358,7 @@ async function main(): Promise<void> {
         isRecord(missRes.json) &&
         missRes.json["status"] === "demo-miss" &&
         typeof missRes.json["message"] === "string" &&
-        (missRes.json["message"] as string).includes("demo room"),
+        (missRes.json["message"] as string).includes("Use the sample room"),
       JSON.stringify(missRes.json)?.slice(0, 200),
     );
     const labelMiss = await demoJar.post(
