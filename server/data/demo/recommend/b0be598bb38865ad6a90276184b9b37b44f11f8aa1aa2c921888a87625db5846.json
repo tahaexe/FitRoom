@@ -4,53 +4,32 @@
   "input": {
     "room": {
       "name": "Living room 420 × 360",
-      "size_cm": [
-        420,
-        360
-      ],
+      "size_cm": [420, 360],
       "style": {
-        "tags": [
-          "modern",
-          "neutral"
-        ],
-        "colors": [
-          "#E8E2D9",
-          "#A8A29E"
-        ]
+        "tags": ["modern", "neutral"],
+        "colors": ["#E8E2D9", "#A8A29E"]
       }
     },
     "placed": [
       {
         "productId": "modern_arm_chair_01",
         "name": "Nord Leather Armchair",
-        "colors": [
-          "black leather",
-          "oak"
-        ]
+        "colors": ["black leather", "oak"]
       },
       {
         "productId": "modern_coffee_table_01",
         "name": "Slate Coffee Table",
-        "colors": [
-          "warm wood frame",
-          "stone top"
-        ]
+        "colors": ["warm wood frame", "stone top"]
       },
       {
         "productId": "modern_wooden_cabinet",
         "name": "Rhythm TV Unit",
-        "colors": [
-          "walnut slats",
-          "black legs"
-        ]
+        "colors": ["walnut slats", "black legs"]
       },
       {
         "productId": "sofa_02",
         "name": "Chester Leather Sofa",
-        "colors": [
-          "black leather",
-          "dark wood"
-        ]
+        "colors": ["black leather", "dark wood"]
       }
     ],
     "request": {
@@ -110,31 +89,16 @@
       {
         "productId": "modern_coffee_table_01",
         "name": "Slate Coffee Table",
-        "size_cm": [
-          120.2,
-          60,
-          39
-        ],
+        "size_cm": [120.2, 60, 39],
         "price_usd": 340,
-        "styleTags": [
-          "modern"
-        ],
-        "colors": [
-          "warm wood frame",
-          "stone top"
-        ],
+        "styleTags": ["modern"],
+        "colors": ["warm wood frame", "stone top"],
         "spot": {
           "kind": "area",
           "areaId": "seat-front",
-          "area_cm": [
-            180.7,
-            105
-          ],
+          "area_cm": [180.7, 105],
           "spare_cm": 45,
-          "centre_cm": [
-            156.9,
-            200
-          ],
+          "centre_cm": [156.9, 200],
           "rotationY": 90,
           "gap_cm": 45,
           "seat": "Chester Leather Sofa"
@@ -143,32 +107,16 @@
       {
         "productId": "coffee_table_round_01",
         "name": "Luna Marble Coffee Table",
-        "size_cm": [
-          130.1,
-          130.1,
-          49.1
-        ],
+        "size_cm": [130.1, 130.1, 49.1],
         "price_usd": 560,
-        "styleTags": [
-          "modern",
-          "glam"
-        ],
-        "colors": [
-          "white marble",
-          "black metal"
-        ],
+        "styleTags": ["modern", "glam"],
+        "colors": ["white marble", "black metal"],
         "spot": {
           "kind": "area",
           "areaId": "seat-front",
-          "area_cm": [
-            180.7,
-            175.1
-          ],
+          "area_cm": [180.7, 175.1],
           "spare_cm": 45,
-          "centre_cm": [
-            192,
-            200
-          ],
+          "centre_cm": [192, 200],
           "rotationY": 90,
           "gap_cm": 45,
           "seat": "Chester Leather Sofa"
@@ -177,32 +125,16 @@
       {
         "productId": "modern_coffee_table_02",
         "name": "Duo Square Coffee Table",
-        "size_cm": [
-          119.9,
-          120,
-          36.9
-        ],
+        "size_cm": [119.9, 120, 36.9],
         "price_usd": 420,
-        "styleTags": [
-          "modern",
-          "minimalist"
-        ],
-        "colors": [
-          "oak top",
-          "black base"
-        ],
+        "styleTags": ["modern", "minimalist"],
+        "colors": ["oak top", "black base"],
         "spot": {
           "kind": "area",
           "areaId": "seat-front",
-          "area_cm": [
-            180.7,
-            165
-          ],
+          "area_cm": [180.7, 165],
           "spare_cm": 45,
-          "centre_cm": [
-            186.9,
-            200
-          ],
+          "centre_cm": [186.9, 200],
           "rotationY": 90,
           "gap_cm": 45,
           "seat": "Chester Leather Sofa"
@@ -211,31 +143,16 @@
       {
         "productId": "CoffeeTable_01",
         "name": "Atelier Long Coffee Table",
-        "size_cm": [
-          147.2,
-          93,
-          50
-        ],
+        "size_cm": [147.2, 93, 50],
         "price_usd": 480,
-        "styleTags": [
-          "modern",
-          "craftsman"
-        ],
-        "colors": [
-          "solid wood"
-        ],
+        "styleTags": ["modern", "craftsman"],
+        "colors": ["solid wood"],
         "spot": {
           "kind": "area",
           "areaId": "seat-front",
-          "area_cm": [
-            180.7,
-            138
-          ],
+          "area_cm": [180.7, 138],
           "spare_cm": 45,
-          "centre_cm": [
-            173.4,
-            200
-          ],
+          "centre_cm": [173.4, 200],
           "rotationY": 90,
           "gap_cm": 45,
           "seat": "Chester Leather Sofa"

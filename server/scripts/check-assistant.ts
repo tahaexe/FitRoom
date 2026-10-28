@@ -68,6 +68,11 @@ import {
   ASSISTANT_DEMO_REQUESTS,
   assistantDemoBriefRequests,
   buildAssistantDemoRequests,
+  buildExampleAssistantDemoRequests,
+  EXAMPLE_ASSISTANT_DEMO_BRIEF,
+  EXAMPLE_ASSISTANT_DEMO_CHIPS,
+  emptyExampleScene,
+  readExampleRoom,
 } from "../src/assistant-demo.js";
 import { DEMO_REQUESTS } from "../src/demo-requests.js";
 import { gatewayKey } from "../src/meta/keys.js";
@@ -384,8 +389,12 @@ async function main(): Promise<void> {
   );
 
   const rebuilt = buildAssistantDemoRequests();
+  const exampleRebuilt = buildExampleAssistantDemoRequests();
   const listed = DEMO_REQUESTS["assistant"];
-  check("demo list holds the nine assistant requests", listed.length === 9);
+  check(
+    "demo list holds the nine sample requests plus the three example turns",
+    listed.length === rebuilt.length + exampleRebuilt.length,
+  );
   check(
     "demo list holds the scripted request texts",
     ASSISTANT_DEMO_REQUESTS.length === 6 &&
@@ -407,10 +416,29 @@ async function main(): Promise<void> {
             JSON.stringify(brief),
       ),
   );
+  const exampleBriefRequest = exampleRebuilt[0] as AssistantRequest | undefined;
+  check(
+    "demo list holds the example brief plus its two arrange chips",
+    exampleRebuilt.length === 3 &&
+      isRecord(listed[9]) &&
+      (listed[9] as Record<string, unknown>)["request"] ===
+        (exampleBriefRequest?.request ?? null) &&
+      JSON.stringify((listed[9] as Record<string, unknown>)["brief"]) ===
+        JSON.stringify(EXAMPLE_ASSISTANT_DEMO_BRIEF) &&
+      EXAMPLE_ASSISTANT_DEMO_CHIPS.length === 2 &&
+      EXAMPLE_ASSISTANT_DEMO_CHIPS.every(
+        (text, offset) =>
+          isRecord(listed[10 + offset]) &&
+          (listed[10 + offset] as Record<string, unknown>)["request"] === text,
+      ),
+  );
   const keysMatch =
-    listed.length === rebuilt.length &&
+    listed.length === rebuilt.length + exampleRebuilt.length &&
     listed.every((entry, index) => {
-      const want = rebuilt[index] as AssistantRequest | undefined;
+      const want =
+        index < rebuilt.length
+          ? (rebuilt[index] as AssistantRequest | undefined)
+          : (exampleRebuilt[index - rebuilt.length] as AssistantRequest | undefined);
       if (want === undefined || !isRecord(entry) || !isAssistantRequest(entry)) return false;
       return (
         gatewayKey("assistant", META_MODELS.spark, entry) ===
@@ -868,9 +896,76 @@ async function main(): Promise<void> {
       }
     }
 
-    // Every stored assistant answer is reached by the nine demo turns;
-    // anything else is a leftover of an earlier recording (like the old
-    // turn-6 rounds) and must be removed from the committed store.
+    // The example room, built exactly as the client builds it after "Try
+    // the example room" (photo-solved with tape A 420 and wall B estimated,
+    // the `shared/samples/example-room.json` fixture, empty start scene):
+    // its two Arrange chips replay from the store with zero upstream calls,
+    // and every round's request key equals the recorded file's key.
+    const exampleRoom = readExampleRoom();
+    const exampleScene = emptyExampleScene();
+    const exampleProducts: FitProducts = new Map(
+      replayCatalog.map((c) => [c.id, { size: c.size, category: c.category, name: c.name }]),
+    );
+    check(
+      "example room tapes wall A at 420 with wall B estimated",
+      exampleRoom.id === "photos-room" &&
+        exampleRoom.walls.length === 4 &&
+        Math.hypot(
+          (exampleRoom.walls[0]?.end.x ?? 0) - (exampleRoom.walls[0]?.start.x ?? 0),
+          (exampleRoom.walls[0]?.end.z ?? 0) - (exampleRoom.walls[0]?.start.z ?? 0),
+        ) === 420 &&
+        Math.hypot(
+          (exampleRoom.walls[1]?.end.x ?? 0) - (exampleRoom.walls[1]?.start.x ?? 0),
+          (exampleRoom.walls[1]?.end.z ?? 0) - (exampleRoom.walls[1]?.start.z ?? 0),
+        ) === 362,
+    );
+    const exampleArranges = exampleRebuilt.filter((first) => first.brief === undefined);
+    check("example room records its two arrange chips", exampleArranges.length === 2);
+    for (let i = 0; i < exampleArranges.length; i += 1) {
+      const first = exampleArranges[i] as AssistantRequest;
+      const replay = await replayTurn(first, exampleScene, reached);
+      check(
+        `example arrange ${String(i + 1)} replays from the store to a text answer`,
+        replay.ok,
+        replay.rounds === 0 ? "turn not recorded yet" : `rounds=${String(replay.rounds)}`,
+      );
+      if (!replay.ok) continue;
+      check(
+        `example arrange ${String(i + 1)} answer hides wall ids`,
+        !replay.answer.includes("wall-"),
+        replay.answer.slice(0, 120),
+      );
+      const errs = errorsOf(exampleRoom, replay.draft, exampleProducts);
+      check(`example arrange ${String(i + 1)}: no fit error`, errs.length === 0, errs.join(","));
+    }
+    // The example room replays its recorded segment answers (four walls ×
+    // five concepts) with tape A 420 and wall B estimated, exactly as
+    // "Try the example room" analyses them.
+    try {
+      const segmentFiles = readdirSync(join(dataDir, "demo", "segment")).filter((n) =>
+        n.endsWith(".json"),
+      );
+      check(
+        "demo store holds the example recorded segment answers",
+        segmentFiles.length >= 20,
+        `${String(segmentFiles.length)} segment file(s)`,
+      );
+    } catch {
+      check("demo store holds the example recorded segment answers", false, "no segment store");
+    }
+    // The example Furnish brief has no recording yet: its first round misses
+    // the store (the client shows the miss card), so nothing is asserted
+    // about its answers.
+    const exampleBrief = exampleRebuilt.find((first) => first.brief !== undefined);
+    if (exampleBrief !== undefined) {
+      const probe = await replayTurn(exampleBrief as AssistantRequest, exampleScene, new Set());
+      check("example furnish brief has no recording yet", !probe.ok);
+    }
+
+    // Every stored assistant answer is reached by the sample turns plus the
+    // example arrange turns; anything else is a leftover of an earlier
+    // recording (like the old turn-6 rounds) and must be removed from the
+    // committed store.
     const stored = readdirSync(join(dataDir, "demo", "assistant"))
       .filter((name) => name.endsWith(".json"))
       .map((name) => name.slice(0, -".json".length));

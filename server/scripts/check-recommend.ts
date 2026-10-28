@@ -44,7 +44,8 @@ import {
 import { META_MODELS } from "../src/config.js";
 import { DEMO_REQUESTS } from "../src/demo-requests.js";
 import { gatewayKey } from "../src/meta/keys.js";
-import { buildRecommendDemoRequests } from "../src/recommend-demo.js";
+import { buildExampleRecommendDemoRequests, buildRecommendDemoRequests } from "../src/recommend-demo.js";
+import { emptyExampleScene, readExampleRoom } from "../src/assistant-demo.js";
 
 const PORT = 8789;
 const BASE = `http://127.0.0.1:${String(PORT)}`;
@@ -156,8 +157,12 @@ async function main(): Promise<void> {
 
   // The recorded list matches what the shared code builds today.
   const rebuilt = buildRecommendDemoRequests();
+  const exampleRebuilt = buildExampleRecommendDemoRequests();
   const listed = DEMO_REQUESTS["recommend"];
-  check("demo list holds every recommend request", listed.length === rebuilt.length);
+  check(
+    "demo list holds every recommend request",
+    listed.length === rebuilt.length + exampleRebuilt.length,
+  );
   const spotWalls = rebuilt
     .map((r) => (r as RecommendRequest).request.spot?.wall)
     .filter((w): w is string => typeof w === "string");
@@ -165,9 +170,12 @@ async function main(): Promise<void> {
     check(`demo list covers ${wall}`, spotWalls.includes(wall), spotWalls.join(" | "));
   }
   const keysMatch =
-    listed.length === rebuilt.length &&
+    listed.length === rebuilt.length + exampleRebuilt.length &&
     listed.every((entry, index) => {
-      const want = rebuilt[index] as RecommendRequest | undefined;
+      const want =
+        index < rebuilt.length
+          ? (rebuilt[index] as RecommendRequest | undefined)
+          : (exampleRebuilt[index - rebuilt.length] as RecommendRequest | undefined);
       if (want === undefined) return false;
       return (
         gatewayKey("recommend", META_MODELS.spark, entry) ===
@@ -175,6 +183,7 @@ async function main(): Promise<void> {
       );
     });
   check("demo list matches the shared-code requests", keysMatch);
+  check("example room records its four recommend requests", exampleRebuilt.length === 4);
   if (!keysMatch) {
     process.exitCode = 1;
     return;
@@ -377,6 +386,109 @@ async function main(): Promise<void> {
           }
         }
         check(`${rec.productId} reason cites request numbers`, cites, detail);
+      }
+    }
+
+    // The example room, built exactly as the client builds it after "Try
+    // the example room" (photo-solved with tape A 420 and wall B estimated,
+    // the `shared/samples/example-room.json` fixture, empty start scene):
+    // every Recommend request key equals its recorded file's key and answers
+    // from the store with zero upstream calls.
+    const exampleRoom = readExampleRoom();
+    const exampleScene = emptyExampleScene();
+    check(
+      "example room tapes wall A at 420 with wall B estimated",
+      exampleRoom.id === "photos-room" &&
+        Math.hypot(
+          (exampleRoom.walls[0]?.end.x ?? 0) - (exampleRoom.walls[0]?.start.x ?? 0),
+          (exampleRoom.walls[0]?.end.z ?? 0) - (exampleRoom.walls[0]?.start.z ?? 0),
+        ) === 420 &&
+        Math.hypot(
+          (exampleRoom.walls[1]?.end.x ?? 0) - (exampleRoom.walls[1]?.start.x ?? 0),
+          (exampleRoom.walls[1]?.end.z ?? 0) - (exampleRoom.walls[1]?.start.z ?? 0),
+        ) === 362,
+    );
+    const exampleProducts: FitProducts = new Map(
+      catalog.map((c) => [c.id, { size: c.size, category: c.category, name: c.name }]),
+    );
+    for (let i = 0; i < exampleRebuilt.length; i += 1) {
+      const request = exampleRebuilt[i] as RecommendRequest;
+      const tag = JSON.stringify(request.request);
+      let payload: unknown = null;
+      let status = 0;
+      try {
+        const res = await fetch(`${BASE}/api/recommend`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(request),
+          signal: AbortSignal.timeout(15_000),
+        });
+        status = res.status;
+        payload = (await res.json()) as unknown;
+      } catch {
+        // Falls through to the FAIL below.
+      }
+      const ok =
+        status === 200 &&
+        isRecord(payload) &&
+        payload["status"] === "ok" &&
+        payload["source"] === "demo";
+      check(`example demo answers request ${String(i)} ${tag} from the store`, ok);
+      if (!ok) continue;
+      const data = (payload as Record<string, unknown>)["data"];
+      check(`example answer ${String(i)} matches the schema`, isRecommendAnswer(data));
+      if (!isRecommendAnswer(data)) continue;
+      check(
+        `example answer ${String(i)} ranks at most 3`,
+        data.recommendations.length <= 3,
+        String(data.recommendations.length),
+      );
+      const numbers: number[] = [];
+      collectNumbers(request, numbers);
+      for (const rec of data.recommendations) {
+        const candidate = request.candidates.find((c) => c.productId === rec.productId);
+        check(
+          `example answer ${String(i)} ranks a known candidate ${rec.productId}`,
+          candidate !== undefined,
+        );
+        if (candidate === undefined) continue;
+        check(
+          `example answer ${String(i)} reason hides wall ids`,
+          !rec.reason.includes("wall-"),
+          rec.reason.slice(0, 80),
+        );
+        const [x, z] = candidate.spot.centre_cm;
+        const probe: SceneState = {
+          ...exampleScene,
+          items: [
+            {
+              instanceId: `check-${rec.productId}`,
+              productId: rec.productId,
+              position: { x: x ?? 0, z: z ?? 0 },
+              rotationY: candidate.spot.rotationY,
+              variant: "default",
+            },
+          ],
+        };
+        const errors = checkFit(exampleRoom, probe, exampleProducts).filter(
+          (iss) => iss.severity === "error",
+        );
+        check(
+          `example ${rec.productId} placed at its spot fits`,
+          errors.length === 0,
+          errors.map((e) => e.type).join(","),
+        );
+        let cites = true;
+        let detail: string | undefined;
+        for (const figure of cmFigures(rec.reason)) {
+          const near = numbers.some((n) => Math.abs(n - figure) <= 1 + 1e-9);
+          if (!near) {
+            cites = false;
+            detail = `${String(figure)} cm is not in the request within 1 cm`;
+            break;
+          }
+        }
+        check(`example ${rec.productId} reason cites request numbers`, cites, detail);
       }
     }
 
