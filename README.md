@@ -144,3 +144,46 @@ Single table, mirrored in `shared/src/photo-room/types.ts`:
 
 Letter to wall id: A -> wall-1, B -> wall-4, C -> wall-3, D -> wall-2.
 Tape: A and C use tape A (width); B and D use tape B (depth).
+
+## Judge-path states
+
+Every empty, loading and error state on the judge path, mirrored in
+`client/src/copy.ts` (`STATES`, same order, same words). Each says plainly
+what happened and what to do next, with a button for the next action where
+one exists. `npm run check:states` renders each row's text from that same
+module and asserts a next action (a button, or a sentence with a verb) and
+no internal word. One name per action: every label below comes from the
+same module (`npm run check:labels` pins it) — the stepper reads
+Photograph → Measure → Confirm on every screen of the flow, the confirm
+view included; the tape step's button is "Next: confirm"; the confirm view
+keeps "Build my room"; the flow's exit is "Leave" everywhere; the header's
+"Add to cart" is disabled during the photo flow and the confirm view; every
+demo-miss / capped card names the same action as its button
+("Use the sample room"); every accessible name starts with its visible
+words.
+
+| where            | what the screen says                                                                                                                                                                                             | next action                     |
+| ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| First-run dialog | Set up your room. Tell us your room size, use photos, or explore the sample room.                                                                                                                                | Enter my room size              |
+| Size form        | Enter your width and length to build your room.                                                                                                                                                                  | Build my room                   |
+| Photo flow       | Get both corners and the floor line in view.                                                                                                                                                                     | Take or pick a photo            |
+| Photo flow       | Reading your photo…                                                                                                                                                                                              | Wait while Reading your photo   |
+| Photo flow       | Analysing your photo…                                                                                                                                                                                            | Wait while Analysing your photo |
+| Photo check      | We couldn't find a solid wall. Photograph a wall that isn't all window or curtain, then retake.                                                                                                                  | Retake                          |
+| Photo check      | We couldn't find the floor. Get the floor in front of the wall in view and well lit, then retake.                                                                                                                | Retake                          |
+| Photo check      | The request timed out. Try again.                                                                                                                                                                                | Try again                       |
+| Photo check      | Measuring your photos uses Live AI (it calls Meta's models).                                                                                                                                                     | Turn on Live AI                 |
+| Tape step        | Measure at floor level, corner to corner. Leave one empty to estimate it from the photos.                                                                                                                        | Next: confirm                   |
+| Build step       | Solving your room…                                                                                                                                                                                               | Wait while Solving your room    |
+| Build step       | Solving failed just now. Please try again.                                                                                                                                                                       | Try again                       |
+| Confirm view     | Wall C · 1 window found. Select the wall to view it.                                                                                                                                                             | Wall C · 1 window found         |
+| Confirm view     | Wall C photo is not available. Select another wall.                                                                                                                                                              | Select another wall             |
+| Empty room       | This room is empty. Add furniture from the catalog, or Furnish it for me.                                                                                                                                        | Furnish it for me               |
+| Catalog search   | No matches for “zzz-no-such-piece”. Try a category: Sofas, Armchairs, Dining tables, Dining chairs, Coffee tables, Side tables, Beds, Wardrobes, Cabinets, Bookcases, Storage, TV units, Shelves, Decor or Rugs. | Try a category                  |
+| AI panel         | Asking Muse Spark…                                                                                                                                                                                               | Wait while Asking Muse Spark    |
+| AI panel         | This answer isn't in the demo yet. Use the sample room or turn on Live AI.                                                                                                                                       | Use the sample room             |
+| AI panel         | The AI service is unreachable. Please try again.                                                                                                                                                                 | Please try again                |
+| AI panel         | The live AI is resting. Use the sample room or try again later.                                                                                                                                                  | Use the sample room             |
+| Visualise        | Visualising… 0s                                                                                                                                                                                                  | Wait while Visualising          |
+| Visualise        | The visualiser couldn't make an image just now. Please try again.                                                                                                                                                | Try again                       |
+| Empty cart       | Your cart is empty. Add furniture from the catalog.                                                                                                                                                              | Add furniture to the room first |

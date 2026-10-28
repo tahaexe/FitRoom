@@ -16,6 +16,7 @@ import {
   type WallLetter,
 } from "@fitroom/shared";
 import { EditorPlanView } from "./plan-view";
+import { BUILD_MY_ROOM, LEAVE } from "../copy";
 import { renderFinishesPicker } from "./finishes";
 import { photoBandText, sourceMark, tapeWallLabel } from "./source-mark";
 import { EditorStore, type PhotoSession } from "./editor-store";
@@ -110,7 +111,7 @@ export class RoomEditor {
     const addWindow = this.pill("Add window", () => this.addOpening("window"));
     const addPiece = this.pill("Add my own piece", () => this.addPiece());
     this.undoBtn = this.pill("Undo", () => this.store.undo());
-    const cancel = this.pill("Cancel", () => this.callbacks.onCancel());
+    const cancel = this.pill(LEAVE, () => this.callbacks.onCancel());
     actions.append(addDoor, addWindow, addPiece, this.undoBtn, cancel);
     scroll.appendChild(actions);
 
@@ -194,7 +195,7 @@ export class RoomEditor {
     this.buildBtn = document.createElement("button");
     this.buildBtn.type = "button";
     this.buildBtn.className = "editor-build";
-    this.buildBtn.textContent = "Build my room";
+    this.buildBtn.textContent = BUILD_MY_ROOM;
     this.buildBtn.addEventListener("click", () => this.callbacks.onBuild());
     foot.append(this.noteEl, this.buildBtn);
     this.element.appendChild(foot);

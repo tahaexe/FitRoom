@@ -37,6 +37,13 @@ import {
   type CandidateQuery,
 } from "@fitroom/shared";
 import { isLive, postRecommend, setLive, type ApiResult } from "../api";
+import {
+  AI_UNREACHABLE,
+  NOT_READY_MESSAGE,
+  RECOMMEND_LOADING,
+  TURN_ON_LIVE,
+  USE_SAMPLE_ROOM,
+} from "../copy";
 
 const CATEGORIES: Array<Exclude<RecommendCategory, "any">> = [
   "sofa",
@@ -371,7 +378,7 @@ export class RecommendPanel {
       out.innerHTML = "";
       const p = document.createElement("p");
       p.className = "recommend-empty";
-      p.textContent = "Asking Muse Spark…";
+      p.textContent = RECOMMEND_LOADING;
       out.appendChild(p);
     }
   }
@@ -482,7 +489,7 @@ export class RecommendPanel {
     try {
       result = await postRecommend(request as unknown as Record<string, unknown>);
     } catch {
-      result = { status: "error", message: "The AI service is unreachable." };
+      result = { status: "error", message: AI_UNREACHABLE };
     }
     this.setLoading(false);
     if (result.status === "ok") {
@@ -490,10 +497,7 @@ export class RecommendPanel {
     } else if (result.status === "demo-miss" || result.status === "capped") {
       this.showNotice(result.message, true);
     } else if (result.status === "not-ready") {
-      this.showNotice(
-        "The advisor isn't ready yet. Turn on Live AI or reset to the demo room.",
-        true,
-      );
+      this.showNotice(NOT_READY_MESSAGE, true);
     } else {
       this.showNotice(result.message, false);
     }
@@ -682,14 +686,14 @@ export class RecommendPanel {
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "btn-quiet";
-    reset.textContent = "Use the sample room";
+    reset.textContent = USE_SAMPLE_ROOM;
     reset.addEventListener("click", () => this.deps.resetDemoRoom());
     row.appendChild(reset);
     if (!isLive()) {
       const live = document.createElement("button");
       live.type = "button";
       live.className = "recommend-go";
-      live.textContent = "Turn on Live AI";
+      live.textContent = TURN_ON_LIVE;
       live.addEventListener("click", () => setLive(true));
       row.appendChild(live);
     }

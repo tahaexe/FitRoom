@@ -24,6 +24,7 @@ import type { EditorStore, PhotoSession } from "./editor-store";
 import { renderFinishesPicker } from "./finishes";
 import type { PhotoDraftMeta } from "../photo-room/flow";
 import { photoBandText } from "./source-mark";
+import { FLOW_STEPS, confirmOpeningLabel, wallChipFound } from "../copy";
 
 export type WallLetter = "A" | "B" | "C" | "D";
 export const WALL_ORDER: WallLetter[] = ["A", "B", "C", "D"];
@@ -65,14 +66,22 @@ export function cornerHandleLabel(corner: CornerId, wall: WallLetter): string {
   return `Corner ${CORNER_NAME[corner] ?? corner} of wall ${wall}`;
 }
 
-/** Focusable opening box name: "Window on wall C, 120 cm". Pure. */
+/**
+ * Focusable opening box name: starts with the visible tag ("Window 120 ×
+ * 140"), then the wall. Pure.
+ */
 export function openingBoxLabel(
   type: "door" | "window",
   wall: WallLetter,
   widthCm: number,
+  heightCm?: number,
+  visibleTag?: string,
 ): string {
+  if (visibleTag !== undefined && visibleTag !== "")
+    return confirmOpeningLabel(type, wall, visibleTag);
   const kind = type === "door" ? "Door" : "Window";
-  return `${kind} on wall ${wall}, ${String(Math.round(widthCm))} cm`;
+  if (heightCm === undefined) return `${kind} ${String(Math.round(widthCm))} cm on wall ${wall}`;
+  return `${kind} ${String(Math.round(widthCm))} × ${String(Math.round(heightCm))} on wall ${wall}`;
 }
 
 /** Opening box text: "Window 120 × 140". Pure. */
@@ -481,6 +490,26 @@ export class PhotoConfirmView {
   ) {
     this.element = document.createElement("div");
     this.element.className = "photo-confirm";
+    // Same stepper as the photo flow (Confirm is current here), so the
+    // three steps read the same on every screen of the flow.
+    const steps = document.createElement("ol");
+    steps.className = "photo-steps";
+    steps.setAttribute("aria-label", "Progress");
+    for (const [index, label] of FLOW_STEPS.entries()) {
+      const li = document.createElement("li");
+      li.className = "photo-step";
+      li.dataset["state"] = index < FLOW_STEPS.length - 1 ? "done" : "current";
+      li.textContent = index < FLOW_STEPS.length - 1 ? `✓ ${label}` : label;
+      steps.appendChild(li);
+      if (index < FLOW_STEPS.length - 1) {
+        const arrow = document.createElement("li");
+        arrow.className = "photo-step-arrow";
+        arrow.textContent = "→";
+        arrow.setAttribute("aria-hidden", "true");
+        steps.appendChild(arrow);
+      }
+    }
+    this.element.appendChild(steps);
     const left = document.createElement("aside");
     left.className = "photo-confirm-walls";
     left.setAttribute("aria-label", "Walls");
@@ -583,6 +612,19 @@ export class PhotoConfirmView {
     this.renderPlan(session, this.store.draft);
   }
 
+  private openingsOn(letter: WallLetter): { doors: number; windows: number } {
+    const draft = this.session()?.draft as unknown as
+      { openings: Array<{ wall: string; type: string }> } | undefined;
+    let doors = 0;
+    let windows = 0;
+    for (const opening of draft?.openings ?? []) {
+      if (opening.wall !== letter) continue;
+      if (opening.type === "door") doors += 1;
+      else if (opening.type === "window") windows += 1;
+    }
+    return { doors, windows };
+  }
+
   private renderWalls(session: PhotoSession): void {
     this.wallsEl.innerHTML = "";
     const title = document.createElement("h2");
@@ -608,16 +650,27 @@ export class PhotoConfirmView {
       const status = document.createElement("span");
       const active = session.activeWall === letter;
       const seen = session.seen.includes(letter);
-      const state = wallCardStatus(active, seen);
-      status.className =
-        state === "Active"
-          ? "photo-wall-status active"
-          : state === "Done"
-            ? "photo-wall-status done"
-            : "photo-wall-status todo";
-      status.textContent = state;
-      card.append(thumb, name, status);
-      card.setAttribute("aria-label", `Wall ${letter}, ${state.toLowerCase()}`);
+      // Unviewed walls say what the solver found on them (one tap views
+      // it); viewed walls keep Active/Done.
+      if (!active && !seen) {
+        const { doors, windows } = this.openingsOn(letter);
+        const found = wallChipFound(doors, windows);
+        status.className = "photo-wall-status todo";
+        status.textContent = `Wall ${letter} · ${found}`;
+        card.append(thumb, name, status);
+        card.setAttribute("aria-label", `Wall ${letter} · ${found}. Select to view it.`);
+      } else {
+        const state = wallCardStatus(active, seen);
+        status.className =
+          state === "Active"
+            ? "photo-wall-status active"
+            : state === "Done"
+              ? "photo-wall-status done"
+              : "photo-wall-status todo";
+        status.textContent = state;
+        card.append(thumb, name, status);
+        card.setAttribute("aria-label", `Wall ${letter}, ${state.toLowerCase()}`);
+      }
       card.addEventListener("click", () => this.actions.onSelectWall(letter));
       this.wallsEl.appendChild(card);
     }
@@ -810,12 +863,15 @@ export class PhotoConfirmView {
       box.style.height = `${String(Math.max(3, heightPct))}%`;
       box.tabIndex = 0;
       box.setAttribute("role", "button");
-      box.setAttribute("aria-label", openingBoxLabel(kind, session.activeWall, widthCm));
       box.dataset["opening"] = opening.id;
       const tag = document.createElement("span");
       tag.className = "photo-opening-tag";
       const widthPm = opening.width.source === "taped" ? undefined : opening.width.plusMinus;
       tag.textContent = openingBoxTextWithPm(kind, widthCm, heightCm, widthPm);
+      box.setAttribute(
+        "aria-label",
+        openingBoxLabel(kind, session.activeWall, widthCm, heightCm, tag.textContent),
+      );
       box.appendChild(tag);
       for (const side of ["left", "right", "top", "bottom"] as const) {
         const grip = document.createElement("span");

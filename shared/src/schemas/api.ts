@@ -47,10 +47,15 @@ export interface GatewayError {
 export type GatewayResponse =
   GatewayOk | GatewayDemoMiss | GatewayCapped | GatewayNotReady | GatewayError;
 
-/** Friendly, fixed copy for the capped and demo-miss envelopes. */
-export const GATEWAY_CAPPED_MESSAGE = "The live AI is resting; try the demo room.";
+/**
+ * Friendly, fixed copy for the capped and demo-miss envelopes. Both name
+ * the same action as their button ("Use the sample room"): one name per
+ * action (see `client/src/copy.ts`).
+ */
+export const GATEWAY_CAPPED_MESSAGE =
+  "The live AI is resting. Use the sample room or try again later.";
 export const GATEWAY_DEMO_MISS_MESSAGE =
-  "This answer isn't in the demo yet. Reset to the demo room or turn on Live AI.";
+  "This answer isn't in the demo yet. Use the sample room or turn on Live AI.";
 
 /** Temporary request bodies until each route gets its real schema. */
 export interface GatewayPromptRequest {

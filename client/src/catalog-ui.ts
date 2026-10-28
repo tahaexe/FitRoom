@@ -1,4 +1,5 @@
 import type { CatalogCategory, CatalogItem } from "@fitroom/shared";
+import { catalogEmptyText } from "./copy";
 
 export const CATEGORIES: Array<CatalogCategory | "all"> = [
   "all",
@@ -184,11 +185,7 @@ export class CatalogPanel {
     if (matches.length === 0) {
       const empty = document.createElement("p");
       empty.className = "catalog-empty";
-      const q = this.query.trim();
-      empty.textContent =
-        q === ""
-          ? "Nothing in this category yet — try All."
-          : `No matches for “${q}”. Try a category: Sofas, Armchairs, Dining tables, Dining chairs, Coffee tables, Side tables, Beds, Wardrobes, Cabinets, Bookcases, Storage, TV units, Shelves, Decor or Rugs.`;
+      empty.textContent = catalogEmptyText(this.query);
       host.appendChild(empty);
       return;
     }

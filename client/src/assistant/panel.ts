@@ -50,6 +50,13 @@ import {
 } from "@fitroom/shared";
 import { isLive, postAssistant, setLive, type ApiResult } from "../api";
 import { isExampleRoom } from "../photo-room/example";
+import {
+  AI_UNREACHABLE,
+  ASSISTANT_LOADING,
+  NOT_READY_MESSAGE,
+  TURN_ON_LIVE,
+  USE_SAMPLE_ROOM,
+} from "../copy";
 
 /** The six scripted demo requests (same list as the server demo store). */
 export const ASSISTANT_DEMO_CHIPS: string[] = [
@@ -452,7 +459,7 @@ export class AssistantPanel {
     const liveButton = document.createElement("button");
     liveButton.type = "button";
     liveButton.className = "assistant-quiet furnish-live-button";
-    liveButton.textContent = "Turn on Live AI";
+    liveButton.textContent = TURN_ON_LIVE;
     liveButton.addEventListener("click", () => {
       setLive(true);
       this.syncMode();
@@ -715,7 +722,7 @@ export class AssistantPanel {
         brief: { ...brief },
       });
     } catch {
-      return { status: "error", message: "The AI service is unreachable." };
+      return { status: "error", message: AI_UNREACHABLE };
     }
   }
 
@@ -737,9 +744,7 @@ export class AssistantPanel {
           if (result.status === "demo-miss" || result.status === "capped") {
             this.addFurnishDemoMiss(result.message);
           } else if (result.status === "not-ready") {
-            this.addFurnishNotice(
-              "The assistant isn't ready yet. Turn on Live AI or reset to the demo room.",
-            );
+            this.addFurnishNotice(NOT_READY_MESSAGE);
           } else {
             this.addFurnishNotice(result.message);
           }
@@ -828,14 +833,14 @@ export class AssistantPanel {
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "assistant-go";
-    reset.textContent = "Use the sample room";
+    reset.textContent = USE_SAMPLE_ROOM;
     reset.addEventListener("click", () => this.deps.resetDemoRoom());
     row.appendChild(reset);
     if (!isLive()) {
       const live = document.createElement("button");
       live.type = "button";
       live.className = "assistant-quiet";
-      live.textContent = "Turn on Live AI";
+      live.textContent = TURN_ON_LIVE;
       live.addEventListener("click", () => {
         setLive(true);
         this.syncMode();
@@ -889,14 +894,14 @@ export class AssistantPanel {
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "assistant-go";
-    reset.textContent = "Use the sample room";
+    reset.textContent = USE_SAMPLE_ROOM;
     reset.addEventListener("click", () => this.deps.resetDemoRoom());
     row.appendChild(reset);
     if (!isLive()) {
       const live = document.createElement("button");
       live.type = "button";
       live.className = "assistant-quiet";
-      live.textContent = "Turn on Live AI";
+      live.textContent = TURN_ON_LIVE;
       live.addEventListener("click", () => {
         setLive(true);
         this.syncMode();
@@ -1057,106 +1062,122 @@ export class AssistantPanel {
         scene: draft,
       });
     } catch {
-      return { status: "error", message: "The AI service is unreachable." };
+      return { status: "error", message: AI_UNREACHABLE };
     }
+  }
+
+  /** Loading line while the turn runs (removed when it ends). */
+  private addThinking(): HTMLElement | null {
+    const log = this.logEl();
+    if (log === null) return null;
+    const p = document.createElement("p");
+    p.className = "assistant-thinking";
+    p.setAttribute("role", "status");
+    p.textContent = ASSISTANT_LOADING;
+    log.appendChild(p);
+    log.scrollTop = log.scrollHeight;
+    return p;
   }
 
   private async turn(request: string): Promise<void> {
     this.addUserLine(request);
-    const start = cloneScene(this.deps.getScene());
-    const draft = cloneScene(start);
-    const ctx = createAssistantContext(this.deps.room, this.deps.catalog);
-    const messages: AssistantMessage[] = [{ role: "user", content: request }];
-    const records: AssistantToolRecord[] = [];
-    let cleanSnapshot: SceneState | null = null;
-    let answer: string | null = null;
+    const thinking = this.addThinking();
+    try {
+      const start = cloneScene(this.deps.getScene());
+      const draft = cloneScene(start);
+      const ctx = createAssistantContext(this.deps.room, this.deps.catalog);
+      const messages: AssistantMessage[] = [{ role: "user", content: request }];
+      const records: AssistantToolRecord[] = [];
+      let cleanSnapshot: SceneState | null = null;
+      let answer: string | null = null;
 
-    for (let round = 0; round < ASSISTANT_MAX_ROUNDS; round += 1) {
-      const result = await this.round(request, messages, draft);
-      if (result.status !== "ok") {
-        if (result.status === "demo-miss" || result.status === "capped") {
-          this.addDemoMiss(result.message);
-        } else if (result.status === "not-ready") {
-          this.addNotice(
-            "The assistant isn't ready yet. Turn on Live AI or reset to the demo room.",
+      for (let round = 0; round < ASSISTANT_MAX_ROUNDS; round += 1) {
+        const result = await this.round(request, messages, draft);
+        if (result.status !== "ok") {
+          if (result.status === "demo-miss" || result.status === "capped") {
+            this.addDemoMiss(result.message);
+          } else if (result.status === "not-ready") {
+            this.addNotice(NOT_READY_MESSAGE);
+          } else {
+            this.addNotice(result.message);
+          }
+          return;
+        }
+        if (!isAssistantRoundData(result.data)) {
+          this.addNotice("The assistant answered oddly. Please try again.");
+          return;
+        }
+        if (result.data.toolCalls.length === 0) {
+          answer = result.data.text;
+          break;
+        }
+        const step = executeTurnRound(ctx, draft, result.data.toolCalls);
+        records.push(...step);
+        messages.push({
+          role: "assistant",
+          content: result.data.text,
+          toolCalls: result.data.toolCalls,
+        });
+        messages.push(...assistantToolMessages(result.data.toolCalls, step));
+        if (turnErrors(this.deps.room, draft, this.deps.catalog).length === 0) {
+          cleanSnapshot = cloneScene(draft);
+        }
+      }
+
+      if (answer === null) {
+        // Round cap: a fit-clean draft is applied with an answer composed from
+        // the tool records (what moved, where, the verdict); a draft with fit
+        // errors is never applied. A refused "does not fit" placement discards
+        // the whole turn, so nothing is applied and the refusal is the answer.
+        const refused = impossibleAnswer(records, "");
+        if (refused !== null) {
+          const summary = summarizeAssistantTurn(start, start, this.deps.room, this.deps.catalog);
+          this.addAnswer(refused, summary, records);
+          return;
+        }
+        if (cleanSnapshot !== null) {
+          this.deps.applyTurn(cleanSnapshot);
+          const composed = summarizeAssistantTurn(
+            start,
+            cleanSnapshot,
+            this.deps.room,
+            this.deps.catalog,
           );
+          this.addAnswer(composed, composed, records);
         } else {
-          this.addNotice(result.message);
+          this.addNotice("I ran out of steps without a clean draft, so nothing changed.");
         }
         return;
       }
-      if (!isAssistantRoundData(result.data)) {
-        this.addNotice("The assistant answered oddly. Please try again.");
-        return;
-      }
-      if (result.data.toolCalls.length === 0) {
-        answer = result.data.text;
-        break;
-      }
-      const step = executeTurnRound(ctx, draft, result.data.toolCalls);
-      records.push(...step);
-      messages.push({
-        role: "assistant",
-        content: result.data.text,
-        toolCalls: result.data.toolCalls,
-      });
-      messages.push(...assistantToolMessages(result.data.toolCalls, step));
-      if (turnErrors(this.deps.room, draft, this.deps.catalog).length === 0) {
-        cleanSnapshot = cloneScene(draft);
-      }
-    }
 
-    if (answer === null) {
-      // Round cap: a fit-clean draft is applied with an answer composed from
-      // the tool records (what moved, where, the verdict); a draft with fit
-      // errors is never applied. A refused "does not fit" placement discards
-      // the whole turn, so nothing is applied and the refusal is the answer.
-      const refused = impossibleAnswer(records, "");
-      if (refused !== null) {
+      // A refused "does not fit" placement enforces the refusal: the turn
+      // applies no change at all, whatever the model did after it.
+      const enforced = impossibleAnswer(records, answer);
+      if (enforced !== null) {
         const summary = summarizeAssistantTurn(start, start, this.deps.room, this.deps.catalog);
-        this.addAnswer(refused, summary, records);
+        this.addAnswer(enforced, summary, records);
         return;
       }
-      if (cleanSnapshot !== null) {
-        this.deps.applyTurn(cleanSnapshot);
-        const composed = summarizeAssistantTurn(
-          start,
-          cleanSnapshot,
-          this.deps.room,
-          this.deps.catalog,
+
+      const errors = turnErrors(this.deps.room, draft, this.deps.catalog);
+      if (errors.length > 0) {
+        this.addAnswer(
+          answer,
+          `I didn't apply it: ${errors.length === 1 ? "1 problem left" : `${String(errors.length)} problems left`}.`,
+          records,
         );
-        this.addAnswer(composed, composed, records);
-      } else {
-        this.addNotice("I ran out of steps without a clean draft, so nothing changed.");
+        return;
       }
-      return;
-    }
-
-    // A refused "does not fit" placement enforces the refusal: the turn
-    // applies no change at all, whatever the model did after it.
-    const enforced = impossibleAnswer(records, answer);
-    if (enforced !== null) {
-      const summary = summarizeAssistantTurn(start, start, this.deps.room, this.deps.catalog);
-      this.addAnswer(enforced, summary, records);
-      return;
-    }
-
-    const errors = turnErrors(this.deps.room, draft, this.deps.catalog);
-    if (errors.length > 0) {
+      const unchanged = JSON.stringify(draft.items) === JSON.stringify(start.items);
+      if (!unchanged) this.deps.applyTurn(draft);
       this.addAnswer(
         answer,
-        `I didn't apply it: ${errors.length === 1 ? "1 problem left" : `${String(errors.length)} problems left`}.`,
+        summarizeAssistantTurn(start, draft, this.deps.room, this.deps.catalog),
         records,
       );
-      return;
+    } finally {
+      thinking?.remove();
     }
-    const unchanged = JSON.stringify(draft.items) === JSON.stringify(start.items);
-    if (!unchanged) this.deps.applyTurn(draft);
-    this.addAnswer(
-      answer,
-      summarizeAssistantTurn(start, draft, this.deps.room, this.deps.catalog),
-      records,
-    );
   }
 }
 

@@ -9,6 +9,7 @@
  */
 
 import { isGatewayResponse, type GatewayResponse, type GatewaySource } from "@fitroom/shared";
+import { AI_UNREACHABLE, CAPPED_MESSAGE } from "./copy";
 
 const LIVE_STORAGE_KEY = "fitroom.live-ai";
 
@@ -81,7 +82,7 @@ async function postGateway(
     if (error instanceof DOMException && error.name === "AbortError") {
       return { status: "error", message: "The request timed out. Try again." };
     }
-    return { status: "error", message: "The AI service is unreachable." };
+    return { status: "error", message: AI_UNREACHABLE };
   }
   let payload: unknown;
   try {
@@ -93,7 +94,7 @@ async function postGateway(
     return { status: "error", message: `The AI service answered HTTP ${String(res.status)}.` };
   }
   if (res.status === 429 && payload.status !== "capped") {
-    return { status: "capped", message: "The live AI is resting; try the demo room." };
+    return { status: "capped", message: CAPPED_MESSAGE };
   }
   return toResult(payload);
 }

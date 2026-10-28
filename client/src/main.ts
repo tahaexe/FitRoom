@@ -43,6 +43,7 @@ import rotatedOutsideScene from "../../shared/samples/fit-tests/rotated-outside.
 import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.json";
 import { initLiveSwitch, isLive } from "./api";
 import { EMPTY_HINT_TEXT, needsDoorTip } from "./hints";
+import { ADD_TO_CART, CART_DISABLED_REASON, CART_EMPTY, EMPTY_ROOM_ACTION } from "./copy";
 import { Guide, GuideView, queryGuideTarget, type GuideScreen } from "./guide";
 import { CatalogPanel, formatMeasure, formatTopBar } from "./catalog-ui";
 import { RecommendPanel } from "./recommend/panel";
@@ -1204,12 +1205,14 @@ class FitRoomApp {
     this.photoFlow = flow;
     document.body.appendChild(flow.element);
     this.refreshMenu();
+    this.updateTopBar();
     this.updateGuide();
   }
 
   private closePhotoFlow(): void {
     this.photoFlow?.element.remove();
     this.photoFlow = null;
+    this.updateTopBar();
     this.updateGuide();
   }
 
@@ -1277,12 +1280,14 @@ class FitRoomApp {
     this.select(null);
     this.showSidePanel("none");
     this.editor?.element.removeAttribute("hidden");
+    this.updateTopBar();
     this.updateEmptyHint(this.store.state.items.length);
   }
 
   private closeEditor(): void {
     this.editing = false;
     this.editor?.element.setAttribute("hidden", "");
+    this.updateTopBar();
     this.updateEmptyHint(this.store.state.items.length);
     this.updateGuide();
   }
@@ -2166,7 +2171,14 @@ class FitRoomApp {
     this.analysis = this.fitEngine.analyze(this.store.state, movedIds);
     this.issues = this.analysis.issues;
     const badge = document.getElementById("fit-badge");
+    // No "Everything fits" without a piece in the room: the fit status
+    // shows once a piece is in.
     if (badge instanceof HTMLButtonElement) {
+      if (this.store.state.items.length === 0) {
+        badge.setAttribute("hidden", "");
+      } else {
+        badge.removeAttribute("hidden");
+      }
       const errors = this.issues.filter((i) => i.severity === "error").length;
       const warns = this.issues.length - errors;
       if (errors > 0 && warns > 0) {
@@ -2282,13 +2294,23 @@ class FitRoomApp {
       count += 1;
     }
     el.textContent = formatTopBar(count, total);
-    el.title = count === 0 ? "Your cart is empty" : `${formatTopBar(count, total)} in your cart`;
+    el.title = count === 0 ? CART_EMPTY : `${formatTopBar(count, total)} in your cart`;
     const phoneCart = document.getElementById("phone-cart");
     if (phoneCart !== null) phoneCart.textContent = formatTopBar(count, total);
     const cart = document.getElementById("tool-cart");
     if (cart instanceof HTMLButtonElement) {
-      cart.disabled = total === 0;
-      cart.title = total === 0 ? "Add furniture to the room first" : "Download your cart as JSON";
+      // The header's Add to cart stays live only outside the photo flow
+      // and the confirm view (which already keeps it disabled): it would
+      // otherwise compete with the flow's own button.
+      cart.textContent = ADD_TO_CART;
+      const inFlow = this.photoFlow !== null || this.editing;
+      if (inFlow) {
+        cart.disabled = true;
+        cart.title = CART_DISABLED_REASON;
+      } else {
+        cart.disabled = total === 0;
+        cart.title = total === 0 ? CART_EMPTY : "Download your cart as JSON";
+      }
     }
     this.updateEmptyHint(count);
   }
@@ -2315,7 +2337,7 @@ class FitRoomApp {
       const furnish = document.createElement("button");
       furnish.type = "button";
       furnish.className = "empty-hint-link";
-      furnish.textContent = "Furnish it for me";
+      furnish.textContent = EMPTY_ROOM_ACTION;
       furnish.addEventListener("click", () => {
         this.showSidePanel("assistant");
         this.assistantPanel?.openFurnish();

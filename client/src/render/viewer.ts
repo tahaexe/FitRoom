@@ -9,6 +9,16 @@ import { buildRenderPrompt } from "@fitroom/shared";
 import type { CatalogItem, RenderWallView, RoomLayout, SceneState } from "@fitroom/shared";
 import { isLive, postRender, setLive } from "../api";
 import { captureView } from "./capture";
+import {
+  AI_UNREACHABLE,
+  NOT_READY_MESSAGE,
+  RENDER_CAPTURE_FAILED,
+  RENDER_FAILED,
+  RETRY,
+  TURN_ON_LIVE,
+  USE_SAMPLE_ROOM,
+  VISUALISING_PREFIX,
+} from "../copy";
 
 export interface RenderViewerDeps {
   room: RoomLayout;
@@ -38,9 +48,9 @@ function messageFor(result: { status: string; message?: string }): string {
   }
   if (result.status === "error") return (result as { message: string }).message;
   if (result.status === "not-ready") {
-    return "The visualiser isn't ready yet. Turn on Live AI or reset to the demo room.";
+    return NOT_READY_MESSAGE;
   }
-  return "The visualiser couldn't make an image just now. Please try again.";
+  return RENDER_FAILED;
 }
 
 export class RenderViewer {
@@ -87,7 +97,7 @@ export class RenderViewer {
       capture = this.deps.getCapture();
     } catch {
       this.busy = false;
-      this.showNotice("The visualiser couldn't capture the view. Please try again.");
+      this.showNotice(RENDER_CAPTURE_FAILED);
       return;
     }
     const scene = this.deps.getScene();
@@ -108,7 +118,7 @@ export class RenderViewer {
         ...(isLive() ? { live: true } : {}),
       });
     } catch {
-      result = { status: "error", message: "The AI service is unreachable." };
+      result = { status: "error", message: AI_UNREACHABLE };
     }
     this.stopProgress();
     this.busy = false;
@@ -159,7 +169,7 @@ export class RenderViewer {
     const status = document.createElement("p");
     status.className = "render-status";
     status.setAttribute("aria-live", "polite");
-    status.textContent = "Visualising… 0s";
+    status.textContent = `${VISUALISING_PREFIX} 0s`;
     wrap.appendChild(status);
     const bar = document.createElement("div");
     bar.className = "render-progress";
@@ -174,7 +184,7 @@ export class RenderViewer {
     this.root.appendChild(wrap);
     this.timer = setInterval(() => {
       const secs = Math.floor((Date.now() - this.startedAt) / 1000);
-      status.textContent = `Visualising… ${String(secs)}s`;
+      status.textContent = `${VISUALISING_PREFIX} ${String(secs)}s`;
     }, 500);
   }
 
@@ -209,14 +219,14 @@ export class RenderViewer {
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "render-go";
-    reset.textContent = "Use the sample room";
+    reset.textContent = USE_SAMPLE_ROOM;
     reset.addEventListener("click", () => this.deps.resetDemoRoom());
     row.appendChild(reset);
     if (!isLive()) {
       const live = document.createElement("button");
       live.type = "button";
       live.className = "render-quiet";
-      live.textContent = "Turn on Live AI";
+      live.textContent = TURN_ON_LIVE;
       live.addEventListener("click", () => setLive(true));
       row.appendChild(live);
     }
@@ -252,7 +262,7 @@ export class RenderViewer {
     const retry = document.createElement("button");
     retry.type = "button";
     retry.className = "render-go";
-    retry.textContent = "Try again";
+    retry.textContent = RETRY;
     retry.addEventListener("click", () => void this.visualise());
     wrap.appendChild(retry);
     const model = document.createElement("p");
@@ -275,7 +285,7 @@ export class RenderViewer {
       typeof data === "object" && data !== null ? (data as Record<string, unknown>) : {};
     const imageBase64 = typeof record["imageBase64"] === "string" ? record["imageBase64"] : null;
     if (imageBase64 === null || imageBase64 === "") {
-      this.showNotice("The visualiser couldn't make an image just now. Please try again.");
+      this.showNotice(RENDER_FAILED);
       return;
     }
     const resultUrl = `data:image/webp;base64,${imageBase64}`;

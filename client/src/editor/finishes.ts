@@ -6,6 +6,7 @@
 
 import { FLOOR_FINISHES, TEXTURE_MEAN_COLORS, WALL_FINISHES } from "@fitroom/shared";
 import type { RoomLayout } from "@fitroom/shared";
+import { resetTintLabel } from "../copy";
 import type { EditorStore } from "./editor-store";
 
 function cloneRoom(room: RoomLayout): RoomLayout {
@@ -87,16 +88,18 @@ export function renderFinishesPicker(store: EditorStore, host: HTMLElement): HTM
   if (typeof room.surfaces.wallTint === "string" && room.surfaces.wallTint !== "") {
     const tintRow = document.createElement("div");
     tintRow.className = "finishes-row";
+    // Decorative swatch: carries no name (Lighthouse: a span must not carry
+    // an aria-label), the button beside it names the action.
     const chip = document.createElement("span");
     chip.className = "finish-tint-chip";
     chip.title = `Wall tint ${room.surfaces.wallTint}`;
-    chip.setAttribute("aria-label", `Wall tint ${room.surfaces.wallTint}`);
+    chip.setAttribute("aria-hidden", "true");
     chip.style.background = room.surfaces.wallTint;
     const reset = document.createElement("button");
     reset.type = "button";
     reset.className = "editor-pill";
-    reset.textContent = "Reset tint";
-    reset.setAttribute("aria-label", "Reset wall tint");
+    reset.textContent = resetTintLabel().visible;
+    reset.setAttribute("aria-label", resetTintLabel().accessible);
     reset.addEventListener("click", () => {
       const next = cloneRoom(store.room);
       const { wallTint: _dropped, ...kept } = next.surfaces;

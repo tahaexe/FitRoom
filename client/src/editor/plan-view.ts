@@ -8,6 +8,7 @@
 
 import type { ExistingPiece, Opening, RoomLayout, Wall } from "@fitroom/shared";
 import { WALL_ID_TO_LETTER } from "@fitroom/shared";
+import { planOpeningName } from "../copy";
 import type { EditorSelection, EditorStore } from "./editor-store";
 
 export interface EditorPlanActions {
@@ -26,8 +27,7 @@ export function openingName(room: RoomLayout, opening: Opening): string {
   const letter =
     (WALL_ID_TO_LETTER[opening.wallId] as string | undefined) ??
     `wall ${String(room.walls.findIndex((w) => w.id === opening.wallId) + 1)}`;
-  const kind = opening.type === "door" ? "Door" : "Window";
-  return `${kind} on wall ${letter}, ${String(Math.round(opening.width))} cm`;
+  return planOpeningName(opening.type, letter, opening.width);
 }
 
 export function pieceName(piece: ExistingPiece): string {

@@ -1,0 +1,200 @@
+/**
+ * `npm run check:labels` — every action has one name, from one module.
+ * Headless (no browser, no Meta calls).
+ *
+ * - Pins the canonical labels in `client/src/copy.ts` (stepper
+ *   Photograph → Measure → Confirm, "Next: confirm", "Build my room",
+ *   "Leave", "Add to cart", "Use the sample room" named alike in the
+ *   demo-miss / capped sentence and its button).
+ * - Asserts the UI renders from that module (every screen imports it) and
+ *   no two screens name one action differently (stale literals are gone:
+ *   "Check" step, "Build room" button, "Cancel" exit, "Reset to the demo
+ *   room" / "try the demo room" copy, per-screen "Turn on Live AI" /
+ *   "Use the sample room" / "Build my room" literals).
+ * - Asserts every accessible name starts with its visible words (plan
+ *   openings, confirm opening boxes, "Reset tint") and the wall-tint chip
+ *   is a button with a name or carries none.
+ *
+ * Prints PASS or FAIL per check and exits non-zero on any FAIL.
+ */
+
+/* global console, process */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import {
+  ADD_TO_CART,
+  BUILD_MY_ROOM,
+  CAPPED_MESSAGE,
+  DEMO_MISS_MESSAGE,
+  FLOW_STEPS,
+  LEAVE,
+  TAPE_NEXT,
+  TURN_ON_LIVE,
+  USE_SAMPLE_ROOM,
+  planOpeningName,
+  resetTintLabel,
+} from "../src/copy.js";
+import { openingName } from "../src/editor/plan-view.js";
+import { openingBoxLabel } from "../src/editor/photo-confirm.js";
+
+const root = join(dirname(fileURLToPath(import.meta.url)), "..");
+const clientRoot = root;
+const src = (rel: string): string => readFileSync(join(clientRoot, "src", rel), "utf8");
+
+let failures = 0;
+
+function check(name: string, pass: boolean, detail?: string): void {
+  if (pass) {
+    console.log(`PASS ${name}`);
+  } else {
+    failures += 1;
+    console.log(`FAIL ${name}${detail === undefined ? "" : ` — ${detail}`}`);
+  }
+}
+
+check(
+  "stepper is Photograph → Measure → Confirm",
+  FLOW_STEPS.join(" → ") === "Photograph → Measure → Confirm",
+);
+check("tape button is Next: confirm", TAPE_NEXT === "Next: confirm");
+check("confirm keeps Build my room", BUILD_MY_ROOM === "Build my room");
+check("exit is Leave everywhere", LEAVE === "Leave");
+check("header cart is Add to cart", ADD_TO_CART === "Add to cart");
+check("demo-miss names its button action", DEMO_MISS_MESSAGE.includes(USE_SAMPLE_ROOM));
+check("capped names its button action", CAPPED_MESSAGE.includes(USE_SAMPLE_ROOM));
+check("live switch is one name", TURN_ON_LIVE === "Turn on Live AI");
+
+const flow = src("photo-room/flow.ts");
+check("flow renders the shared stepper", flow.includes("FLOW_STEPS"), "flow.ts");
+check("flow exit renders Leave", flow.includes("LEAVE"), "flow.ts");
+check("flow tape button renders Next: confirm", flow.includes("TAPE_NEXT"), "flow.ts");
+check("flow stale step label gone", !flow.includes('label: "Check"'), "flow.ts");
+check("flow stale build label gone", !flow.includes('"Build room"'), "flow.ts");
+check("flow stale continue-to-tape gone", !flow.includes('"Continue to tape"'), "flow.ts");
+
+const confirm = src("editor/photo-confirm.ts");
+check("confirm view keeps the stepper", confirm.includes("FLOW_STEPS"), "photo-confirm.ts");
+
+const editor = src("editor/editor.ts");
+check("editor exit renders Leave", editor.includes("LEAVE"), "editor.ts");
+check("editor exit Cancel gone", !editor.includes('pill("Cancel"'), "editor.ts");
+check("editor build renders Build my room", editor.includes("BUILD_MY_ROOM"), "editor.ts");
+
+const main = src("main.ts");
+check("header cart renders from the module", main.includes("ADD_TO_CART"), "main.ts");
+check(
+  "header cart disabled in flow and confirm",
+  main.includes("CART_DISABLED_REASON") && main.includes("photoFlow !== null || this.editing"),
+  "main.ts",
+);
+
+for (const file of [
+  "photo-room/flow.ts",
+  "editor/photo-confirm.ts",
+  "editor/editor.ts",
+  "editor/finishes.ts",
+  "editor/plan-view.ts",
+  "main.ts",
+  "catalog-ui.ts",
+  "assistant/panel.ts",
+  "recommend/panel.ts",
+  "render/viewer.ts",
+  "first-open.ts",
+  "api.ts",
+]) {
+  const body = src(file);
+  check(
+    `${file} carries no per-screen Live AI literal`,
+    !body.includes('textContent = "Turn on Live AI"'),
+    file,
+  );
+  check(
+    `${file} carries no per-screen sample-room literal`,
+    !body.includes('textContent = "Use the sample room"'),
+    file,
+  );
+}
+for (const file of [
+  "photo-room/flow.ts",
+  "editor/editor.ts",
+  "first-open.ts",
+  "main.ts",
+  "assistant/panel.ts",
+  "recommend/panel.ts",
+  "render/viewer.ts",
+]) {
+  // Comments may quote the name; only code may not carry its own literal.
+  const code = src(file)
+    .split("\n")
+    .filter((line) => {
+      const trimmed = line.trim();
+      return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*");
+    })
+    .join("\n");
+  check(
+    `${file} carries no per-screen Build my room literal`,
+    !code.includes('"Build my room"'),
+    file,
+  );
+}
+const sharedApi = readFileSync(join(root, "..", "shared", "src", "schemas", "api.ts"), "utf8");
+check(
+  "shared gateway copy names Use the sample room",
+  sharedApi.includes("Use the sample room") &&
+    !sharedApi.includes("Reset to the demo room") &&
+    !sharedApi.includes("try the demo room"),
+);
+for (const file of ["assistant/panel.ts", "recommend/panel.ts", "render/viewer.ts", "api.ts"]) {
+  const body = src(file);
+  check(
+    `${file} carries no reset-to-demo-room copy`,
+    !body.includes("reset to the demo room") && !body.includes("try the demo room"),
+    file,
+  );
+}
+
+// Accessible names start with their visible words.
+const room = {
+  walls: [{ id: "wall-2", start: { x: 0, z: 0 }, end: { x: 100, z: 0 } }],
+  openings: [],
+};
+const planName = openingName(
+  room as unknown as Parameters<typeof openingName>[0],
+  { wallId: "wall-2", type: "door", width: 100 } as unknown as Parameters<typeof openingName>[1],
+);
+check(
+  "plan opening name starts with its visible words",
+  planName.startsWith("Door · 100 cm"),
+  planName,
+);
+const boxName = openingBoxLabel("window", "C", 120, 140, "Window 120 × 140");
+check(
+  "confirm opening name starts with its visible tag",
+  boxName.startsWith("Window 120 × 140"),
+  boxName,
+);
+const directName = planOpeningName("door", "A", 145);
+check(
+  "plan helper starts with its visible words",
+  directName.startsWith("Door · 145 cm"),
+  directName,
+);
+const tint = resetTintLabel();
+check(
+  "Reset tint name starts with its visible words",
+  tint.accessible.startsWith(tint.visible),
+  tint.accessible,
+);
+const finishes = src("editor/finishes.ts");
+check("tint reset renders from the module", finishes.includes("resetTintLabel"), "finishes.ts");
+check("tint reset stale name gone", !finishes.includes('"Reset wall tint"'), "finishes.ts");
+check(
+  "wall-tint chip carries no name",
+  finishes.includes('setAttribute("aria-hidden", "true")') &&
+    !finishes.includes('chip.setAttribute("aria-label"'),
+  "finishes.ts",
+);
+
+if (failures > 0) process.exit(1);
+console.log("labels ok");

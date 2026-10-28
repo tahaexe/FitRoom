@@ -43,6 +43,21 @@ import {
 import { processPhotoFile, type IntakePhoto } from "./intake";
 import { clearPhoto, loadPhoto, savePhoto, type StoredPhoto } from "./photo-store";
 import {
+  BUILD_SOLVING,
+  FLOW_STEPS,
+  LEAVE,
+  PHOTO_ANALYSING,
+  PHOTO_DEMO_MISS,
+  PHOTO_PICK,
+  PHOTO_READING,
+  RETAKE,
+  RETRY,
+  TAPE_NEXT,
+  TAPE_NOTE,
+  TAPE_TITLE,
+  TURN_ON_LIVE,
+} from "../copy";
+import {
   EDGE_AT_DOOR_COPY,
   SAM_FOUND_LINE,
   TWO_WALLS_COPY,
@@ -279,7 +294,7 @@ export class PhotoFlow {
   private exampleMode = false;
   private exampleLoading = false;
   private readonly exampleDisplay = new Map<WallLetter, string>();
-  private buildMessage = "Solving your room…";
+  private buildMessage = BUILD_SOLVING;
   private buildError: string | null = null;
 
   constructor(
@@ -301,7 +316,7 @@ export class PhotoFlow {
     const leave = document.createElement("button");
     leave.type = "button";
     leave.className = "photo-leave";
-    leave.textContent = "Leave";
+    leave.textContent = LEAVE;
     leave.addEventListener("click", () => this.callbacks.onClose());
     head.appendChild(leave);
     this.element.appendChild(head);
@@ -444,9 +459,9 @@ export class PhotoFlow {
 
   private renderSteps(): void {
     const steps: Array<{ id: FlowStep; label: string }> = [
-      { id: "capture", label: "Photograph" },
-      { id: "tape", label: "Check" },
-      { id: "build", label: "Build room" },
+      { id: "capture", label: FLOW_STEPS[0] },
+      { id: "tape", label: FLOW_STEPS[1] },
+      { id: "build", label: FLOW_STEPS[2] },
     ];
     const order: FlowStep[] = ["capture", "tape", "build"];
     const currentAt = order.indexOf(this.step);
@@ -519,12 +534,12 @@ export class PhotoFlow {
       if (!isLive()) {
         const demo = document.createElement("p");
         demo.className = "photo-sheet-note";
-        demo.textContent = "Measuring your photos uses Live AI (it calls Meta's models).";
+        demo.textContent = PHOTO_DEMO_MISS;
         host.appendChild(demo);
         const live = document.createElement("button");
         live.type = "button";
         live.className = "photo-primary";
-        live.textContent = "Turn on Live AI";
+        live.textContent = TURN_ON_LIVE;
         live.addEventListener("click", () => setLive(true));
         host.appendChild(live);
       }
@@ -550,7 +565,7 @@ export class PhotoFlow {
         const retry = document.createElement("button");
         retry.type = "button";
         retry.className = "photo-quiet";
-        retry.textContent = "Try again";
+        retry.textContent = RETRY;
         retry.addEventListener("click", () => {
           state.error = null;
           this.render();
@@ -588,7 +603,7 @@ export class PhotoFlow {
     const label = document.createElement("label");
     label.className = "photo-pick";
     label.setAttribute("for", inputId);
-    label.textContent = state.reading ? "Reading your photo…" : "Take or pick a photo";
+    label.textContent = state.reading ? PHOTO_READING : PHOTO_PICK;
     const hint = document.createElement("p");
     hint.className = "photo-drop-hint";
     hint.textContent = "Camera or library on a phone · drag and drop on a desktop";
@@ -764,7 +779,7 @@ export class PhotoFlow {
     if (state.analysing) {
       const waiting = document.createElement("p");
       waiting.className = "photo-sheet-note";
-      waiting.textContent = "Analysing your photo…";
+      waiting.textContent = PHOTO_ANALYSING;
       sheet.appendChild(waiting);
       return sheet;
     }
@@ -779,19 +794,19 @@ export class PhotoFlow {
         const retake = document.createElement("button");
         retake.type = "button";
         retake.className = "photo-primary";
-        retake.textContent = "Retake";
+        retake.textContent = RETAKE;
         retake.addEventListener("click", () => void this.retake(letter));
         sheet.append(message, retake);
       } else {
         const retry = document.createElement("button");
         retry.type = "button";
         retry.className = "photo-primary";
-        retry.textContent = "Try again";
+        retry.textContent = RETRY;
         retry.addEventListener("click", () => void this.analyse(letter, this.tapFor(letter)));
         const retake = document.createElement("button");
         retake.type = "button";
         retake.className = "photo-quiet";
-        retake.textContent = "Retake";
+        retake.textContent = RETAKE;
         retake.addEventListener("click", () => void this.retake(letter));
         sheet.append(message, retry, retake);
       }
@@ -800,11 +815,11 @@ export class PhotoFlow {
     if (state.demoMiss) {
       const message = document.createElement("p");
       message.className = "photo-sheet-note";
-      message.textContent = "Measuring your photos uses Live AI (it calls Meta's models).";
+      message.textContent = PHOTO_DEMO_MISS;
       const live = document.createElement("button");
       live.type = "button";
       live.className = "photo-primary";
-      live.textContent = "Turn on Live AI";
+      live.textContent = TURN_ON_LIVE;
       live.addEventListener("click", () => {
         setLive(true);
         void this.analyse(letter, this.tapFor(letter));
@@ -914,12 +929,12 @@ export class PhotoFlow {
     const retake = document.createElement("button");
     retake.type = "button";
     retake.className = failed ? "photo-primary" : "photo-quiet";
-    retake.textContent = "Retake";
+    retake.textContent = RETAKE;
     retake.addEventListener("click", () => void this.retake(letter));
     const next = document.createElement("button");
     next.type = "button";
     next.className = failed ? "photo-quiet" : "photo-primary";
-    next.textContent = letter === "D" ? "Continue to tape" : "Next wall";
+    next.textContent = letter === "D" ? "Next: measure" : "Next wall";
     next.addEventListener("click", () => this.next(letter));
     actions.append(retake, next);
     sheet.appendChild(actions);
@@ -1057,13 +1072,12 @@ export class PhotoFlow {
   private renderTape(host: HTMLElement): void {
     const title = document.createElement("h2");
     title.className = "photo-title";
-    title.textContent = "Two tape values";
+    title.textContent = TAPE_TITLE;
     host.appendChild(title);
     host.appendChild(this.tapeDrawing());
     const note = document.createElement("p");
     note.className = "photo-note";
-    note.textContent =
-      "Measure at floor level, corner to corner. Leave one empty to estimate it from the photos.";
+    note.textContent = TAPE_NOTE;
     host.appendChild(note);
     if (this.exampleMode) {
       const exampleNote = document.createElement("p");
@@ -1102,7 +1116,7 @@ export class PhotoFlow {
     const build = document.createElement("button");
     build.type = "button";
     build.className = "photo-primary";
-    build.textContent = "Build room";
+    build.textContent = TAPE_NEXT;
     build.addEventListener("click", () => void this.build());
     actions.appendChild(build);
     host.appendChild(actions);
@@ -1186,7 +1200,7 @@ export class PhotoFlow {
   private renderBuild(host: HTMLElement): void {
     const title = document.createElement("h2");
     title.className = "photo-title";
-    title.textContent = "Build room";
+    title.textContent = FLOW_STEPS[2];
     host.appendChild(title);
     const message = document.createElement("p");
     message.className = "photo-note";
@@ -1206,7 +1220,7 @@ export class PhotoFlow {
       const retry = document.createElement("button");
       retry.type = "button";
       retry.className = "photo-primary";
-      retry.textContent = "Try again";
+      retry.textContent = RETRY;
       retry.addEventListener("click", () => void this.build());
       actions.appendChild(retry);
       host.appendChild(actions);
@@ -1290,7 +1304,7 @@ export class PhotoFlow {
     this.tapeError = null;
     this.buildError = null;
     this.step = "build";
-    this.buildMessage = "Solving your room…";
+    this.buildMessage = BUILD_SOLVING;
     this.render();
     try {
       // First pass with placeholders where a tape is missing, so the width

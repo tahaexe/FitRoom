@@ -20,6 +20,7 @@ import {
   type SizeUnit,
   type SlipSuggestion,
 } from "./room-units";
+import { BUILD_MY_ROOM } from "./copy";
 
 export interface RoomSize {
   widthCm: number;
@@ -296,7 +297,7 @@ export class FirstOpen {
     planWrap.appendChild(this.planSvg);
     form.appendChild(planWrap);
 
-    const build = el("button", "setup-go setup-sticky", "Build my room");
+    const build = el("button", "setup-go setup-sticky", BUILD_MY_ROOM);
     build.type = "submit";
     this.buildBtn = build;
     form.appendChild(build);
