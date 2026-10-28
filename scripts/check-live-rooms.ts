@@ -8,8 +8,16 @@
  *
  * - market-house's floor comes from `carpet` (the floor answer is empty, the
  *   carpet answer decodes as floor instances);
+ * - market-house's wall A has no window under 40 cm;
+ * - zaher-rio's wall A has no window wider than 80 % of the wall;
  * - hostel's `floor` and `carpet` are both empty and the card is the retake
- *   copy (`NO_FLOOR_MESSAGE`, retake-only);
+ *   copy (`NO_FLOOR_MESSAGE`, retake-only), while the own-size SAM inbox
+ *   recording has a floor;
+ * - carlos-orig's `floor` and `carpet` are both empty, so the flow owes one
+ *   more `floor` call at up to 1920 px (`needsFloorSecondTry` true with a
+ *   larger photo, false otherwise; the cache key hashes the image so the
+ *   size is in the key), shown with a larger decoded frame; carlos at 1280
+ *   already finds a floor;
  * - ceborski flags `two-walls-in-view` (and not `edge-at-door`);
  * - carlos flags `edge-at-door` (and not `two-walls-in-view`);
  * - carlos's wall tint keeps its hue (Lab a* and b* within 4 of the lit-wall
@@ -34,10 +42,13 @@ import {
 import {
   FALLBACK_DECODE_CONCEPT,
   FLOOR_FALLBACK_CONCEPT,
+  FLOOR_SECOND_TRY_CONCEPT,
   NO_FLOOR_MESSAGE,
   errorRecovery,
   isEmptyAnswerText,
+  needsFloorSecondTry,
 } from "../client/src/photo-room/cards.js";
+import { computePhotoPlan } from "../client/src/photo-room/intake.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const repoRoot = resolve(here, "..");
@@ -152,6 +163,67 @@ async function main(): Promise<void> {
     NO_FLOOR_MESSAGE,
   );
   check("hostel card offers no retry", errorRecovery(NO_FLOOR_MESSAGE) === "retake");
+  try {
+    const samFloor = readFileSync(
+      join(repoRoot, ".inbox", "room-photos-sam", "hostel-twin-room-wardrobe-floor.txt"),
+      "utf8",
+    );
+    const ownSize = samFloor.trim().length === 0 ? [] : await segmentInstances("floor", samFloor);
+    check(
+      "hostel gets a floor from its own-size recording",
+      ownSize.length > 0,
+      `${String(ownSize.length)} floor instances at ${String(ownSize[0]?.imageWidth ?? 0)}x${String(ownSize[0]?.imageHeight ?? 0)}`,
+    );
+  } catch {
+    check("hostel gets a floor from its own-size recording", false, "no sam inbox floor");
+  }
+
+  // Market-house wall A: no window under 40 cm.
+  const marketDraft = await solveLive("market-house-reading-room");
+  const marketWindows = marketDraft.openings.filter((o) => o.type === "window" && o.wall === "A");
+  check(
+    "market-house wall A has no window under 40 cm",
+    marketWindows.every((o) => o.width.value >= 40),
+    `${String(marketWindows.length)} windows [${marketWindows.map((o) => `${String(Math.round(o.width.value))}@${String(Math.round(o.offset.value))}`).join(", ")}]`,
+  );
+
+  // Zaher-rio wall A: no window wider than 80 % of the wall.
+  const zaherDraft = await solveLive("living-room-zaher-rio");
+  const zaherWallLen = zaherDraft.wallLengths.A.value;
+  const zaherWindows = zaherDraft.openings.filter((o) => o.type === "window" && o.wall === "A");
+  check(
+    "zaher-rio wall A has no window wider than 80 % of the wall",
+    zaherWindows.every((o) => o.width.value <= 0.8 * zaherWallLen),
+    `${String(zaherWindows.length)} windows wall ${String(Math.round(zaherWallLen))} [${zaherWindows.map((o) => `${String(Math.round(o.width.value))}@${String(Math.round(o.offset.value))}`).join(", ")}]`,
+  );
+
+  // Carlos-orig: both 1280-orig answers empty, so one more floor call at 1920 px.
+  const origFloor = textOf("living-room-carlos-zgz-orig", "floor");
+  const origCarpet = textOf("living-room-carlos-zgz-orig", FLOOR_FALLBACK_CONCEPT);
+  check("carlos-orig floor answer is empty", isEmptyAnswerText(origFloor));
+  check("carlos-orig carpet answer is empty", isEmptyAnswerText(origCarpet));
+  check("the second try re-asks the floor concept", FLOOR_SECOND_TRY_CONCEPT === "floor");
+  check(
+    "carlos-orig owes a 1920 px floor second try",
+    needsFloorSecondTry(true, true, true) &&
+      !needsFloorSecondTry(false, true, true) &&
+      !needsFloorSecondTry(true, false, true) &&
+      !needsFloorSecondTry(true, true, false),
+    `predicate ${String(needsFloorSecondTry(isEmptyAnswerText(origFloor), isEmptyAnswerText(origCarpet), true))}`,
+  );
+  const largePlan = computePhotoPlan(1920, 1280, 1);
+  check(
+    "the second try decodes a larger frame",
+    largePlan.hasLarge && largePlan.largeWidth === 1920 && largePlan.largeHeight === 1280,
+    `${String(largePlan.largeWidth)}x${String(largePlan.largeHeight)}`,
+  );
+  const carlosFloor = textOf("living-room-carlos-zgz", "floor");
+  check(
+    "carlos finds a floor at 1280 or on the second try",
+    !isEmptyAnswerText(carlosFloor) ||
+      needsFloorSecondTry(isEmptyAnswerText(origFloor), isEmptyAnswerText(origCarpet), true),
+    `1280 floor empty=${String(isEmptyAnswerText(carlosFloor))}`,
+  );
 
   // Ceborski sees two walls in one frame; carlos ends at a door's jamb.
   const ceborski = await solveLive("living-room-unsplash-ceborski");
@@ -243,6 +315,8 @@ async function main(): Promise<void> {
     ["market-house-reading-room", "Andy Li"],
     ["living-room-unsplash-ceborski", "Ceborski"],
     ["living-room-carlos-zgz", "Carlos ZGZ"],
+    ["living-room-zaher-rio", "Wilfredor"],
+    ["living-room-carlos-zgz-orig", "Carlos ZGZ"],
   ] as const) {
     check(
       `sources name ${prefix}`,

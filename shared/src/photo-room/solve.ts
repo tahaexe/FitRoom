@@ -39,6 +39,12 @@ import {
 export const WINDOW_FRAME_CM = -5;
 /** Ragged gap edges sit just off the jamb. */
 export const GAP_MARGIN_CM = 3;
+/** Windows narrower than this never become openings (edge-clip slivers). */
+export const MIN_WINDOW_WIDTH_CM = 40;
+/** Window instances merge only across gaps under this (panes of one opening). */
+export const WINDOW_MERGE_GAP_CM = 10;
+/** A clipped window keeps at least this much wall at each jamb. */
+export const WINDOW_JAMB_MARGIN_CM = 10;
 /** Frame pieces sit inside the jambs (measured on the truth renders). */
 export const FRAME_MARGIN_CM = 8;
 
@@ -986,12 +992,19 @@ function boxesTouch(a: SamInstance, b: SamInstance, pad = 3): boolean {
 }
 
 /**
- * Window pieces overlapping one opening (panes) merge into one opening.
- * Panes touch or nearly touch with a large vertical overlap; separate
- * windows stand further apart.
+ * Window pieces overlapping one opening (panes) merge into one opening: a
+ * window comes from one SAM window instance, or from instances that
+ * overlap or touch on the same wall with a gap under 10 cm. Separate
+ * windows stand further apart and stay separate.
  */
 function xOverlap(a: SamInstance, b: SamInstance): number {
   return Math.max(0, Math.min(a.box[2], b.box[2]) - Math.max(a.box[0], b.box[0]) + 1);
+}
+
+function xGap(a: SamInstance, b: SamInstance): number {
+  if (a.box[2] < b.box[0]) return b.box[0] - a.box[2] - 1;
+  if (b.box[2] < a.box[0]) return a.box[0] - b.box[2] - 1;
+  return 0;
 }
 
 function yGap(a: SamInstance, b: SamInstance): number {
@@ -1000,12 +1013,21 @@ function yGap(a: SamInstance, b: SamInstance): number {
   return 0;
 }
 
-/** Panes of one opening: touching side by side, or stacked in one column. */
-function sameOpening(a: SamInstance, b: SamInstance, photoW: number): boolean {
-  if (boxesTouch(a, b, scalePx(10, photoW)) && verticalOverlap(a, b) >= 0.25) return true;
-  const minW = Math.min(a.box[2] - a.box[0], b.box[2] - b.box[0]) + 1;
-  const minH = Math.min(a.box[3] - a.box[1], b.box[3] - b.box[1]) + 1;
-  return xOverlap(a, b) >= 0.5 * minW && yGap(a, b) <= 2 * minH;
+/**
+ * Panes of one opening: overlapping boxes, or boxes with a gap under the
+ * tolerance that line up side by side (shared height) or stacked in one
+ * column (shared width).
+ */
+function sameOpening(a: SamInstance, b: SamInstance, gapTolPx: number): boolean {
+  const xg = xGap(a, b);
+  const yg = yGap(a, b);
+  if (xg <= 0 && yg <= 0) return true;
+  if (yg <= 0 && xg < gapTolPx && verticalOverlap(a, b) >= 0.25) return true;
+  if (xg <= 0 && yg < gapTolPx) {
+    const minW = Math.min(a.box[2] - a.box[0], b.box[2] - b.box[0]) + 1;
+    if (xOverlap(a, b) >= 0.5 * minW) return true;
+  }
+  return false;
 }
 
 function groupFootprint(g: SamInstance[]): SamInstance {
@@ -1021,7 +1043,7 @@ function groupFootprint(g: SamInstance[]): SamInstance {
   };
 }
 
-function mergePanes(windows: SamInstance[], photoW: number): SamInstance[] {
+function mergePanes(windows: SamInstance[], gapTolPx: number): SamInstance[] {
   // Fixpoint: a pane joining a group grows its footprint, which can pull
   // in a further pane (a tall stack split by several mullions).
   let groups: SamInstance[][] = windows.map((w) => [w]);
@@ -1032,7 +1054,7 @@ function mergePanes(windows: SamInstance[], photoW: number): SamInstance[] {
       for (let j = i + 1; j < groups.length; j += 1) {
         const a = groupFootprint(groups[i] as SamInstance[]);
         const b = groupFootprint(groups[j] as SamInstance[]);
-        if (sameOpening(a, b, photoW)) {
+        if (sameOpening(a, b, gapTolPx)) {
           (groups[i] as SamInstance[]).push(...(groups[j] as SamInstance[]));
           groups = [...groups.slice(0, j), ...groups.slice(j + 1)];
           changed = true;
@@ -1400,9 +1422,15 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
     const doors = byConcept(photo.instances, "door").filter((d) => inRange(d.box));
     // Window pieces overlapping one opening (panes) merge into one; a
     // glass strip inside a door's leaf is the door glazing, not a window.
+    // The merge gap is 10 cm at the wall's own scale, so panes join while
+    // separate windows stay separate at any photo size.
+    const mergeTolPx = Math.max(
+      3,
+      Math.round((WINDOW_MERGE_GAP_CM * Math.max(1, photo.width)) / Math.max(1, wallLen)),
+    );
     const windows = mergePanes(
       byConcept(photo.instances, "window").filter((w) => inRange(w.box)),
-      photo.width,
+      mergeTolPx,
     );
     const uncMul = photoWide[pi] === true ? 2.5 : 1;
     // Shopper-tapped door point for this wall, when the solver would
@@ -1686,8 +1714,25 @@ export function solveRoomFromPhotos(input: SolverInput): RoomDraft {
       hi += WINDOW_FRAME_CM;
       top += WINDOW_FRAME_CM;
       bot -= WINDOW_FRAME_CM;
-      const width = Math.max(10, hi - lo);
-      const off = Math.max(0, Math.min(wallLen - width, lo));
+      // Slivers from edge clipping never become windows, and neither does a
+      // span lying mostly off the wall: both are dropped instead of being
+      // clipped to the quad's edge.
+      const span = hi - lo;
+      if (span < MIN_WINDOW_WIDTH_CM) continue;
+      const outside = Math.max(0, -lo) + Math.max(0, hi - wallLen);
+      if (outside > 0.5 * Math.max(1, span)) continue;
+      const loC = Math.max(0, lo);
+      const hiC = Math.min(wallLen, hi);
+      let width = hiC - loC;
+      let off = loC;
+      // A span that ran past the quad is part guesswork: clip it, and keep
+      // at least one jamb margin of wall at each side, so no window is
+      // wider than its wall minus 20 cm. A span measured fully inside its
+      // wall keeps its measured width (a glazed wall is all window).
+      if ((lo < 0 || hi > wallLen) && width > wallLen - 2 * WINDOW_JAMB_MARGIN_CM) {
+        width = Math.max(MIN_WINDOW_WIDTH_CM, wallLen - 2 * WINDOW_JAMB_MARGIN_CM);
+        off = Math.max(0, Math.min(wallLen - width, loC));
+      }
       const height = Math.max(10, top - bot);
       const sill = Math.max(0, bot);
       winN += 1;

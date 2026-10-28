@@ -9,7 +9,9 @@
  * - The floor fallback asks once more with the concept `carpet`
  *   (`FLOOR_FALLBACK_CONCEPT`), only on an empty floor answer; the carpet
  *   text is decoded with `FALLBACK_DECODE_CONCEPT` so its instances join
- *   the floor mask. The check stops only when both answers are empty.
+ *   the floor mask. When both answers are empty and the photo is larger,
+ *   the flow asks `floor` once more at up to 1920 px (`needsFloorSecondTry`)
+ *   before the retake card shows.
  * - "Next wall" is the primary button only when every check passes; any
  *   ✕ makes "Retake" primary and "Next wall" secondary.
  */
@@ -24,6 +26,25 @@ export const NO_FLOOR_MESSAGE =
 
 /** Concept the server segments for the one-shot floor fallback. */
 export const FLOOR_FALLBACK_CONCEPT = "carpet";
+
+/**
+ * The floor second try re-asks the `floor` concept itself (not the carpet
+ * fallback), once, with the photo at up to 1920 px on its long side.
+ */
+export const FLOOR_SECOND_TRY_CONCEPT = "floor";
+
+/**
+ * True when the flow owes the photo one more floor call at a larger size:
+ * the 1280 px `floor` and `carpet` answers both came back empty and a
+ * larger photo exists. One extra call, only on that path.
+ */
+export function needsFloorSecondTry(
+  floorEmpty: boolean,
+  carpetEmpty: boolean,
+  hasLargerPhoto: boolean,
+): boolean {
+  return floorEmpty && carpetEmpty && hasLargerPhoto;
+}
 
 /**
  * Concept the fallback text is decoded with, so its instances join the

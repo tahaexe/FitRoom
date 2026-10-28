@@ -3,7 +3,10 @@
  * `door` and `window` in parallel (with progress), decoded with the shared
  * SAM decoder, then solved for the instant check. When the `floor` answer
  * is empty the client asks once more with the concept `carpet` and uses
- * its instances as the floor, stopping only when both answers are empty.
+ * its instances as the floor; when both answers are empty and the photo
+ * is larger, it asks `floor` once more with the photo at up to 1920 px on
+ * its long side (one extra call, only on that path) before the retake card
+ * shows.
  *
  * Demo mode answers `demo-miss` for the segment route, which is reported
  * plainly (never a silent failure) with a way to switch Live AI on.
@@ -23,9 +26,11 @@ import { segmentInstances } from "../capture/sam";
 import {
   FALLBACK_DECODE_CONCEPT,
   FLOOR_FALLBACK_CONCEPT,
+  FLOOR_SECOND_TRY_CONCEPT,
   NO_FLOOR_MESSAGE,
   NO_WALL_MESSAGE,
   isEmptyAnswerText,
+  needsFloorSecondTry,
 } from "./cards";
 import { computeSurfaceColors } from "./surfaces";
 
@@ -38,6 +43,13 @@ export const SEGMENT_TIMEOUT_MS = 60000;
 export const LABEL_TIMEOUT_MS = 30000;
 
 export type SegmentProgress = (done: number, total: number) => void;
+
+/** Larger photo for the floor second try (up to 1920 px on its long side). */
+export interface LargerPhoto {
+  url: string;
+  width: number;
+  height: number;
+}
 
 export interface WallAnalysis {
   instances: SamInstance[];
@@ -122,6 +134,41 @@ async function requestFloorFallback(
 }
 
 /**
+ * The one-shot larger-photo floor retry: a single `floor` request with the
+ * photo at up to 1920 px, through the same route, cache, cap and metering
+ * (the cache key hashes the image, so the size is in the key). Best
+ * effort: anything but a usable answer resolves null and the caller shows
+ * the retake card.
+ */
+async function requestFloorSecondTry(
+  large: LargerPhoto,
+  onProgress: SegmentProgress,
+): Promise<SamInstance[] | { demoMiss: true } | null> {
+  onProgress(SEGMENT_CONCEPTS.length + 1, SEGMENT_CONCEPTS.length + 2);
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), SEGMENT_TIMEOUT_MS);
+  try {
+    const result = await postSegment(
+      { image: large.url, concept: FLOOR_SECOND_TRY_CONCEPT },
+      { signal: controller.signal },
+    );
+    onProgress(SEGMENT_CONCEPTS.length + 2, SEGMENT_CONCEPTS.length + 2);
+    if (result.status === "demo-miss") return { demoMiss: true };
+    if (result.status !== "ok") return null;
+    const text = textOf(result.data);
+    if (text === null || isEmptyAnswerText(text)) return null;
+    return segmentInstances(FLOOR_SECOND_TRY_CONCEPT, text, {
+      width: large.width,
+      height: large.height,
+    });
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * Segment one 1280 px photo and solve it for the instant check.
  * Placeholder tapes only scale the height readout (corners, lines and
  * tilt never depend on them). Throws a plain-English error, except
@@ -135,6 +182,7 @@ export async function analyseWallPhoto(
   focal35mm: number | undefined,
   doorTap: DoorTap | null,
   onProgress: SegmentProgress,
+  large?: LargerPhoto | null,
 ): Promise<WallAnalysis | { demoMiss: true }> {
   const total = SEGMENT_CONCEPTS.length;
   let done = 0;
@@ -168,7 +216,8 @@ export async function analyseWallPhoto(
     // missing or empty answer for an optional concept holds zero instances
     // and the analysis goes on. An empty wall answer stops the instant
     // check with a retake reason; an empty floor answer first tries the
-    // one-shot carpet fallback and stops only when both are empty.
+    // one-shot carpet fallback, then (both empty and the photo larger) one
+    // floor call at up to 1920 px, and stops only when those are empty too.
     if (text === null || isEmptyAnswerText(text)) {
       if (concept === "wall") throw new Error(NO_WALL_MESSAGE);
       if (concept === "floor") {
@@ -177,10 +226,21 @@ export async function analyseWallPhoto(
           { width: segWidth, height: segHeight },
           onProgress,
         );
-        if (fallback === null) throw new Error(NO_FLOOR_MESSAGE);
-        if ("demoMiss" in fallback) return { demoMiss: true };
-        instances.push(...fallback);
-        continue;
+        if (fallback !== null) {
+          if ("demoMiss" in fallback) return { demoMiss: true };
+          instances.push(...fallback);
+          continue;
+        }
+        const hasLarge = large !== undefined && large !== null;
+        if (large !== undefined && large !== null && needsFloorSecondTry(true, true, hasLarge)) {
+          const second = await requestFloorSecondTry(large, onProgress);
+          if (second !== null) {
+            if ("demoMiss" in second) return { demoMiss: true };
+            instances.push(...second);
+            continue;
+          }
+        }
+        throw new Error(NO_FLOOR_MESSAGE);
       }
       continue;
     }

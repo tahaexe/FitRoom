@@ -986,6 +986,17 @@ export class PhotoFlow {
     state.progress = { done: 0, total: 5 };
     this.render();
     try {
+      const large =
+        intake.largeUrl !== null &&
+        intake.largeUrl !== undefined &&
+        (intake.largeWidth ?? 0) > 0 &&
+        (intake.largeHeight ?? 0) > 0
+          ? {
+              url: intake.largeUrl,
+              width: intake.largeWidth as number,
+              height: intake.largeHeight as number,
+            }
+          : null;
       const result = await analyseWallPhoto(
         letter,
         intake.segUrl,
@@ -997,6 +1008,7 @@ export class PhotoFlow {
           state.progress = { done, total };
           this.renderProgress(letter, done, total);
         },
+        large,
       );
       if ("demoMiss" in result) {
         state.demoMiss = true;

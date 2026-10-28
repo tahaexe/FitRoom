@@ -201,22 +201,45 @@ async function main(): Promise<void> {
     small.segWidth === 400 && small.segHeight === 300,
     `${String(small.segWidth)}x${String(small.segHeight)}`,
   );
+  check(
+    "a 48 MP photo keeps a 1920 px second-try frame",
+    plan.hasLarge && plan.largeWidth === 1920 && plan.largeHeight === 1440,
+    `${String(plan.largeWidth)}x${String(plan.largeHeight)} hasLarge=${String(plan.hasLarge)}`,
+  );
+  check(
+    "a 1280 px photo keeps no second-try frame",
+    computePhotoPlan(1280, 857, 1).hasLarge === false,
+    "hasLarge",
+  );
+  check(
+    "a 1920 px photo keeps a second-try frame",
+    computePhotoPlan(1920, 1280, 1).hasLarge === true,
+    "hasLarge",
+  );
 
   let oversized = false;
   const made: string[] = [];
   const result = await runDownscalePipeline(new FakeSource(8000, 6000), 1, (w, h) => {
     made.push(`${String(w)}x${String(h)}`);
-    if (Math.max(w, h) > 1280) oversized = true;
+    if (Math.max(w, h) > 1920) oversized = true;
     return new FakeCanvas(w, h);
   });
   check(
     "only downscaled canvases are made",
-    !oversized && same(made, ["1280x960", "640x480"]),
+    !oversized && same(made, ["1280x960", "1920x1440", "640x480"]),
     made.join(","),
   );
   check(
     "the full image is closed before the URLs resolve",
-    same(events, ["draw 8000x6000 o1", "close", "small 1280x960", "url 1280x960", "url 640x480"]),
+    same(events, [
+      "draw 8000x6000 o1",
+      "draw 8000x6000 o1",
+      "close",
+      "small 1280x960",
+      "url 1280x960",
+      "url 1920x1440",
+      "url 640x480",
+    ]),
     events.join(" | "),
   );
   check(
@@ -228,6 +251,13 @@ async function main(): Promise<void> {
     "the pipeline keeps the 640 px size",
     result.labelWidth === 640 && result.labelHeight === 480,
     `${String(result.labelWidth)}x${String(result.labelHeight)}`,
+  );
+  check(
+    "the pipeline keeps the 1920 px second-try frame",
+    result.largeWidth === 1920 &&
+      result.largeHeight === 1440 &&
+      result.largeUrl === "data:image/jpeg;base64,fake-1920x1440",
+    `${String(result.largeWidth)}x${String(result.largeHeight)}`,
   );
 
   const wiringFile = new File([new Uint8Array([1, 2, 3])], "photo.jpg", { type: "image/jpeg" });

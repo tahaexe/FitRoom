@@ -42,7 +42,7 @@ function floorPoint(p: PlanPoint, y: number): THREE.Vector3 {
  * colour.
  */
 export class FitOverlay {
-  private arcsBuilt = false;
+  private arcMeshes: THREE.Mesh[] = [];
   private clearanceMesh: THREE.Mesh | null = null;
   private clearanceTex: THREE.DataTexture | null = null;
   private clearanceNx = 0;
@@ -74,10 +74,8 @@ export class FitOverlay {
   }
 
   setAnalysis(analysis: FitAnalysis, issues: FitIssue[]): void {
-    if (!this.arcsBuilt) {
-      this.buildArcs(analysis.doors);
-      this.arcsBuilt = true;
-    }
+    this.clearArcs();
+    this.buildArcs(analysis.doors);
     this.updateClearance(analysis);
     this.rebuildMarks(analysis, issues);
     this.rebuildLabels(issues);
@@ -96,8 +94,25 @@ export class FitOverlay {
     return this.clearanceMesh?.visible ?? false;
   }
 
+  /** Door swing sectors as flat red sectors on the floor: rebuilt for the
+   * current doors only, so rooms with no door show no sector. */
+  private clearArcs(): void {
+    for (const mesh of this.arcMeshes) {
+      this.scene.remove(mesh);
+      mesh.geometry.dispose();
+      const mat = mesh.material;
+      if (Array.isArray(mat)) {
+        for (const m of mat) m.dispose();
+      } else {
+        mat.dispose();
+      }
+    }
+    this.arcMeshes = [];
+  }
+
   /** Door swing sectors as flat red sectors on the floor. */
   private buildArcs(doors: FitAnalysis["doors"]): void {
+    if (doors.length === 0) return;
     const mat = new THREE.MeshBasicMaterial({
       color: RED,
       transparent: true,
@@ -126,6 +141,7 @@ export class FitOverlay {
       mesh.name = `fit-swing-${door.doorId}`;
       mesh.renderOrder = 1;
       this.scene.add(mesh);
+      this.arcMeshes.push(mesh);
     }
   }
 

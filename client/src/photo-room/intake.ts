@@ -4,9 +4,10 @@
  * One photo at a time: the focal length (35 mm equivalent) and the
  * orientation are read from EXIF with `exifr` before any resize, the
  * orientation is applied, and the photo is downscaled to 1280 px on the
- * long side for segmentation and 640 px for labelling. The full-size
- * image is released at once (the source is closed right after the single
- * downscale draw, so only downscaled pixels are ever kept).
+ * long side for segmentation and 640 px for labelling (plus up to 1920 px
+ * when the photo is larger, for the floor second try). The full-size
+ * image is released at once (the source is closed right after the
+ * downscale draws, so only downscaled pixels are ever kept).
  *
  * The orchestration (`runDownscalePipeline`) works on injected
  * source/canvas factories so `check:photo-intake` exercises the real order
@@ -18,6 +19,8 @@ import * as exifrNs from "exifr";
 
 export const SEG_LONG_SIDE = 1280;
 export const LABEL_LONG_SIDE = 640;
+/** Long side of the larger photo kept for the one-shot floor second try. */
+export const LARGE_LONG_SIDE = 1920;
 
 type ExifrParse = (
   data: ArrayBuffer | Uint8Array | Blob,
@@ -183,15 +186,21 @@ export interface PhotoPlan {
   segHeight: number;
   labelWidth: number;
   labelHeight: number;
+  /** Second-try floor image, kept only when the photo is larger than 1280 px. */
+  hasLarge: boolean;
+  largeWidth: number;
+  largeHeight: number;
 }
 
-/** Full downscale plan for a photo: orientation applied, then both sizes. */
+/** Full downscale plan for a photo: orientation applied, then all sizes. */
 export function computePhotoPlan(fullW: number, fullH: number, orientation: number): PhotoPlan {
   const t = orientTransform(orientation);
   const orientedWidth = t.swapDims ? fullH : fullW;
   const orientedHeight = t.swapDims ? fullW : fullH;
   const seg = targetSize(orientedWidth, orientedHeight, SEG_LONG_SIDE);
   const label = targetSize(orientedWidth, orientedHeight, LABEL_LONG_SIDE);
+  const hasLarge = Math.max(orientedWidth, orientedHeight) > SEG_LONG_SIDE;
+  const large = targetSize(orientedWidth, orientedHeight, LARGE_LONG_SIDE);
   return {
     orientedWidth,
     orientedHeight,
@@ -199,6 +208,9 @@ export function computePhotoPlan(fullW: number, fullH: number, orientation: numb
     segHeight: seg.height,
     labelWidth: label.width,
     labelHeight: label.height,
+    hasLarge,
+    largeWidth: large.width,
+    largeHeight: large.height,
   };
 }
 
@@ -227,12 +239,17 @@ export interface DownscaledPhoto {
   labelUrl: string;
   labelWidth: number;
   labelHeight: number;
+  /** Larger photo for the floor second try (null when the photo is not larger). */
+  largeUrl: string | null;
+  largeWidth: number;
+  largeHeight: number;
 }
 
 /**
- * The real order of operations: draw the source once at 1280 px, close it
- * at once, then derive 640 px from the 1280 px canvas. Resolves only after
- * the source is closed, holding no full-size pixels.
+ * The real order of operations: draw the source at 1280 px (and, when the
+ * photo is larger, once more at up to 1920 px for the floor second try),
+ * close it at once, then derive 640 px from the 1280 px canvas. Resolves
+ * only after the source is closed, holding no full-size pixels.
  */
 export async function runDownscalePipeline(
   source: PhotoSource,
@@ -242,10 +259,13 @@ export async function runDownscalePipeline(
   const plan = computePhotoPlan(source.width, source.height, orientation);
   const seg = makeCanvas(plan.segWidth, plan.segHeight);
   seg.drawOriented(source, orientation);
+  const large = plan.hasLarge ? makeCanvas(plan.largeWidth, plan.largeHeight) : null;
+  if (large !== null) large.drawOriented(source, orientation);
   source.close();
   const label = makeCanvas(plan.labelWidth, plan.labelHeight);
   label.drawSmaller(seg);
   const segUrl = await seg.toDataUrl();
+  const largeUrl = large === null ? null : await large.toDataUrl();
   const labelUrl = await label.toDataUrl();
   return {
     segUrl,
@@ -254,6 +274,9 @@ export async function runDownscalePipeline(
     labelUrl,
     labelWidth: plan.labelWidth,
     labelHeight: plan.labelHeight,
+    largeUrl,
+    largeWidth: plan.largeWidth,
+    largeHeight: plan.largeHeight,
   };
 }
 
@@ -316,6 +339,10 @@ export interface IntakePhoto {
   labelUrl: string;
   labelWidth: number;
   labelHeight: number;
+  /** Larger photo for the floor second try (absent when the photo is not larger). */
+  largeUrl?: string | null;
+  largeWidth?: number;
+  largeHeight?: number;
   orientation: number;
   focal35mm: number | undefined;
 }

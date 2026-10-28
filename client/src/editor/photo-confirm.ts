@@ -354,12 +354,6 @@ export class PhotoConfirmView {
       card.append(thumb, name, status);
       card.setAttribute("aria-label", `Wall ${letter}, ${state.toLowerCase()}`);
       card.addEventListener("click", () => this.actions.onSelectWall(letter));
-      if (isExampleRoom(this.store.room.name)) {
-        const badge = document.createElement("span");
-        badge.className = "photo-example-badge";
-        badge.textContent = exampleBadge(letter);
-        card.appendChild(badge);
-      }
       this.wallsEl.appendChild(card);
     }
   }
