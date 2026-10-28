@@ -96,7 +96,13 @@ export class RoomEditor {
     this.bandEl = document.createElement("div");
     this.bandEl.className = "photo-draft-band";
     this.bandEl.setAttribute("hidden", "");
-    this.element.appendChild(this.bandEl);
+
+    // Scrolling body: everything above the foot scrolls, while the foot
+    // ("Build my room") stays pinned at the bottom of the editor, always in
+    // view without scrolling.
+    const scroll = document.createElement("div");
+    scroll.className = "editor-scroll";
+    scroll.appendChild(this.bandEl);
 
     const actions = document.createElement("div");
     actions.className = "editor-actions";
@@ -106,7 +112,7 @@ export class RoomEditor {
     this.undoBtn = this.pill("Undo", () => this.store.undo());
     const cancel = this.pill("Cancel", () => this.callbacks.onCancel());
     actions.append(addDoor, addWindow, addPiece, this.undoBtn, cancel);
-    this.element.appendChild(actions);
+    scroll.appendChild(actions);
 
     const grid = document.createElement("div");
     grid.className = "editor-grid";
@@ -134,13 +140,13 @@ export class RoomEditor {
     this.fieldsEl = document.createElement("div");
     fieldsCard.appendChild(this.fieldsEl);
     grid.appendChild(fieldsCard);
-
-    this.element.appendChild(grid);
+    scroll.appendChild(grid);
 
     this.confirmHost = document.createElement("div");
     this.confirmHost.className = "photo-confirm-host";
     this.confirmHost.setAttribute("hidden", "");
-    this.element.appendChild(this.confirmHost);
+    scroll.appendChild(this.confirmHost);
+    this.element.appendChild(scroll);
     this.confirmView = new PhotoConfirmView(
       this.store,
       {

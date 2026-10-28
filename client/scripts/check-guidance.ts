@@ -53,6 +53,7 @@ import {
   PHONE_MENU_LABELS,
 } from "../src/phone-sheet.js";
 import { measuredMarkText, photoBandText, tapeWallLabel } from "../src/editor/source-mark.js";
+import { EMPTY_HINT_TEXT, coachMarksReady, needsDoorTip } from "../src/hints.js";
 import {
   cornerHandleLabel,
   openingBoxLabel,
@@ -882,6 +883,87 @@ check(
     phoneInspector.includes("inspector-more") &&
     phoneInspector.includes("onRotate"),
   "rotate, variants and delete first, More for position fields",
+);
+
+// ---- Confirm view: "Build my room" stays in view without scrolling ----
+const editorSource = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "editor", "editor.ts"),
+  "utf8",
+);
+const editorCss = readFileSync(
+  join(dirname(fileURLToPath(import.meta.url)), "..", "src", "editor", "editor.css"),
+  "utf8",
+);
+check(
+  "confirm:foot-outside-scroll",
+  editorSource.includes("scroll.appendChild(this.confirmHost)") &&
+    editorSource.includes("this.element.appendChild(scroll)") &&
+    editorSource.includes("this.element.appendChild(foot)"),
+  "the scrolling body holds the confirm view; the foot with the build button sits outside it",
+);
+check(
+  "confirm:scroll-css",
+  editorCss.includes(".editor-scroll") &&
+    /\.editor-scroll\s*\{[^}]*overflow-y:\s*auto/.test(editorCss) &&
+    /\.room-editor\s*\{[^}]*overflow:\s*hidden/.test(editorCss),
+  "the editor itself never scrolls; only .editor-scroll does",
+);
+// The catalog sheet stays closed through the photo flow and the confirm
+// view, and comes back on phones after the build.
+function methodBody(source: string, name: string): string {
+  const start = source.indexOf(name);
+  if (start < 0) return "";
+  const next = source.indexOf("private ", start + name.length);
+  return next < 0 ? source.slice(start) : source.slice(start, next);
+}
+check(
+  "confirm:sheet-closed-photo-flow",
+  methodBody(phoneMain, "private openPhotoFlow").includes("this.sheets?.close()"),
+  "opening the photo flow closes the sheet",
+);
+check(
+  "confirm:sheet-closed-confirm",
+  methodBody(phoneMain, "private openEditor").includes("this.sheets?.close()"),
+  "the confirm view (editor) opens with the sheet closed",
+);
+check(
+  "confirm:sheet-back-after-build",
+  methodBody(phoneMain, "private finishBuild").includes('this.sheets.open("catalog")'),
+  "the catalog sheet comes back on phones after the build",
+);
+
+// ---- One hint after a build ----
+check(
+  "hints:empty-text",
+  EMPTY_HINT_TEXT === "This room is empty. Add furniture from the catalog, or " &&
+    !EMPTY_HINT_TEXT.includes("on the left"),
+  JSON.stringify(EMPTY_HINT_TEXT),
+);
+check(
+  "hints:empty-wraps",
+  /\.empty-hint\s*\{[^}]*white-space:\s*normal/.test(phoneCss) &&
+    /\.empty-hint\s*\{[^}]*max-width:/.test(phoneCss),
+  "the empty-room hint wraps inside the screen",
+);
+check(
+  "hints:door-only-when-needed",
+  needsDoorTip([]) === true &&
+    needsDoorTip([{ type: "door" }]) === false &&
+    needsDoorTip([{ type: "window" }]) === false,
+  "the door tip shows only with no door and no window",
+);
+check(
+  "hints:tour-waits-for-piece",
+  coachMarksReady(0) === false && coachMarksReady(1) === true,
+  "the tour starts only once a piece is in the room",
+);
+check(
+  "hints:main-uses-rules",
+  phoneMain.includes("needsDoorTip(ROOM.openings)") &&
+    phoneMain.includes("coachMarksReady(this.store.state.items.length)") &&
+    !phoneMain.includes("Add furniture from the catalog on the left") &&
+    !phoneMain.includes("Add more from the catalog on the left"),
+  "main.ts follows the hint rules, with no 'on the left' copy",
 );
 
 if (failures > 0) process.exit(1);

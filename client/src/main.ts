@@ -41,6 +41,7 @@ import rotatedOverlapScene from "../../shared/samples/fit-tests/rotated-overlap.
 import rotatedOutsideScene from "../../shared/samples/fit-tests/rotated-outside.json";
 import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.json";
 import { initLiveSwitch } from "./api";
+import { EMPTY_HINT_TEXT, coachMarksReady, needsDoorTip } from "./hints";
 import { CatalogPanel, formatMeasure, formatTopBar } from "./catalog-ui";
 import { RecommendPanel } from "./recommend/panel";
 import { AssistantPanel } from "./assistant/panel";
@@ -1066,7 +1067,7 @@ class FitRoomApp {
     this.buildRoomAtSize(at);
   }
 
-  /** One dismissible tip after the first build, shown once per room. */
+  /** One dismissible tip after a build, shown once per room without a door or window. */
   private maybeShowDoorTip(): void {
     const key = `fitroom.doors-tip-seen:${ROOM.id}`;
     const seen = ((): boolean => {
@@ -1077,6 +1078,16 @@ class FitRoomApp {
       }
     })();
     if (seen) return;
+    // Rooms that already have a door or a window need no tip: remember it
+    // as seen so it never pesters that room later.
+    if (!needsDoorTip(ROOM.openings)) {
+      try {
+        window.localStorage.setItem(key, "1");
+      } catch {
+        // Private mode: the tip simply shows again next visit.
+      }
+      return;
+    }
     let tip = document.getElementById("door-tip");
     if (tip === null) {
       tip = document.createElement("div");
@@ -1231,6 +1242,13 @@ class FitRoomApp {
     this.closeEditor();
     this.rebuildRoom();
     this.refreshMenu();
+    // The catalog sheet stayed closed through the photo flow and the
+    // confirm view; after the build it comes back on phones, so the next
+    // step (adding furniture) is one tap away.
+    if (this.sheets !== null && isPhoneViewport()) {
+      this.sheets.open("catalog");
+    }
+    this.syncPhoneBar();
     this.maybeShowDoorTip();
   }
 
@@ -2019,6 +2037,8 @@ class FitRoomApp {
     this.fitOverlay.setAnalysis(this.analysis, this.issues);
     this.renderFitList();
     this.updateTopBar();
+    // A placed piece may now let the first-visit tour start.
+    this.maybeShowCoachMarks();
   }
 
   /** Live fit feedback while dragging, re-checked at most once per frame. */
@@ -2133,7 +2153,7 @@ class FitRoomApp {
       hint.id = "empty-hint";
       hint.className = "empty-hint";
       const text = document.createElement("span");
-      text.textContent = "This room is empty. Add furniture from the catalog on the left. ";
+      text.textContent = EMPTY_HINT_TEXT;
       const furnish = document.createElement("button");
       furnish.type = "button";
       furnish.className = "empty-hint-link";
@@ -2191,10 +2211,14 @@ class FitRoomApp {
       }
     })();
     if (seen) return;
+    // "Click a piece to select it" needs a piece: wait until one is in the
+    // room instead of touring an empty room. Never stack two bars.
+    if (!coachMarksReady(this.store.state.items.length)) return;
+    if (this.container.querySelector(".coach-marks") !== null) return;
     const steps = [
       "Click a piece to select it.",
       "Drag a piece to move it.",
-      "Add more from the catalog on the left.",
+      "Add more from the catalog.",
     ];
     let at = 0;
     const bar = document.createElement("div");

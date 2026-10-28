@@ -4,7 +4,7 @@
  * | # | rule |
  * |---|------|
  * | 1 | Walls are a closed counter-clockwise polygon from the inner south-west corner (origin). |
- * | 2 | Letters run clockwise seen from inside: A = wall-1 (south, entrance door), B = wall-4 (west), C = wall-3 (north), D = wall-2 (east). |
+ * | 2 | Letters run counter-clockwise seen from inside: A = wall-1 (the entrance door), B = wall-4 (on the left as you face A), C = wall-3 (opposite A), D = wall-2 (on the right as you face A). |
  * | 3 | Seen from inside, a wall runs from image left (its start) to image right (its end); an opening offset is measured from the wall start. |
  * | 4 | Plan (x, z) maps to three.js (x, z) with y up: facing +z, +x is on the left. |
  * | 5 | A door hinge side is stored in room terms (viewed from inside facing the wall; left = wall-end side, the image-right side), never image terms. |

@@ -1,5 +1,5 @@
 /**
- * People-friendly wall names, as seen standing in the doorway looking in:
+ * People-friendly wall names, as seen from inside, facing the door wall:
  * "Door wall", "Back wall", "Left wall", "Right wall", with " (window)"
  * added when a window sits on that wall (e.g. "Back wall (window)"). The
  * `wall-N` ids stay internal: every shopper-facing surface (the

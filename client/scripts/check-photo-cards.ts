@@ -12,11 +12,18 @@
  *   decodes as floor instances;
  * - "Next wall" is primary only when every check passes; any ✕ makes
  *   "Retake" primary and "Next wall" secondary.
+ * - the guide's B/D sides match the wall table through rule 4 (B on the
+ *   left as you face wall A, D on the right), and rule 2 reads the same in
+ *   `types.ts` and the README.
  *
  * Prints PASS or FAIL per check and exits non-zero on any FAIL.
  */
 
 /* global process */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { LETTER_TO_WALL_ID } from "@fitroom/shared";
 import {
   EDGE_AT_DOOR_COPY,
   FALLBACK_DECODE_CONCEPT,
@@ -116,6 +123,52 @@ check(
   "two walls make retake primary",
   !nextIsPrimary({ bothCornersFound: bothCornersOk(true, true), floorLineFound: true }),
 );
+
+// The guide's B/D sides match the wall table through rule 4: facing wall A
+// (wall-1, the south wall) from inside means facing -z, and rule 4 (facing
+// +z, +x is on the left) puts -x on the left there — the west wall (wall-4).
+// The guide must put B on the left (wall-4) and D on the right (wall-2).
+const RULE_2 =
+  "Letters run counter-clockwise seen from inside: A = wall-1 (the entrance door), B = wall-4 (on the left as you face A), C = wall-3 (opposite A), D = wall-2 (on the right as you face A)";
+{
+  const here = dirname(fileURLToPath(import.meta.url));
+  const repoRoot = join(here, "..", "..");
+  const flowSource = readFileSync(join(repoRoot, "client", "src", "photo-room", "flow.ts"), "utf8");
+  const typesSource = readFileSync(
+    join(repoRoot, "shared", "src", "photo-room", "types.ts"),
+    "utf8",
+  );
+  const readme = readFileSync(join(repoRoot, "README.md"), "utf8");
+  const sideOf = (letter: "B" | "D"): string | null => {
+    const match = flowSource.match(
+      new RegExp(`${letter}:\\s*"Wall ${letter}[^"]*on the (left|right) as you face wall A"`),
+    );
+    return match?.[1] ?? null;
+  };
+  const bSide = sideOf("B");
+  const dSide = sideOf("D");
+  check("guide puts wall B on a side", bSide === "left" || bSide === "right", `B: ${bSide ?? "?"}`);
+  check("guide puts wall D on a side", dSide === "left" || dSide === "right", `D: ${dSide ?? "?"}`);
+  // Rule 4: facing +z, +x is on the left, so left(fx, fz) = (fz, -fx).
+  // Facing wall-1 from inside is facing -z (0, -1): left is (-1, 0), west.
+  const left: [number, number] = [-1, 0];
+  const expectedLeftId = left[0] < 0 ? "wall-4" : "wall-2";
+  const expectedRightId = left[0] < 0 ? "wall-2" : "wall-4";
+  const leftLetter = bSide === "left" ? "B" : dSide === "left" ? "D" : null;
+  const rightLetter = bSide === "right" ? "B" : dSide === "right" ? "D" : null;
+  check(
+    "guide left letter maps to the wall on the left of wall-1",
+    leftLetter !== null && LETTER_TO_WALL_ID[leftLetter] === expectedLeftId,
+    `left: ${leftLetter ?? "?"} -> ${leftLetter === null ? "?" : LETTER_TO_WALL_ID[leftLetter]} (want ${expectedLeftId})`,
+  );
+  check(
+    "guide right letter maps to the wall on the right of wall-1",
+    rightLetter !== null && LETTER_TO_WALL_ID[rightLetter] === expectedRightId,
+    `right: ${rightLetter ?? "?"} -> ${rightLetter === null ? "?" : LETTER_TO_WALL_ID[rightLetter]} (want ${expectedRightId})`,
+  );
+  check("types.ts rule 2 names the counter-clockwise letters", typesSource.includes(RULE_2));
+  check("README rule 2 names the counter-clockwise letters", readme.includes(RULE_2));
+}
 
 console.log(
   failures === 0

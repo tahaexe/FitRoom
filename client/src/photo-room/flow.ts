@@ -64,9 +64,9 @@ export const WALL_ORDER: WallLetter[] = ["A", "B", "C", "D"];
 
 const WALL_BLURB: Record<WallLetter, string> = {
   A: "Wall A · the wall with the entrance door",
-  B: "Wall B · on the right as you face wall A",
+  B: "Wall B · on the left as you face wall A",
   C: "Wall C · opposite the entrance door",
-  D: "Wall D · on the left as you face wall A",
+  D: "Wall D · on the right as you face wall A",
 };
 
 export interface WallSourceMark {
@@ -209,9 +209,9 @@ export function miniPlanSvg(current: WallLetter): SVGSVGElement {
     ly: number;
   }> = [
     { letter: "A", x1: x0, y1: y0 + h, x2: x0 + w, y2: y0 + h, lx: x0 + w / 2, ly: y0 + h + 12 },
-    { letter: "B", x1: x0, y1: y0 + h, x2: x0, y2: y0, lx: x0 - 10, ly: y0 + h / 2 },
+    { letter: "B", x1: x0 + w, y1: y0 + h, x2: x0 + w, y2: y0, lx: x0 + w + 10, ly: y0 + h / 2 },
     { letter: "C", x1: x0 + w, y1: y0, x2: x0, y2: y0, lx: x0 + w / 2, ly: y0 - 6 },
-    { letter: "D", x1: x0 + w, y1: y0, x2: x0 + w, y2: y0 + h, lx: x0 + w + 10, ly: y0 + h / 2 },
+    { letter: "D", x1: x0, y1: y0, x2: x0, y2: y0 + h, lx: x0 - 10, ly: y0 + h / 2 },
   ];
   for (const edge of edges) {
     const line = document.createElementNS(NS, "line");
@@ -1136,17 +1136,17 @@ export class PhotoFlow {
     labelA.setAttribute("class", "photo-tape-label");
     labelA.textContent = "A · corner to corner";
     const lineB1 = document.createElementNS(NS, "line");
-    lineB1.setAttribute("x1", "36");
+    lineB1.setAttribute("x1", "174");
     lineB1.setAttribute("y1", "90");
-    lineB1.setAttribute("x2", "36");
+    lineB1.setAttribute("x2", "174");
     lineB1.setAttribute("y2", "20");
     lineB1.setAttribute("class", "photo-tape-line");
     const labelB = document.createElementNS(NS, "text");
-    labelB.setAttribute("x", "28");
+    labelB.setAttribute("x", "182");
     labelB.setAttribute("y", "58");
     labelB.setAttribute("text-anchor", "middle");
     labelB.setAttribute("class", "photo-tape-label");
-    labelB.setAttribute("transform", "rotate(-90 28 58)");
+    labelB.setAttribute("transform", "rotate(-90 182 58)");
     labelB.textContent = "B · corner to corner";
     svg.append(lineA1, labelA, lineB1, labelB);
     return svg;

@@ -128,3 +128,19 @@ window.__fitroomCamera;
 ## How it's built
 
 All of the code in this repository was written by Meta's Muse Code agent. Recommendations and the layout assistant run on Muse Spark; the photoreal view runs on Muse Image.
+
+## Photo-room conventions
+
+Single table, mirrored in `shared/src/photo-room/types.ts`:
+
+| #   | rule                                                                                                                                                                                      |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Walls are a closed counter-clockwise polygon from the inner south-west corner (origin).                                                                                                   |
+| 2   | Letters run counter-clockwise seen from inside: A = wall-1 (the entrance door), B = wall-4 (on the left as you face A), C = wall-3 (opposite A), D = wall-2 (on the right as you face A). |
+| 3   | Seen from inside, a wall runs from image left (its start) to image right (its end); an opening offset is measured from the wall start.                                                    |
+| 4   | Plan (x, z) maps to three.js (x, z) with y up: facing +z, +x is on the left.                                                                                                              |
+| 5   | A door hinge side is stored in room terms (viewed from inside facing the wall; left = wall-end side, the image-right side), never image terms.                                            |
+| 6   | Every fixture has asymmetric openings and a hinged door so a consistent image/room flip fails the checks.                                                                                 |
+
+Letter to wall id: A -> wall-1, B -> wall-4, C -> wall-3, D -> wall-2.
+Tape: A and C use tape A (width); B and D use tape B (depth).

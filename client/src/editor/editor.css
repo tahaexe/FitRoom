@@ -11,11 +11,22 @@
   border-radius: var(--radius);
   box-shadow: var(--shadow);
   padding: 16px;
-  overflow-y: auto;
+  overflow: hidden;
   display: flex;
   flex-direction: column;
   gap: 16px;
   z-index: 5;
+}
+
+/* Scrolling body above the pinned foot: the wall cards, plan, fields and
+   photo confirm view scroll here, while "Build my room" stays in view. */
+.editor-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .room-editor[hidden] {
@@ -353,6 +364,9 @@
   gap: 16px;
   align-items: center;
   justify-content: flex-end;
+  flex-shrink: 0;
+  background: var(--bg);
+  padding-top: 4px;
 }
 
 .editor-note {

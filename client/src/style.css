@@ -1456,7 +1456,9 @@ button.danger {
   font-size: 15px;
   font-weight: 600;
   color: var(--ink);
-  white-space: nowrap;
+  white-space: normal;
+  text-align: center;
+  max-width: min(480px, calc(100% - 32px));
   z-index: 2;
   pointer-events: none;
 }
