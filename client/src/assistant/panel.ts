@@ -57,6 +57,7 @@ import {
   TURN_ON_LIVE,
   USE_SAMPLE_ROOM,
 } from "../copy";
+import { formatCatalogPrice } from "../catalog-ui";
 
 /** The six scripted demo requests (same list as the server demo store). */
 export const ASSISTANT_DEMO_CHIPS: string[] = [
@@ -683,7 +684,7 @@ export class AssistantPanel {
         }
         const price = document.createElement("span");
         price.className = "furnish-price";
-        price.textContent = `$${String(row.price.toLocaleString("en-US"))}`;
+        price.textContent = formatCatalogPrice(row.price);
         item.append(thumb, meta, price);
         list.appendChild(item);
       }

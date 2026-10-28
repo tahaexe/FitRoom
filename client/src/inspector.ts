@@ -1,4 +1,5 @@
 import type { CatalogItem, SceneItem } from "@fitroom/shared";
+import { formatCatalogPrice, formatCatalogSize } from "./catalog-ui";
 import { clampFootprintToRoom } from "./state";
 
 export interface InspectorBounds {
@@ -65,7 +66,7 @@ export class Inspector {
     this.root.appendChild(name);
     if (entry !== undefined) {
       const dims = document.createElement("p");
-      dims.textContent = `Size ${Math.round(entry.size.w)}×${Math.round(entry.size.d)}×${Math.round(entry.size.h)}cm · $${entry.price}`;
+      dims.textContent = `Size ${formatCatalogSize(entry.size.w, entry.size.d, entry.size.h)} · ${formatCatalogPrice(entry.price)}`;
       this.root.appendChild(dims);
     }
 

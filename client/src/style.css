@@ -319,11 +319,15 @@ button {
 
 .chips {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
   gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 4px;
+  scrollbar-width: thin;
 }
 
 .chips button {
+  flex: 0 0 auto;
   border: 1px solid var(--border-color);
   background: #ffffff;
   color: var(--ink);
@@ -397,6 +401,20 @@ button {
   font-weight: 700;
   color: var(--ink);
   font-variant-numeric: tabular-nums;
+}
+
+/* "+ Add" on every catalog card: the whole card adds the piece. */
+.catalog-add {
+  align-self: center;
+  flex: 0 0 auto;
+  margin-left: auto;
+  background: var(--coral);
+  color: var(--on-coral);
+  border-radius: 999px;
+  padding: 6px 12px;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 /* ---- right inspector ---- */

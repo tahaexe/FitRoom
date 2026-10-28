@@ -60,7 +60,7 @@ import {
   TOOLBAR_VISUALISE,
 } from "./copy";
 import { Guide, GuideView, queryGuideTarget, type GuideScreen } from "./guide";
-import { CatalogPanel, formatMeasure, formatTopBar } from "./catalog-ui";
+import { CatalogPanel, formatCatalogSize, formatMeasure, formatTopBar } from "./catalog-ui";
 import { RecommendPanel } from "./recommend/panel";
 import { AssistantPanel } from "./assistant/panel";
 import { applyVariant, loadModel } from "./models";
@@ -3124,7 +3124,7 @@ class FitRoomApp {
     this.sizeTag.style.display = "block";
     this.sizeTag.style.left = `${sx}px`;
     this.sizeTag.style.top = `${sy}px`;
-    this.sizeTag.textContent = `${Math.round(catalogEntry.size.w)}×${Math.round(catalogEntry.size.d)}cm`;
+    this.sizeTag.textContent = formatCatalogSize(catalogEntry.size.w, catalogEntry.size.d);
   }
 
   private frame(): void {

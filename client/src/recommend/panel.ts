@@ -44,6 +44,7 @@ import {
   TURN_ON_LIVE,
   USE_SAMPLE_ROOM,
 } from "../copy";
+import { formatCatalogPrice, formatCatalogSize } from "../catalog-ui";
 
 const CATEGORIES: Array<Exclude<RecommendCategory, "any">> = [
   "sofa",
@@ -627,10 +628,10 @@ export class RecommendPanel {
     name.textContent = item.entry.name;
     const dims = document.createElement("span");
     dims.className = "catalog-dims";
-    dims.textContent = `${Math.round(item.entry.size.w)}×${Math.round(item.entry.size.d)}×${Math.round(item.entry.size.h)}cm`;
+    dims.textContent = formatCatalogSize(item.entry.size.w, item.entry.size.d, item.entry.size.h);
     const price = document.createElement("span");
     price.className = "catalog-price";
-    price.textContent = `$${item.entry.price}`;
+    price.textContent = formatCatalogPrice(item.entry.price);
     meta.append(name, dims, price);
     const go = document.createElement("button");
     go.type = "button";

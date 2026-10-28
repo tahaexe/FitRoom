@@ -104,7 +104,22 @@ export function matchesCatalogQuery(item: CatalogItem, rawQuery: string): boolea
 
 /** Top bar readout: "4 items · $3,280" (never a bare "$3,280 · 4"). */
 export function formatTopBar(count: number, total: number): string {
-  return `${String(count)} ${count === 1 ? "item" : "items"} · $${total.toLocaleString("en-US")}`;
+  return `${String(count)} ${count === 1 ? "item" : "items"} · ${formatCatalogPrice(total)}`;
+}
+
+/**
+ * The one formatter for every catalog size and price in the UI (cards,
+ * Inspector, cart summary, AI panels, measure pill, size tag): no card or
+ * panel builds its own (`check:catalog-format` pins this).
+ */
+export function formatCatalogSize(wCm: number, dCm: number, hCm?: number): string {
+  if (hCm === undefined) return `${String(Math.round(wCm))} × ${String(Math.round(dCm))} cm`;
+  return `${String(Math.round(wCm))} × ${String(Math.round(dCm))} × ${String(Math.round(hCm))} cm`;
+}
+
+/** Grouped dollars, never a bare "$1490". */
+export function formatCatalogPrice(priceUsd: number): string {
+  return `$${Math.round(priceUsd).toLocaleString("en-US")}`;
 }
 
 /** Status pill for the selected piece, in plain words (never symbols). */
@@ -116,7 +131,7 @@ export function formatMeasure(
   rotationDeg: number,
 ): string {
   return (
-    `${name} ${String(Math.round(widthCm))}×${String(Math.round(depthCm))}cm · ` +
+    `${name} ${formatCatalogSize(widthCm, depthCm)} · ` +
     `${String(Math.round(wallCm))} cm from the wall · ${String(Math.round(rotationDeg))}°`
   );
 }
@@ -199,7 +214,7 @@ export class CatalogPanel {
       thumb.loading = "lazy";
       const meta = document.createElement("span");
       meta.className = "catalog-meta";
-      const dims = `${Math.round(item.size.w)}×${Math.round(item.size.d)}×${Math.round(item.size.h)}cm`;
+      const dims = formatCatalogSize(item.size.w, item.size.d, item.size.h);
       const name = document.createElement("span");
       name.className = "catalog-name";
       name.textContent = item.name;
@@ -208,11 +223,20 @@ export class CatalogPanel {
       dimsEl.textContent = dims;
       const price = document.createElement("span");
       price.className = "catalog-price";
-      price.textContent = `$${item.price}`;
+      price.textContent = formatCatalogPrice(item.price);
+      const add = document.createElement("span");
+      add.className = "catalog-add";
+      add.textContent = "+ Add";
+      add.setAttribute("aria-hidden", "true");
       meta.append(name, dimsEl, price);
       card.appendChild(thumb);
       card.appendChild(meta);
+      card.appendChild(add);
       card.title = `Add ${item.name} (${dims})`;
+      card.setAttribute(
+        "aria-label",
+        `Add ${item.name} (${dims}, ${formatCatalogPrice(item.price)})`,
+      );
       card.addEventListener("click", () => this.onAdd(item));
       host.appendChild(card);
     }
