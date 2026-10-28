@@ -50,7 +50,7 @@ import { applyVariant, loadModel } from "./models";
 import { PlanOverlay } from "./plan";
 import { FitOverlay } from "./fit-overlay";
 import { Inspector } from "./inspector";
-import { captureView } from "./render/capture";
+import { captureView, facingDirForRoom } from "./render/capture";
 import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
 import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
@@ -183,7 +183,7 @@ function hexToLinearTriple(hex: string): [number, number, number] {
 /**
  * Display colour over the wall texture in linear light: the photo albedo
  * divided by the finish mean (the texture is normalised to a mean of 1),
- * else neutral (`#F1ECE2`, the old `setHex` default, converted). Channels
+ * else neutral (`#F3EFE8`, warm-white matte, converted). Channels
  * may exceed 1 — `Color.setRGB` takes them as is — so a wall lighter than
  * the texture keeps its hue and renders light instead of clipping to the
  * texture's own grey.
@@ -193,7 +193,7 @@ export function wallTintLinearFor(
   textureId?: string | null,
 ): [number, number, number] {
   if (typeof surfaceId !== "string" || !/^#[0-9a-fA-F]{6}$/.test(surfaceId)) {
-    return hexToLinearTriple("#F1ECE2");
+    return hexToLinearTriple("#F3EFE8");
   }
   if (textureId !== undefined && textureId !== null) {
     const display = wallDisplayLinear(surfaceId, textureId);
@@ -1387,6 +1387,8 @@ class FitRoomApp {
     }));
     const floor = built.group.getObjectByName("fitroom-floor");
     this.floorMesh = floor instanceof THREE.Mesh ? floor : null;
+    const freshBackdrop = built.group.getObjectByName("fitroom-backdrop");
+    if (freshBackdrop !== undefined) freshBackdrop.visible = this.mode !== "plan";
     this.rebuildExistingGroup();
     if (this.rig !== null) {
       this.scene.remove(this.rig.contactPlane);
@@ -1412,6 +1414,13 @@ class FitRoomApp {
     this.planCam.position.set(cxM, 12, czM);
     this.planCam.lookAt(cxM, 0, czM);
     this.planCam.updateProjectionMatrix();
+    // Any room change reframes the whole room with a margin, facing the
+    // window walls when the room has them.
+    if (!this.devCam) {
+      this.frameDollhouse(cxM, czM, wM, dM, aspect);
+      this.clampTarget();
+      this.controls.update();
+    }
     this.planOverlay.svg.remove();
     this.planOverlay = new PlanOverlay(this.container, ROOM);
     this.planOverlay.setVisible(this.mode === "plan");
@@ -1431,6 +1440,10 @@ class FitRoomApp {
       this.scene.remove(this.existingGroup);
       this.existingGroup.traverse((obj) => {
         if (obj instanceof THREE.Mesh) {
+          obj.geometry.dispose();
+          const material = obj.material;
+          if (material instanceof THREE.Material) material.dispose();
+        } else if (obj instanceof THREE.LineSegments) {
           obj.geometry.dispose();
           const material = obj.material;
           if (material instanceof THREE.Material) material.dispose();
@@ -1457,6 +1470,16 @@ class FitRoomApp {
       mesh.castShadow = true;
       mesh.receiveShadow = true;
       mesh.name = `existing-${piece.id}`;
+      const edges = new THREE.LineSegments(
+        new THREE.EdgesGeometry(geometry, 25),
+        new THREE.LineBasicMaterial({
+          color: 0x2b2c30,
+          transparent: true,
+          opacity: 0.6,
+        }),
+      );
+      edges.name = "fitroom-outline";
+      mesh.add(edges);
       group.add(mesh);
     }
     this.scene.add(group);
@@ -2853,10 +2876,22 @@ class FitRoomApp {
   }
 
   /**
-   * Dollhouse framing for the first visit: the whole room in view with a
-   * margin, from a raised front corner so the two cutaway walls (hidden by
-   * updateDollhouse) face the camera. Fits the room's bounding sphere
-   * inside the smaller of the vertical/horizontal fields of view.
+   * Raised camera-side direction for the dollhouse view: opposite the
+   * average outward of the walls holding windows (see `facingDirForRoom`),
+   * so after a photo build the found-window walls are the drawn pair, not
+   * the cut-away pair. Rooms without windows keep the south-east corner.
+   */
+  private dollhouseDir(): THREE.Vector3 {
+    const h = facingDirForRoom(ROOM);
+    return new THREE.Vector3(h.x, 0.85, h.z).normalize();
+  }
+
+  /**
+   * Dollhouse framing for the first visit and after any room change: the
+   * whole room in view with a margin, from a raised side so the two
+   * cutaway walls (hidden by updateDollhouse) face the camera. Fits the
+   * room's bounding sphere inside the smaller of the vertical/horizontal
+   * fields of view.
    */
   private frameDollhouse(cxM: number, czM: number, wM: number, dM: number, aspect: number): void {
     const wallHeightM = 2.6;
@@ -2867,7 +2902,7 @@ class FitRoomApp {
     const hFov = 2 * Math.atan(Math.tan(vFov / 2) * aspect);
     const fitFov = Math.min(vFov, hFov);
     const dist = (radius / Math.sin(fitFov / 2)) * 1.12;
-    const dir = new THREE.Vector3(0.85, 0.85, 1).normalize();
+    const dir = this.dollhouseDir();
     this.controls.target.set(cxM, 0.3, czM);
     this.orbitCam.position.set(cxM + dir.x * dist, 0.3 + dir.y * dist, czM + dir.z * dist);
     this.controls.update();
@@ -2934,6 +2969,12 @@ class FitRoomApp {
         cmToMeters((bounds.minZ + bounds.maxZ) / 2),
       );
     }
+    // The studio backdrop disc never draws in plan view: from above it
+    // would read as a large dark shape outside the room. Walls hide the
+    // same way (see updateDollhouse); the floor-sized contact catcher,
+    // which cannot spill past a wall, stays.
+    const backdrop = this.roomGroup?.getObjectByName("fitroom-backdrop");
+    if (backdrop !== undefined) backdrop.visible = mode !== "plan";
     this.controls.update();
     // Walls hide in plan view, so the shadow map must render again without
     // them: otherwise the orbit view's wall shadows spill outside the room.

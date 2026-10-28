@@ -10,6 +10,32 @@ export function openingLabel(type: string, widthCm: number): string {
 }
 
 /**
+ * Screen side of a wall in the main Plan view. The plan camera sits above
+ * the room centre looking down with up `-z` (screen up is world `-z`) and
+ * screen right world `+x`, so a south wall (world `-z` of centre) reads at
+ * the top. Pure plan maths, headless-testable.
+ */
+export function planWallSide(
+  room: RoomLayout,
+  wallId: string,
+): "top" | "right" | "bottom" | "left" | null {
+  let cx = 0;
+  let cz = 0;
+  for (const wall of room.walls) {
+    cx += (wall.start.x + wall.end.x) / 2;
+    cz += (wall.start.z + wall.end.z) / 2;
+  }
+  cx /= Math.max(1, room.walls.length);
+  cz /= Math.max(1, room.walls.length);
+  const wall = room.walls.find((w) => w.id === wallId);
+  if (wall === undefined) return null;
+  const dx = (wall.start.x + wall.end.x) / 2 - cx;
+  const dz = (wall.start.z + wall.end.z) / 2 - cz;
+  if (Math.abs(dx) >= Math.abs(dz)) return dx >= 0 ? "right" : "left";
+  return dz < 0 ? "top" : "bottom";
+}
+
+/**
  * Top plan overlay: SVG labels in shopper words (±1cm rounding). Wall
  * lengths in cm sit OUTSIDE their wall ("Door wall · 420 cm"); opening
  * labels ("Door · 90 cm", "Window · 120 cm") sit INSIDE the room beside

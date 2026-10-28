@@ -58,14 +58,18 @@ export function floorTextureIdFor(surfaceId: string | null | undefined): string 
   return "WoodFloor070";
 }
 
-/** Tiled ambientCG PBR floor, repeat derived from room metres. */
+/**
+ * Tiled ambientCG PBR floor, repeat derived from room metres. One texture
+ * tile spans about 1 m, so the plank rows read at a real board scale
+ * (about 20 cm wide on the light oak finishes).
+ */
 export function makeFloorMaterial(
   roomWM: number,
   roomDM: number,
   onLoad: () => void = () => {},
   floorId?: string,
 ): THREE.MeshStandardMaterial {
-  const tileM = 2;
+  const tileM = 1;
   const finish = floorTextureIdFor(floorId);
   const sets = pbrSet(
     `assets/textures/ambientcg/${finish}/${finish}_1K-JPG`,
@@ -96,7 +100,7 @@ export function setupStage(
   onLoad: () => void = () => {},
 ): StageRig {
   renderer.toneMapping = THREE.NeutralToneMapping;
-  renderer.toneMappingExposure = 1.0;
+  renderer.toneMappingExposure = 1.35;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.shadowMap.autoUpdate = false;
@@ -108,7 +112,7 @@ export function setupStage(
     (hdr) => {
       const env = pmrem.fromEquirectangular(hdr).texture;
       scene.environment = env;
-      scene.environmentIntensity = 0.55;
+      scene.environmentIntensity = 1.0;
       hdr.dispose();
       pmrem.dispose();
       onLoad();
@@ -119,10 +123,10 @@ export function setupStage(
     },
   );
 
-  const hemi = new THREE.HemisphereLight(0xffffff, 0x8a8f96, 0.35);
+  const hemi = new THREE.HemisphereLight(0xfff6ec, 0x9aa0a6, 0.55);
   scene.add(hemi);
 
-  const sun = new THREE.DirectionalLight(0xfff2e0, 2.2);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
   const R = Math.max(floorSize.wM, floorSize.dM);
   sun.position.set(floorSize.cxM + R * 1.2, wallHeightM + R * 1.4, floorSize.czM + R * 0.8);
   sun.target.position.set(floorSize.cxM, 0, floorSize.czM);
@@ -133,12 +137,12 @@ export function setupStage(
   sun.shadow.camera.top = R;
   sun.shadow.camera.bottom = -R;
   sun.shadow.camera.far = R * 6;
-  sun.shadow.radius = 6;
+  sun.shadow.radius = 8;
   sun.shadow.bias = -0.0004;
   scene.add(sun);
   scene.add(sun.target);
 
-  const contactMat = new THREE.ShadowMaterial({ opacity: 0.28 });
+  const contactMat = new THREE.ShadowMaterial({ opacity: 0.38 });
   const contactPlane = new THREE.Mesh(
     new THREE.PlaneGeometry(floorSize.wM, floorSize.dM),
     contactMat,

@@ -249,6 +249,212 @@ export function wallPhotoMapping(
   };
 }
 
+function fmt(n: number): string {
+  return String(Math.round(n * 10) / 10);
+}
+
+export interface MiniPlanEdgeDatum {
+  letter: WallLetter;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  active: boolean;
+  lengthCm: number;
+  label: string;
+  labelX: number;
+  labelY: number;
+  anchor: "start" | "middle" | "end";
+  side: "top" | "right" | "bottom" | "left";
+}
+
+export interface MiniPlanOpeningDatum {
+  id: string;
+  letter: WallLetter;
+  kind: "door" | "window";
+  gx1: number;
+  gy1: number;
+  gx2: number;
+  gy2: number;
+  hx: number;
+  hy: number;
+  leafX: number;
+  leafY: number;
+  arcD: string | null;
+  arc: boolean;
+  windowLines: Array<[number, number, number, number]>;
+  selected: boolean;
+}
+
+export interface MiniPlanData {
+  viewBox: [number, number, number, number];
+  edges: MiniPlanEdgeDatum[];
+  openings: MiniPlanOpeningDatum[];
+  aSide: "top" | "right" | "bottom" | "left";
+}
+
+/**
+ * The confirm view's small plan as drawing data: the real room at its own
+ * wall lengths (A wide, B deep), wall A at the top like the main Plan
+ * view, every wall with its length, and doors (leaf + swing arc) drawn
+ * apart from windows (double line). Pure, headless-testable.
+ */
+export function miniPlanData(
+  room: RoomLayout,
+  session: PhotoSession,
+  selectedOpeningId: string | null = null,
+): MiniPlanData | null {
+  const wallIdOf = (letter: WallLetter): string => letterToWallId(letter, session);
+  const lenOf = (letter: WallLetter): number =>
+    Math.max(1, Math.round(wallLengthOf(room, wallIdOf(letter))));
+  const W = lenOf("A");
+  const D = lenOf("B");
+  if (!(W > 0) || !(D > 0)) return null;
+  const VB_W = 120;
+  const VB_H = 96;
+  const scale = Math.min((VB_W - 44) / W, (VB_H - 44) / D);
+  const rw = W * scale;
+  const rh = D * scale;
+  const x0 = (VB_W - rw) / 2;
+  const y0 = (VB_H - rh) / 2;
+  const cx = x0 + rw / 2;
+  const cy = y0 + rh / 2;
+  // Wall A (entrance door) at the top like the main Plan view, C opposite
+  // at the bottom, D (east) right, B (west) left. Each edge runs in its
+  // wall's start->end direction so opening offsets map straight on.
+  const raw: Array<{
+    letter: WallLetter;
+    x1: number;
+    y1: number;
+    x2: number;
+    y2: number;
+    side: "top" | "right" | "bottom" | "left";
+  }> = [
+    { letter: "A", x1: x0, y1: y0, x2: x0 + rw, y2: y0, side: "top" },
+    { letter: "C", x1: x0 + rw, y1: y0 + rh, x2: x0, y2: y0 + rh, side: "bottom" },
+    { letter: "D", x1: x0 + rw, y1: y0, x2: x0 + rw, y2: y0 + rh, side: "right" },
+    { letter: "B", x1: x0, y1: y0 + rh, x2: x0, y2: y0, side: "left" },
+  ];
+  const edges: MiniPlanEdgeDatum[] = raw.map((e) => {
+    const lengthCm = lenOf(e.letter);
+    const label = `${e.letter} · ${String(lengthCm)} cm`;
+    const midX = (e.x1 + e.x2) / 2;
+    const midY = (e.y1 + e.y2) / 2;
+    const labelX = e.side === "right" ? midX + 3 : e.side === "left" ? midX - 3 : midX;
+    const labelY = e.side === "top" ? midY - 5 : e.side === "bottom" ? midY + 7 : midY;
+    const anchor = e.side === "right" ? "start" : e.side === "left" ? "end" : "middle";
+    return {
+      letter: e.letter,
+      x1: e.x1,
+      y1: e.y1,
+      x2: e.x2,
+      y2: e.y2,
+      active: e.letter === session.activeWall,
+      lengthCm,
+      label,
+      labelX,
+      labelY,
+      anchor,
+      side: e.side,
+    };
+  });
+  const openings: MiniPlanOpeningDatum[] = [];
+  for (const opening of room.openings) {
+    const letter = wallToLetter(opening.wallId, session);
+    if (letter === null) continue;
+    const edge = raw.find((e) => e.letter === letter);
+    if (edge === undefined) continue;
+    const wallLen = lenOf(letter);
+    const u0 = Math.min(1, Math.max(0, opening.offset / wallLen));
+    const u1 = Math.min(1, Math.max(0, (opening.offset + opening.width) / wallLen));
+    const gx1 = edge.x1 + (edge.x2 - edge.x1) * u0;
+    const gy1 = edge.y1 + (edge.y2 - edge.y1) * u0;
+    const gx2 = edge.x1 + (edge.x2 - edge.x1) * u1;
+    const gy2 = edge.y1 + (edge.y2 - edge.y1) * u1;
+    const base = {
+      id: opening.id,
+      letter,
+      kind: opening.type,
+      gx1,
+      gy1,
+      gx2,
+      gy2,
+      selected: selectedOpeningId === opening.id,
+    } as const;
+    if (opening.type !== "door") {
+      const ex = edge.x2 - edge.x1;
+      const ey = edge.y2 - edge.y1;
+      const el = Math.hypot(ex, ey) || 1;
+      const px = (-ey / el) * 1.1;
+      const py = (ex / el) * 1.1;
+      openings.push({
+        ...base,
+        hx: gx1,
+        hy: gy1,
+        leafX: gx2,
+        leafY: gy2,
+        arcD: null,
+        arc: false,
+        windowLines: [
+          [gx1 + px, gy1 + py, gx2 + px, gy2 + py],
+          [gx1 - px, gy1 - py, gx2 - px, gy2 - py],
+        ],
+      });
+      continue;
+    }
+    // Door: hinge at the wall-end side for "left" (room terms), else the
+    // wall-start side; leaf ajar 30 degrees toward the room, arc from the
+    // closed leaf to the swing side.
+    const ex = edge.x2 - edge.x1;
+    const ey = edge.y2 - edge.y1;
+    const el = Math.hypot(ex, ey) || 1;
+    const ux = ex / el;
+    const uy = ey / el;
+    const atEnd = opening.hinge === "left";
+    const hx = atEnd ? gx2 : gx1;
+    const hy = atEnd ? gy2 : gy1;
+    const s = atEnd ? -1 : 1;
+    const r = Math.max(2, Math.hypot(gx2 - gx1, gy2 - gy1));
+    let ix = cx - hx;
+    let iy = cy - hy;
+    const il = Math.hypot(ix, iy) || 1;
+    ix /= il;
+    iy /= il;
+    const rad = (30 * Math.PI) / 180;
+    let lx = s * ux * Math.cos(rad) + ix * Math.sin(rad);
+    let ly = s * uy * Math.cos(rad) + iy * Math.sin(rad);
+    const ll = Math.hypot(lx, ly) || 1;
+    lx /= ll;
+    ly /= ll;
+    const v0x = (s * ux) / (Math.hypot(s * ux, s * uy) || 1);
+    const v0y = (s * uy) / (Math.hypot(s * ux, s * uy) || 1);
+    const a0 = Math.atan2(v0y, v0x);
+    const a1 = Math.atan2(iy, ix);
+    let delta = a1 - a0;
+    while (delta > Math.PI) delta -= 2 * Math.PI;
+    while (delta < -Math.PI) delta += 2 * Math.PI;
+    const sweep = delta > 0 ? 1 : 0;
+    const p0x = hx + v0x * r;
+    const p0y = hy + v0y * r;
+    const p1x = hx + ix * r;
+    const p1y = hy + iy * r;
+    openings.push({
+      ...base,
+      hx,
+      hy,
+      leafX: hx + lx * r * 0.92,
+      leafY: hy + ly * r * 0.92,
+      arcD: `M${fmt(p0x)},${fmt(p0y)}A${fmt(r)},${fmt(r)} 0 0 ${String(sweep)} ${fmt(p1x)},${fmt(p1y)}`,
+      arc: true,
+      windowLines: [],
+    });
+  }
+  const aEdge = raw.find((e) => e.letter === "A");
+  const aSide: "top" | "right" | "bottom" | "left" =
+    aEdge !== undefined && aEdge.y1 <= cy ? "top" : "bottom";
+  return { viewBox: [0, 0, VB_W, VB_H], edges, openings, aSide };
+}
+
 export class PhotoConfirmView {
   readonly element: HTMLElement;
   private readonly wallsEl: HTMLElement;
@@ -1045,6 +1251,12 @@ export class PhotoConfirmView {
     return { sill, height };
   }
 
+  /**
+   * The confirmed plan's drawing data: the real room at its own wall
+   * lengths (A wide, B deep), wall A at the top like the main Plan view,
+   * every wall with its length, and doors (leaf + swing arc) drawn apart
+   * from windows (double line). Pure data, headless-testable.
+   */
   private renderPlan(session: PhotoSession, meta: PhotoDraftMeta | null): void {
     this.planEl.innerHTML = "";
     const title = document.createElement("h2");
@@ -1052,54 +1264,82 @@ export class PhotoConfirmView {
     this.planEl.appendChild(title);
     const svgNS = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(svgNS, "svg");
-    svg.setAttribute("viewBox", "0 0 120 96");
+    const selectedOpeningId =
+      this.store.selection?.kind === "opening" ? this.store.selection.id : null;
+    const data = miniPlanData(this.store.room, session, selectedOpeningId);
+    if (data === null) return;
+    svg.setAttribute(
+      "viewBox",
+      `${fmt(data.viewBox[0])} ${fmt(data.viewBox[1])} ${fmt(data.viewBox[2])} ${fmt(data.viewBox[3])}`,
+    );
     svg.setAttribute("class", "photo-mini-room");
     svg.setAttribute("role", "img");
     svg.setAttribute("aria-label", "Room plan with the active wall highlighted");
-    const x0 = 18;
-    const y0 = 14;
-    const w = 84;
-    const h = 60;
-    const edges: Array<{ letter: WallLetter; x1: number; y1: number; x2: number; y2: number }> = [
-      { letter: "A", x1: x0, y1: y0 + h, x2: x0 + w, y2: y0 + h },
-      { letter: "B", x1: x0 + w, y1: y0 + h, x2: x0 + w, y2: y0 },
-      { letter: "C", x1: x0 + w, y1: y0, x2: x0, y2: y0 },
-      { letter: "D", x1: x0, y1: y0, x2: x0, y2: y0 + h },
-    ];
-    for (const edge of edges) {
+    for (const edge of data.edges) {
       const line = document.createElementNS(svgNS, "line");
-      line.setAttribute("x1", String(edge.x1));
-      line.setAttribute("y1", String(edge.y1));
-      line.setAttribute("x2", String(edge.x2));
-      line.setAttribute("y2", String(edge.y2));
+      line.setAttribute("x1", fmt(edge.x1));
+      line.setAttribute("y1", fmt(edge.y1));
+      line.setAttribute("x2", fmt(edge.x2));
+      line.setAttribute("y2", fmt(edge.y2));
       const active = edge.letter === session.activeWall;
       line.setAttribute("stroke", active ? "#f54e49" : "#2b2c30");
-      line.setAttribute("stroke-width", active ? "5" : "3");
+      line.setAttribute("stroke-width", active ? "3" : "1.8");
       line.setAttribute("stroke-linecap", "round");
       svg.appendChild(line);
     }
-    const room = this.store.room;
-    for (const opening of room.openings) {
-      const letter = wallToLetter(opening.wallId, session);
-      if (letter === null) continue;
-      const wallLen = Math.max(1, wallLengthOf(room, opening.wallId));
-      const u0 = opening.offset / wallLen;
-      const u1 = (opening.offset + opening.width) / wallLen;
-      const edge = edges.find((e) => e.letter === letter);
-      if (edge === undefined) continue;
-      const gx1 = edge.x1 + (edge.x2 - edge.x1) * u0;
-      const gy1 = edge.y1 + (edge.y2 - edge.y1) * u0;
-      const gx2 = edge.x1 + (edge.x2 - edge.x1) * u1;
-      const gy2 = edge.y1 + (edge.y2 - edge.y1) * u1;
+    for (const opening of data.openings) {
       const gap = document.createElementNS(svgNS, "line");
-      gap.setAttribute("x1", String(gx1));
-      gap.setAttribute("y1", String(gy1));
-      gap.setAttribute("x2", String(gx2));
-      gap.setAttribute("y2", String(gy2));
-      gap.setAttribute("stroke", "#f54e49");
-      gap.setAttribute("stroke-width", "5");
+      gap.setAttribute("x1", fmt(opening.gx1));
+      gap.setAttribute("y1", fmt(opening.gy1));
+      gap.setAttribute("x2", fmt(opening.gx2));
+      gap.setAttribute("y2", fmt(opening.gy2));
+      gap.setAttribute("stroke", "#ffffff");
+      gap.setAttribute("stroke-width", "4");
       gap.setAttribute("stroke-linecap", "round");
       svg.appendChild(gap);
+      if (opening.kind === "door") {
+        const leaf = document.createElementNS(svgNS, "line");
+        leaf.setAttribute("x1", fmt(opening.hx));
+        leaf.setAttribute("y1", fmt(opening.hy));
+        leaf.setAttribute("x2", fmt(opening.leafX));
+        leaf.setAttribute("y2", fmt(opening.leafY));
+        leaf.setAttribute("stroke", opening.selected ? "#f54e49" : "#b3261e");
+        leaf.setAttribute("stroke-width", opening.selected ? "2" : "1.4");
+        leaf.setAttribute("stroke-linecap", "round");
+        svg.appendChild(leaf);
+        if (opening.arcD !== null) {
+          const arc = document.createElementNS(svgNS, "path");
+          arc.setAttribute("d", opening.arcD);
+          arc.setAttribute("fill", "none");
+          arc.setAttribute("stroke", opening.selected ? "#f54e49" : "#b3261e");
+          arc.setAttribute("stroke-width", opening.selected ? "2" : "1.4");
+          svg.appendChild(arc);
+        }
+      } else {
+        for (const [ox1, oy1, ox2, oy2] of opening.windowLines) {
+          const line = document.createElementNS(svgNS, "line");
+          line.setAttribute("x1", fmt(ox1));
+          line.setAttribute("y1", fmt(oy1));
+          line.setAttribute("x2", fmt(ox2));
+          line.setAttribute("y2", fmt(oy2));
+          line.setAttribute("stroke", opening.selected ? "#f54e49" : "#2b2c30");
+          line.setAttribute("stroke-width", opening.selected ? "1.8" : "1.1");
+          line.setAttribute("stroke-linecap", "round");
+          svg.appendChild(line);
+        }
+      }
+    }
+    for (const edge of data.edges) {
+      const label = document.createElementNS(svgNS, "text");
+      label.setAttribute("x", fmt(edge.labelX));
+      label.setAttribute("y", fmt(edge.labelY));
+      label.setAttribute("text-anchor", edge.anchor);
+      label.setAttribute("dominant-baseline", "middle");
+      label.setAttribute("font-size", "5.5");
+      label.setAttribute("font-weight", "700");
+      label.setAttribute("fill", "#2b2c30");
+      label.textContent = edge.label;
+      svg.appendChild(label);
     }
     this.planEl.appendChild(svg);
     const legend = document.createElement("div");

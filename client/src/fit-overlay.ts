@@ -94,8 +94,8 @@ export class FitOverlay {
     return this.clearanceMesh?.visible ?? false;
   }
 
-  /** Door swing sectors as flat red sectors on the floor: rebuilt for the
-   * current doors only, so rooms with no door show no sector. */
+  /** Door swing arcs as thin red outlines on the floor: rebuilt for the
+   * current doors only, so rooms with no door show no arc. */
   private clearArcs(): void {
     for (const mesh of this.arcMeshes) {
       this.scene.remove(mesh);
@@ -110,38 +110,42 @@ export class FitOverlay {
     this.arcMeshes = [];
   }
 
-  /** Door swing sectors as flat red sectors on the floor. */
+  /**
+   * Door swing arcs as thin red outlines on the floor (the arc curve plus
+   * its two radii, no filled patch): one line per door, none without a
+   * door. Red #B3261E at 35 % per the fit-status tokens.
+   */
   private buildArcs(doors: FitAnalysis["doors"]): void {
     if (doors.length === 0) return;
-    const mat = new THREE.MeshBasicMaterial({
+    const mat = new THREE.LineBasicMaterial({
       color: RED,
       transparent: true,
       opacity: 0.35,
       depthWrite: false,
-      side: THREE.DoubleSide,
     });
     for (const door of doors) {
-      // Shape space maps to world as (sx, -sy): pre-negate the z sign so
-      // the flat-rotated mesh lands on the plan coordinates.
-      const shape = new THREE.Shape();
       const hx = cmToMeters(door.hx);
       const hz = cmToMeters(door.hz);
-      shape.moveTo(hx, -hz);
+      const pts: THREE.Vector3[] = [new THREE.Vector3(hx, 0.02, hz)];
       const steps = 24;
       for (let i = 0; i <= steps; i += 1) {
         const phi = (i / steps) * (Math.PI / 2);
         const dx = door.ax * Math.cos(phi) + door.nx * Math.sin(phi);
         const dz = door.az * Math.cos(phi) + door.nz * Math.sin(phi);
-        shape.lineTo(hx + cmToMeters(dx * door.radius), -(hz + cmToMeters(dz * door.radius)));
+        pts.push(
+          new THREE.Vector3(
+            hx + cmToMeters(dx * door.radius),
+            0.02,
+            hz + cmToMeters(dz * door.radius),
+          ),
+        );
       }
-      shape.closePath();
-      const mesh = new THREE.Mesh(new THREE.ShapeGeometry(shape, 4), mat);
-      mesh.rotation.x = -Math.PI / 2;
-      mesh.position.y = 0.02;
-      mesh.name = `fit-swing-${door.doorId}`;
-      mesh.renderOrder = 1;
-      this.scene.add(mesh);
-      this.arcMeshes.push(mesh);
+      pts.push(new THREE.Vector3(hx, 0.02, hz));
+      const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), mat);
+      line.name = `fit-swing-${door.doorId}`;
+      line.renderOrder = 1;
+      this.scene.add(line);
+      this.arcMeshes.push(line as unknown as THREE.Mesh);
     }
   }
 

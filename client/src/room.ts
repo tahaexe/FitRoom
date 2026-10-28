@@ -3,8 +3,8 @@ import type { Opening, RoomLayout, Wall } from "@fitroom/shared";
 import { cmToMeters, wallLengthCm } from "@fitroom/shared";
 
 export const WALL_MATERIAL = new THREE.MeshStandardMaterial({
-  color: 0xf1ece2,
-  roughness: 0.94,
+  color: 0xf3efe8,
+  roughness: 1,
   metalness: 0,
 });
 

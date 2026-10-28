@@ -24,6 +24,33 @@ export const MODEL_YAW_FIX_DEG: Record<string, number> = {
   wooden_display_shelves_01: 90,
 };
 
+/**
+ * Thin dark silhouette outline on every piece (about #2B2C30 at 60 %,
+ * 1 px lines): one `LineSegments` per mesh from its edges, so the piece
+ * reads at a glance in both the 3D and plan views.
+ */
+export const OUTLINE_COLOR = 0x2b2c30;
+export const OUTLINE_OPACITY = 0.6;
+
+function addOutlines(root: THREE.Object3D): void {
+  const mat = new THREE.LineBasicMaterial({
+    color: OUTLINE_COLOR,
+    transparent: true,
+    opacity: OUTLINE_OPACITY,
+  });
+  const meshes: THREE.Mesh[] = [];
+  root.traverse((obj) => {
+    if ((obj as THREE.Mesh).isMesh === true) meshes.push(obj as THREE.Mesh);
+  });
+  for (const mesh of meshes) {
+    const geometry = mesh.geometry as THREE.BufferGeometry | undefined;
+    if (geometry === undefined) continue;
+    const lines = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 25), mat);
+    lines.name = "fitroom-outline";
+    mesh.add(lines);
+  }
+}
+
 export const MODEL_NOTES: Record<string, string> = {
   painted_wooden_sofa:
     "Oversized source scaled 0.7857 to a 44cm seat; front +Z, centred, grounded.",
@@ -193,6 +220,7 @@ export function loadModel(item: CatalogItem): Promise<THREE.Group> {
         mesh.receiveShadow = true;
       }
     });
+    addOutlines(root);
     if (item.id === "SheenChair") indexSheenVariants(item.id, gltf.parser);
     loadCache.set(item.id, root);
     return instantiate(root);
