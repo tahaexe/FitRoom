@@ -74,6 +74,7 @@ import {
   TOOLBAR_ROTATE_RIGHT,
   TOOLBAR_VISUALISE,
   USE_SAMPLE_ROOM,
+  storeAddHint,
 } from "./copy";
 import { Guide, GuideView, queryGuideTarget, type GuideScreen } from "./guide";
 import {
@@ -97,6 +98,12 @@ import { OrbitResolutionController } from "./orbit-resolution";
 import { isPhoneViewport, PhoneSheets, type PhoneSheetName } from "./phone-sheet";
 import { buildCartModel } from "./cart-model";
 import { decodeLayout, encodeLayout, type DecodedLayout } from "./layout-share";
+import {
+  hasStoreAdd,
+  highlightStoreAddCard,
+  storeAddIdFromSearch,
+  stripStoreAdd,
+} from "./store-add";
 import { PointerOwnership } from "./pointer-ownership";
 import { SceneSynchronizer } from "./scene-sync";
 import { EditorStore } from "./editor/editor-store";
@@ -343,6 +350,10 @@ class FitRoomApp {
   /** Current side panel (desktop visibility + phone sheet source of truth). */
   private sidePanel: "inspector" | "recommend" | "assistant" | "cart" | "none" = "none";
   private pendingSharedLayout: DecodedLayout | null = null;
+  /** `?add=` catalog id, read once at start (the address is cleaned at once). */
+  private pendingStoreAdd: string | null = null;
+  /** The entry hint shows at most once per app start. */
+  private storeAddShown = false;
   private sharedInvalid = false;
   private wasPhone = false;
   /** Resize coalescing: at most one breakpoint + guide pass per frame. */
@@ -386,6 +397,24 @@ class FitRoomApp {
         return null;
       }
     })();
+    // A furniture store's `?add=<catalog id>` entry: read once beside
+    // `?room=`, then leave the address at once. Unknown ids do nothing
+    // later; the link itself never places anything.
+    this.pendingStoreAdd = storeAddIdFromSearch(window.location.search, (id) =>
+      CATALOG_MAP.has(id),
+    );
+    if (hasStoreAdd(window.location.search)) {
+      try {
+        const cleaned = stripStoreAdd(window.location.search);
+        history.replaceState(
+          null,
+          "",
+          `${window.location.pathname}${cleaned}${window.location.hash}`,
+        );
+      } catch {
+        // Address cleanup is best-effort; the entry still resolves.
+      }
+    }
     const storedManualRoom = ROOM.id === "manual-room" ? null : loadRoomLayout("manual-room");
     const storedPhotosRoom = ROOM.id === "photos-room" ? null : loadRoomLayout("photos-room");
     let hasSavedScene = false;
@@ -829,6 +858,9 @@ class FitRoomApp {
       this.menuChoice = "photos";
       this.refreshMenu();
     }
+    // A store `?add=` entry highlights its catalog card now that the app
+    // opened as today (setup screen, last room, or shared layout first).
+    this.maybeHighlightStoreAdd();
     // Render on demand: frames only while the camera moves, after scene or
     // selection changes, or when a texture finishes loading. No idle loop.
     this.requestRender();
@@ -924,6 +956,29 @@ class FitRoomApp {
     }));
     void this.syncInstances();
     this.refreshIssues();
+  }
+
+  /**
+   * `?add=<id>` entry: bring the piece's catalog card into view with a ring
+   * and the one entry hint — only when no guide bubble shows. The link
+   * places nothing: the room, its saved copy and every demo key stay
+   * unchanged until the visitor acts.
+   */
+  private maybeHighlightStoreAdd(): void {
+    const id = this.pendingStoreAdd;
+    this.pendingStoreAdd = null;
+    if (id === null || this.storeAddShown) return;
+    if (this.guide.showing) return;
+    const entry = CATALOG_MAP.get(id);
+    if (entry === undefined) return;
+    const host = document.getElementById("catalog");
+    if (host === null) return;
+    // Phones read the card in the catalog sheet at its peek.
+    if (isPhoneViewport()) this.sheets?.open("catalog");
+    const card = host.querySelector(`[data-product-id="${id}"]`);
+    if (card === null) return;
+    this.storeAddShown = true;
+    highlightStoreAddCard(host, card, storeAddHint(entry.name), isPhoneViewport());
   }
 
   /** Queue a single frame unless one is already queued. */

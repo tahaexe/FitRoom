@@ -208,6 +208,7 @@ export class CatalogPanel {
       const card = document.createElement("button");
       card.type = "button";
       card.className = "catalog-card";
+      card.dataset["productId"] = item.id;
       const thumb = document.createElement("img");
       thumb.src = item.thumbnail;
       thumb.alt = item.name;
