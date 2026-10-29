@@ -486,7 +486,7 @@ check("store way back opens the app", STORE_OPEN_APP === "Open FitRoom");
 check(
   "store entry hint names the piece",
   storeAddHint("Chester Leather Sofa") ===
-    "Drag the Chester Leather Sofa into your room, or press + Add",
+    "Press + Add to put the Chester Leather Sofa in your room",
   storeAddHint("Chester Leather Sofa"),
 );
 {
@@ -496,7 +496,7 @@ check(
     "See it in your room",
     "That piece isn't in the demo store.",
     "Open FitRoom",
-    "into your room, or press",
+    "Press + Add to put the",
   ];
   for (const file of storeFiles) {
     const code = src(file)

@@ -66,7 +66,7 @@ export const STORE_OPEN_APP = "Open FitRoom";
 
 /** Entry hint for a catalog card: names the piece, never a bare id. */
 export function storeAddHint(name: string): string {
-  return `Drag the ${name} into your room, or press + Add`;
+  return `Press + Add to put the ${name} in your room`;
 }
 
 /** Example photo view: the placed pieces drawn into the wall photo. */

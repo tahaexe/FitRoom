@@ -6,10 +6,11 @@
  *   parse to null and do nothing;
  * - `add` leaves the address once read (other parameters survive);
  * - the highlight rings the piece's card, scrolls it into view (sheet top
- *   on phones) and shows the one hint `Drag the <name> into your room, or
- *   press + Add`, exactly once;
+ *   on phones) and shows the one hint `Press + Add to put the <name> in
+ *   your room`, exactly once;
  * - the link places nothing: the room state is equal before and after;
- * - `main.ts` runs the highlight only when no guide bubble shows, opens
+ * - `main.ts` keeps the pending piece until the guide has ended and a room
+ *   is open with its catalog on screen, then runs the highlight once, opens
  *   the catalog sheet on phones, and commits nothing (no store write, no
  *   saved room, no demo key).
  *
@@ -74,7 +75,7 @@ check(
 // ---- The hint names the piece, once ----
 check(
   "entry:hint-names-the-piece",
-  storeAddHint(KNOWN_NAME) === `Drag the ${KNOWN_NAME} into your room, or press + Add`,
+  storeAddHint(KNOWN_NAME) === `Press + Add to put the ${KNOWN_NAME} in your room`,
   storeAddHint(KNOWN_NAME),
 );
 
