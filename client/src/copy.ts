@@ -26,6 +26,9 @@ export const TAPE_NEXT = "Next: confirm";
 /** The confirm view (and size form) keeps this build name. */
 export const BUILD_MY_ROOM = "Build my room";
 
+/** Size form's plan-editor link: openings and exact walls, not rectangles. */
+export const SHAPE_IN_EDITOR = "Doors, windows and exact walls: adjust them in the plan editor";
+
 /** The one demo-miss / capped way out, named the same in every card. */
 export const USE_SAMPLE_ROOM = "Use the sample room";
 export const TURN_ON_LIVE = "Turn on Live AI";

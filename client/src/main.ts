@@ -484,12 +484,9 @@ class FitRoomApp {
     this.controls.maxDistance = 18;
     if (firstVisit) this.frameDollhouse(cxM, czM, wM, dM, aspect);
 
-    dressWalls(() => this.requestRender(), ROOM.surfaces.wall, ROOM.surfaces.wallTint);
-    const floorMat = makeFloorMaterial(wM, dM, () => this.requestRender(), ROOM.surfaces.floor);
-    this.floorMaterial = floorMat;
-    const built = buildRoom(ROOM, floorMat);
-    this.scene.add(built.group);
-    this.roomGroup = built.group;
+    // The first 3D downloads start in `startStageLoads` (after the setup
+    // card's first paint on a first visit, at once on a returning visit),
+    // so no 3D file is requested before the card has painted.
     this.scene.add(this.modelsRoot);
     this.syncer = new SceneSynchronizer<THREE.Group>({
       load: async (item) => {
@@ -518,17 +515,6 @@ class FitRoomApp {
       },
     });
     this.rebuildExistingGroup();
-    const floor = built.group.getObjectByName("fitroom-floor");
-    if (floor instanceof THREE.Mesh) this.floorMesh = floor;
-    this.rig = setupStage(this.renderer, this.scene, built.floorSize, built.wallHeightM, () =>
-      this.requestRender(),
-    );
-    this.roomWalls = built.group;
-    this.wallEntries = built.wallEntries.map((e) => ({
-      wallId: e.wallId,
-      meshes: e.meshes,
-      outward: e.outward,
-    }));
 
     // Selection outline + rotate ring + size tag.
     this.rotateHandle = new THREE.Group();
@@ -712,7 +698,6 @@ class FitRoomApp {
     // Nothing open on first load: the side column starts empty.
     this.showSidePanel("none");
     this.watchPanelClose();
-    void this.syncInstances();
     this.refreshIssues();
     this.updateSelectionTools();
     this.updateMeasure();
@@ -747,6 +732,15 @@ class FitRoomApp {
       onSkip: () => this.skipGuide(),
     });
     if (this.firstOpenSetup && roomParam !== "sample") this.firstOpen.showCards();
+    const showsSetup = this.firstOpenSetup && roomParam !== "sample";
+    if (showsSetup) {
+      // First visit: the setup card goes up first; the stage's downloads
+      // start after its first paint, never before the card has painted.
+      this.afterFirstPaint(() => this.startStageLoads());
+    } else {
+      // Returning visit with no setup screen: loads its room as today.
+      this.startStageLoads();
+    }
     // First paint of the four-moment guide: moment 1 on the first-run
     // dialog, else the moment that fits the screen — or nothing seen.
     this.updateGuide();
@@ -800,6 +794,71 @@ class FitRoomApp {
     }
   }
 
+  /**
+   * Run after the setup card's first paint: two animation frames land
+   * after the browser has painted, while the card image's `decode()` wins
+   * the race when it is already ready. A short time-out starts the room
+   * even when the card image is slow, so it never holds the room back.
+   */
+  private afterFirstPaint(run: () => void): void {
+    let done = false;
+    const go = (): void => {
+      if (done) return;
+      done = true;
+      run();
+    };
+    window.requestAnimationFrame(() => window.requestAnimationFrame(go));
+    const img = this.firstOpen?.element.querySelector("img.setup-thumb");
+    if (img instanceof HTMLImageElement && typeof img.decode === "function") {
+      const fallback = window.setTimeout(go, 1500);
+      void img
+        .decode()
+        .then(() => {
+          window.clearTimeout(fallback);
+          go();
+        })
+        .catch(() => {
+          window.clearTimeout(fallback);
+          go();
+        });
+    } else {
+      window.setTimeout(go, 1500);
+    }
+  }
+
+  /**
+   * The first 3D downloads (floor and wall maps, the HDRI, the models):
+   * after the setup card's first paint on a first visit, at once on a
+   * returning visit. Runs once per app start.
+   */
+  private stageLoadsStarted = false;
+  private startStageLoads(): void {
+    if (this.stageLoadsStarted) return;
+    this.stageLoadsStarted = true;
+    dressWalls(() => this.requestRender(), ROOM.surfaces.wall, ROOM.surfaces.wallTint);
+    const bounds = roomBounds(ROOM);
+    const wM = cmToMeters(bounds.maxX - bounds.minX);
+    const dM = cmToMeters(bounds.maxZ - bounds.minZ);
+    const floorMat = makeFloorMaterial(wM, dM, () => this.requestRender(), ROOM.surfaces.floor);
+    this.floorMaterial = floorMat;
+    const built = buildRoom(ROOM, floorMat);
+    this.scene.add(built.group);
+    this.roomGroup = built.group;
+    const floor = built.group.getObjectByName("fitroom-floor");
+    if (floor instanceof THREE.Mesh) this.floorMesh = floor;
+    this.rig = setupStage(this.renderer, this.scene, built.floorSize, built.wallHeightM, () =>
+      this.requestRender(),
+    );
+    this.roomWalls = built.group;
+    this.wallEntries = built.wallEntries.map((e) => ({
+      wallId: e.wallId,
+      meshes: e.meshes,
+      outward: e.outward,
+    }));
+    void this.syncInstances();
+    this.refreshIssues();
+  }
+
   /** Queue a single frame unless one is already queued. */
   private requestRender(): void {
     if (this.rafId !== 0) return;
@@ -816,8 +875,8 @@ class FitRoomApp {
     this.requestRender();
   }
 
-  private roomWalls: THREE.Group;
-  private wallEntries: Array<{ wallId: string; meshes: THREE.Mesh[]; outward: THREE.Vector3 }>;
+  private roomWalls!: THREE.Group;
+  private wallEntries!: Array<{ wallId: string; meshes: THREE.Mesh[]; outward: THREE.Vector3 }>;
 
   // ---- mutations ----
 
@@ -1144,7 +1203,7 @@ class FitRoomApp {
     this.refreshMenu();
   }
 
-  /** "Not a rectangle?": open the editor at the typed size for shaping. */
+  /** Plan-editor link: open the editor at the typed size for shaping. */
   private shapeInEditor(size: RoomSize | null): void {
     const at = size ?? { widthCm: 420, lengthCm: 360, ceilingCm: 250 };
     this.buildRoomAtSize(at);

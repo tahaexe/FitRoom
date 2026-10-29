@@ -70,7 +70,7 @@ import {
   openingBoxText,
   wallCardStatus,
 } from "../src/editor/photo-confirm.js";
-import { confirmOpeningLabel } from "../src/copy.js";
+import { SHAPE_IN_EDITOR, confirmOpeningLabel } from "../src/copy.js";
 import {
   detectDefaultUnit,
   detectSlip,
@@ -876,14 +876,16 @@ check("firstopen:photos-live", firstOpenSource.includes("Uses Live AI"));
 check("firstopen:sample-size", firstOpenSource.includes("420 × 360 cm"));
 check(
   "firstopen:sample-photo",
-  firstOpenSource.includes("assets/sample-room.webp") &&
+  firstOpenSource.includes("assets/sample-room-640.webp") &&
     firstOpenSource.includes("setup-thumb-size"),
   "the sample card shows the recorded photoreal picture with its size over it",
 );
 check("firstopen:measure-hint", firstOpenSource.includes("Measure wall to wall at floor level."));
 check(
   "firstopen:not-rectangle",
-  firstOpenSource.includes("Not a rectangle? Shape it in the plan editor"),
+  firstOpenSource.includes("SHAPE_IN_EDITOR") &&
+    SHAPE_IN_EDITOR === "Doors, windows and exact walls: adjust them in the plan editor",
+  "the size form's plan-editor link renders the copy module's words",
 );
 check(
   "firstopen:door-tip",

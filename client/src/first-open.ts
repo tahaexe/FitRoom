@@ -20,7 +20,7 @@ import {
   type SizeUnit,
   type SlipSuggestion,
 } from "./room-units";
-import { BUILD_MY_ROOM } from "./copy";
+import { BUILD_MY_ROOM, SHAPE_IN_EDITOR } from "./copy";
 
 export interface RoomSize {
   widthCm: number;
@@ -55,7 +55,10 @@ function sampleThumb(): HTMLElement {
   const wrap = el("div", "setup-thumb-wrap");
   const img = document.createElement("img");
   img.className = "setup-thumb";
-  img.src = "assets/sample-room.webp";
+  img.src = "assets/sample-room-640.webp";
+  img.setAttribute("width", "640");
+  img.setAttribute("height", "427");
+  img.setAttribute("fetchpriority", "high");
   img.alt = "Photoreal view of the furnished sample room, 420 by 360 centimetres";
   const badge = el("span", "setup-thumb-size", "420 × 360 cm");
   wrap.append(img, badge);
@@ -308,7 +311,7 @@ export class FirstOpen {
     this.buildReason.setAttribute("aria-live", "polite");
     form.appendChild(this.buildReason);
 
-    const shape = el("button", "setup-link", "Not a rectangle? Shape it in the plan editor");
+    const shape = el("button", "setup-link", SHAPE_IN_EDITOR);
     shape.type = "button";
     shape.addEventListener("click", () => {
       this.callbacks.onShapeInEditor(this.currentSize());
