@@ -36,6 +36,8 @@
     "check:photo-cards": "npm run check:photo-cards -w @fitroom/client",
     "check:example-room": "npm run check:example-room -w @fitroom/client",
     "check:guidance": "npm run check:guidance -w @fitroom/client",
+    "check:notices": "npm run check:notices -w @fitroom/client",
+    "check:credits": "npm run check:credits -w @fitroom/client",
     "check:guide": "npm run check:guide -w @fitroom/client",
     "check:states": "npm run check:states -w @fitroom/client",
     "check:labels": "npm run check:labels -w @fitroom/client",

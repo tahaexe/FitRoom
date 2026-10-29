@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5173 --strictPort",
-    "build": "vite build",
+    "build": "node scripts/write-third-party-notices.mjs && vite build",
+    "check:notices": "tsx scripts/check-notices.ts",
+    "check:credits": "tsx scripts/check-credits.ts",
     "check:capture": "tsx scripts/check-capture.ts",
     "check:photo-intake": "tsx scripts/check-photo-intake.ts",
     "check:example-room": "tsx scripts/check-example-room.ts",
