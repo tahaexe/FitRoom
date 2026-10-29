@@ -140,8 +140,7 @@ export function resolveStaticFile(urlPath: string, distDir: string): string {
   if (normalized === "" || normalized === "/") return indexFile;
   const candidate = resolve(distDir, `.${normalized}`);
   const relToDist = relative(distDir, candidate);
-  const isInside =
-    relToDist !== "" && relToDist !== ".." && !relToDist.startsWith(`..${sep}`);
+  const isInside = relToDist !== "" && relToDist !== ".." && !relToDist.startsWith(`..${sep}`);
   if (!isInside) return indexFile;
   if (extname(candidate) !== "") {
     if (existsSync(candidate)) return candidate;
@@ -149,8 +148,7 @@ export function resolveStaticFile(urlPath: string, distDir: string): string {
   }
   const htmlCandidate = resolve(distDir, `.${normalized}.html`);
   const htmlRel = relative(distDir, htmlCandidate);
-  const htmlInside =
-    htmlRel !== "" && htmlRel !== ".." && !htmlRel.startsWith(`..${sep}`);
+  const htmlInside = htmlRel !== "" && htmlRel !== ".." && !htmlRel.startsWith(`..${sep}`);
   if (htmlInside && existsSync(htmlCandidate)) return htmlCandidate;
   return indexFile;
 }
