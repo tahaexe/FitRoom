@@ -94,6 +94,7 @@ import { captureView } from "./render/capture";
 import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
 import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
+import { runOnePerTask } from "./boot-tasks";
 import { surfaceMapFiles } from "./surface-maps";
 import { OrbitResolutionController } from "./orbit-resolution";
 import { isPhoneViewport, PhoneSheets, type PhoneSheetName } from "./phone-sheet";
@@ -936,28 +937,61 @@ class FitRoomApp {
   private startStageLoads(): void {
     if (this.stageLoadsStarted) return;
     this.stageLoadsStarted = true;
-    dressWalls(() => this.requestRender(), ROOM.surfaces.wall, ROOM.surfaces.wallTint);
-    const bounds = roomBounds(ROOM);
-    const wM = cmToMeters(bounds.maxX - bounds.minX);
-    const dM = cmToMeters(bounds.maxZ - bounds.minZ);
-    const floorMat = makeFloorMaterial(wM, dM, () => this.requestRender(), ROOM.surfaces.floor);
-    this.floorMaterial = floorMat;
-    const built = buildRoom(ROOM, floorMat);
-    this.scene.add(built.group);
-    this.roomGroup = built.group;
-    const floor = built.group.getObjectByName("fitroom-floor");
-    if (floor instanceof THREE.Mesh) this.floorMesh = floor;
-    this.rig = setupStage(this.renderer, this.scene, built.floorSize, built.wallHeightM, () =>
-      this.requestRender(),
-    );
-    this.roomWalls = built.group;
-    this.wallEntries = built.wallEntries.map((e) => ({
-      wallId: e.wallId,
-      meshes: e.meshes,
-      outward: e.outward,
-    }));
-    void this.syncInstances();
-    this.refreshIssues();
+    // One heavy step per task: every step runs, then the main thread
+    // yields (idle time when available, else a zero time-out) before the
+    // next begins, so the setup screen's buttons answer at once while the
+    // room behind still finishes on its own. Order matches the old
+    // straight-line boot: walls, floor, room, stage (with its environment
+    // prefilter), model parses and variants (each model its own task inside
+    // the synchronizer), shader precompile, shadow refresh, then issues.
+    let floorMat: THREE.Material | null = null;
+    let floorSize: { wM: number; dM: number; cxM: number; czM: number } | null = null;
+    let wallHeightM = 0;
+    void runOnePerTask([
+      () => {
+        dressWalls(() => this.requestRender(), ROOM.surfaces.wall, ROOM.surfaces.wallTint);
+      },
+      () => {
+        const bounds = roomBounds(ROOM);
+        const wM = cmToMeters(bounds.maxX - bounds.minX);
+        const dM = cmToMeters(bounds.maxZ - bounds.minZ);
+        floorMat = makeFloorMaterial(wM, dM, () => this.requestRender(), ROOM.surfaces.floor);
+        this.floorMaterial = floorMat;
+      },
+      () => {
+        if (floorMat === null) return;
+        const built = buildRoom(ROOM, floorMat);
+        this.scene.add(built.group);
+        this.roomGroup = built.group;
+        const floor = built.group.getObjectByName("fitroom-floor");
+        if (floor instanceof THREE.Mesh) this.floorMesh = floor;
+        floorSize = built.floorSize;
+        wallHeightM = built.wallHeightM;
+        this.roomWalls = built.group;
+        this.wallEntries = built.wallEntries.map((e) => ({
+          wallId: e.wallId,
+          meshes: e.meshes,
+          outward: e.outward,
+        }));
+      },
+      () => {
+        if (floorSize === null) return;
+        this.rig = setupStage(this.renderer, this.scene, floorSize, wallHeightM, () =>
+          this.requestRender(),
+        );
+      },
+      () => this.syncInstances(),
+      () => {
+        this.renderer.compile(this.scene, this.orbitCam);
+      },
+      () => {
+        this.shadowNeedsUpdate = true;
+        this.markSceneChanged();
+      },
+      () => {
+        this.refreshIssues();
+      },
+    ]);
   }
 
   /**

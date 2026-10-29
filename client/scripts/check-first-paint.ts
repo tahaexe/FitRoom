@@ -21,6 +21,7 @@
 import { readFileSync, statSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runOnePerTask, yieldToUI } from "../src/boot-tasks.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const clientDir = join(here, "..");
@@ -196,6 +197,77 @@ check(
     paintStep.split("requestAnimationFrame").length - 1 >= 2,
   "stage loads must start two frames after decode settles or the 1500ms time-out",
 );
+
+// ---- One heavy step per task: the boot yields between steps ----
+const bootTasksSource = readFileSync(join(srcDir, "boot-tasks.ts"), "utf8");
+check(
+  "first-paint:boot-tasks-yield",
+  bootTasksSource.includes("requestIdleCallback") &&
+    bootTasksSource.includes("timeout") &&
+    bootTasksSource.includes("setTimeout"),
+  "boot-tasks must yield via requestIdleCallback with a time-out or setTimeout(0)",
+);
+check(
+  "first-paint:boot-imports-tasks",
+  mainSource.includes('from "./boot-tasks"') && mainSource.includes("runOnePerTask"),
+  "main.ts must run the boot through boot-tasks",
+);
+check(
+  "first-paint:stage-steps-one-per-task",
+  stageStep.includes("runOnePerTask"),
+  "startStageLoads must run each heavy step in its own task via runOnePerTask",
+);
+const syncSource = src("scene-sync.ts");
+check(
+  "first-paint:models-one-per-task",
+  (syncSource.includes('from "./boot-tasks"') &&
+    (syncSource.includes("yieldToUI") || syncSource.includes("runOnePerTask"))) ||
+    stageStep.includes("yieldToUI"),
+  "each model's parse and variant must yield to its own task",
+);
+
+// Stubbed steps over the boot code: order is preserved and no two heavy
+// steps share a task (each step observes a distinct task id).
+{
+  const order: string[] = [];
+  const tasks: number[] = [];
+  let taskId = 0;
+  let yields = 0;
+  const yieldTask = (): Promise<void> => {
+    yields += 1;
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        taskId += 1;
+        resolve();
+      }, 0);
+    });
+  };
+  await runOnePerTask(
+    [
+      () => {
+        order.push("walls");
+        tasks.push(taskId);
+      },
+      () => {
+        order.push("floor");
+        tasks.push(taskId);
+      },
+      () => {
+        order.push("stage");
+        tasks.push(taskId);
+      },
+      () => {
+        order.push("models");
+        tasks.push(taskId);
+      },
+    ],
+    yieldTask,
+  );
+  check("first-paint:boot-order", order.join(",") === "walls,floor,stage,models", order.join(","));
+  check("first-paint:boot-yields-between-steps", yields === 3, `yields=${String(yields)}`);
+  check("first-paint:boot-steps-own-tasks", new Set(tasks).size === tasks.length, tasks.join(","));
+  check("first-paint:yield-is-a-promise", typeof yieldToUI() === "object");
+}
 
 if (failures > 0) process.exit(1);
 console.log("first-paint ok: the card paints first, the stage loads after");

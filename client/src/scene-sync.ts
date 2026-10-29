@@ -18,6 +18,7 @@
  */
 
 import type { SceneItem } from "@fitroom/shared";
+import { yieldToUI } from "./boot-tasks";
 
 export interface SceneEntry<G> {
   item: SceneItem;
@@ -52,7 +53,15 @@ export class SceneSynchronizer<G> {
     const wanted = new Map<string, SceneItem>();
     for (const item of stateItems) wanted.set(item.instanceId, item);
 
-    for (const item of stateItems) {
+    for (let index = 0; index < stateItems.length; index += 1) {
+      // Each model's parse and variant runs in its own task: yield
+      // between pieces (idle time when available, else a zero time-out)
+      // so the setup screen stays responsive while the room fills in.
+      if (index > 0) {
+        await yieldToUI();
+        if (epoch !== this.epoch) return;
+      }
+      const item = stateItems[index] as SceneItem;
       if (epoch !== this.epoch) return;
       const existing = this.instances.get(item.instanceId);
       if (existing === undefined) {
