@@ -795,10 +795,10 @@ class FitRoomApp {
   }
 
   /**
-   * Run after the setup card's first paint: two animation frames land
-   * after the browser has painted, while the card image's `decode()` wins
-   * the race when it is already ready. A short time-out starts the room
-   * even when the card image is slow, so it never holds the room back.
+   * Run after the setup card's first paint: two animation frames after the
+   * card image's `decode()` settles, so the card has painted before the
+   * stage's downloads start. A short time-out starts the room even when
+   * the card image is slow, so it never holds the room back.
    */
   private afterFirstPaint(run: () => void): void {
     let done = false;
@@ -807,22 +807,25 @@ class FitRoomApp {
       done = true;
       run();
     };
-    window.requestAnimationFrame(() => window.requestAnimationFrame(go));
     const img = this.firstOpen?.element.querySelector("img.setup-thumb");
     if (img instanceof HTMLImageElement && typeof img.decode === "function") {
-      const fallback = window.setTimeout(go, 1500);
+      const fallback = window.setTimeout(() => {
+        window.requestAnimationFrame(() => window.requestAnimationFrame(go));
+      }, 1500);
       void img
         .decode()
         .then(() => {
           window.clearTimeout(fallback);
-          go();
+          window.requestAnimationFrame(() => window.requestAnimationFrame(go));
         })
         .catch(() => {
           window.clearTimeout(fallback);
-          go();
+          window.requestAnimationFrame(() => window.requestAnimationFrame(go));
         });
     } else {
-      window.setTimeout(go, 1500);
+      window.setTimeout(() => {
+        window.requestAnimationFrame(() => window.requestAnimationFrame(go));
+      }, 1500);
     }
   }
 
@@ -875,8 +878,8 @@ class FitRoomApp {
     this.requestRender();
   }
 
-  private roomWalls!: THREE.Group;
-  private wallEntries!: Array<{ wallId: string; meshes: THREE.Mesh[]; outward: THREE.Vector3 }>;
+  private roomWalls: THREE.Group | null = null;
+  private wallEntries: Array<{ wallId: string; meshes: THREE.Mesh[]; outward: THREE.Vector3 }> = [];
 
   // ---- mutations ----
 
@@ -3249,6 +3252,7 @@ class FitRoomApp {
   /** Dollhouse: hide the 2 walls nearest the camera (orbit mode only). */
   private updateDollhouse(): void {
     if (this.devCam) return;
+    if (this.wallEntries.length === 0) return;
     const cam = this.activeCamera();
     if (this.mode === "plan") {
       for (const e of this.wallEntries) for (const m of e.meshes) m.visible = false;

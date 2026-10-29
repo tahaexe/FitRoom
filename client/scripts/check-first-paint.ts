@@ -161,5 +161,41 @@ check(
   `expected the single syncer loadModel call, found ${String(loadModelCalls)}`,
 );
 
+// ---- Walls start empty: no definite assignment, frames before loads are safe ----
+check(
+  "first-paint:no-bang-walls",
+  !mainSource.includes("private roomWalls!") && !mainSource.includes("private wallEntries!"),
+  "roomWalls and wallEntries must start empty without a ! assertion",
+);
+const dollStart = mainSource.indexOf("private updateDollhouse(");
+const dollEnd = mainSource.indexOf("\n  private updateTag(");
+const doll = dollStart >= 0 && dollEnd > dollStart ? mainSource.slice(dollStart, dollEnd) : "";
+const frameStart = mainSource.indexOf("private frame(");
+const frameStep = frameStart >= 0 ? mainSource.slice(frameStart, frameStart + 3000) : "";
+check(
+  "first-paint:empty-walls",
+  doll.includes("this.wallEntries.length === 0") ||
+    frameStep.includes("this.wallEntries.length === 0"),
+  "updateDollhouse (or frame) must handle empty walls",
+);
+
+// ---- Loads start two frames after the decode settles or the time-out ----
+const decodeAt = paintStep.indexOf("decode()");
+const thenAt = paintStep.indexOf(".then(");
+const catchAt = paintStep.indexOf(".catch(");
+const thenSlice = thenAt >= 0 ? paintStep.slice(thenAt, thenAt + 500) : "";
+const catchSlice = catchAt >= 0 ? paintStep.slice(catchAt, catchAt + 500) : "";
+check(
+  "first-paint:decode-then-frames",
+  decodeAt >= 0 &&
+    thenAt > decodeAt &&
+    catchAt > thenAt &&
+    thenSlice.includes("requestAnimationFrame") &&
+    catchSlice.includes("requestAnimationFrame") &&
+    paintStep.includes("1500") &&
+    paintStep.split("requestAnimationFrame").length - 1 >= 2,
+  "stage loads must start two frames after decode settles or the 1500ms time-out",
+);
+
 if (failures > 0) process.exit(1);
 console.log("first-paint ok: the card paints first, the stage loads after");
