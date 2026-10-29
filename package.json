@@ -29,6 +29,7 @@
     "check:sam-decode": "tsx scripts/check-sam-decode.ts",
     "check:geometry": "tsx scripts/check-geometry.ts",
     "check:example-geometry": "tsx scripts/check-example-geometry.ts",
+    "check:photo-camera": "tsx scripts/check-photo-camera.ts",
     "check:surfaces": "tsx scripts/check-surfaces.ts",
     "check:light-maps": "tsx scripts/check-light-maps.ts",
     "check:live-rooms": "tsx scripts/check-live-rooms.ts",

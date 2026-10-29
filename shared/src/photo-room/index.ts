@@ -6,3 +6,4 @@ export * from "./resolve.js";
 export * from "./surfaces.js";
 export * from "./synthetic.js";
 export * from "./example-room.js";
+export * from "./photo-camera.js";
