@@ -2279,6 +2279,7 @@ class FitRoomApp {
       this.syncPhoneBar();
       this.container.classList.toggle("has-side-panel", false);
       this.resize();
+      this.renderGuide();
       return;
     }
     const inspector = document.getElementById("inspector");
@@ -2305,6 +2306,7 @@ class FitRoomApp {
     // `has-side-panel` in style.css), never over the panel's tabs.
     this.container.classList.toggle("has-side-panel", name !== "none");
     this.resize();
+    this.renderGuide();
   }
 
   /**
@@ -2329,6 +2331,7 @@ class FitRoomApp {
           this.container.classList.toggle("has-side-panel", false);
           this.syncPhoneBar();
           this.resize();
+          this.renderGuide();
         }
       }).observe(el, { attributes: true, attributeFilter: ["hidden"] });
     }
@@ -2958,6 +2961,14 @@ class FitRoomApp {
   /** Paint the bubble by the moment's target, or hide it and let the hints work. */
   private renderGuide(): void {
     if (this.guideView === null) return;
+    // An open side panel covers the bubble's corner: hide the bubble while
+    // any panel is open (the tour keeps its step and shows again on close).
+    if (this.sidePanel !== "none") {
+      this.guideView.hide();
+      this.updateEmptyHint(this.store.state.items.length);
+      this.maybeShowDoorTip();
+      return;
+    }
     const screen = this.guideScreen();
     // While a guide bubble shows, the empty-room hint and the doors tip do
     // not: the three can never show together. When the guide is done or

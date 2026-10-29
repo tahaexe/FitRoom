@@ -681,5 +681,35 @@ check(
   "a built photo room opens built; only a never-built one resumes confirm",
 );
 
+// ---- An open side panel hides the bubble, closing shows it again ----
+{
+  const renderAt = mainSource.indexOf("private renderGuide()");
+  const renderBody = renderAt < 0 ? "" : mainSource.slice(renderAt, renderAt + 1200);
+  check(
+    "guide:panel-hides-bubble",
+    renderBody.includes('this.sidePanel !== "none"') && renderBody.includes("guideView.hide()"),
+    "an open panel hides the bubble in renderGuide",
+  );
+  check(
+    "guide:panel-keeps-step",
+    !/private renderGuide\(\)[\s\S]{0,1200}\.(skip|finish|restart)\(/.test(mainSource) &&
+      !/private renderGuide\(\)[\s\S]{0,1200}GUIDE_KEY/.test(mainSource),
+    "hiding never skips, finishes, restarts or writes the stored outcome",
+  );
+  const showAt = mainSource.indexOf("private showSidePanel(");
+  const showBody = showAt < 0 ? "" : mainSource.slice(showAt, showAt + 4000);
+  check(
+    "guide:panel-toggle-rerenders",
+    showBody.includes("this.renderGuide()"),
+    "opening or closing a panel re-renders the guide at the same step",
+  );
+  check(
+    "guide:panel-close-rerenders",
+    mainSource.includes("private watchPanelClose()") &&
+      /watchPanelClose\(\)[\s\S]{0,2000}this\.renderGuide\(\)/.test(mainSource),
+    "a panel × close shows the guide again",
+  );
+}
+
 if (failures > 0) process.exit(1);
 console.log("guide: all checks passed");
