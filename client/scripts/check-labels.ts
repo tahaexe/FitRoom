@@ -595,5 +595,32 @@ check(
   );
 }
 
+// ---- Sample-room confirm stays in view with focus on Continue ----
+{
+  const panel = src("assistant/panel.ts");
+  const confirmAt = panel.indexOf("private addSampleConfirm");
+  const confirmBody = confirmAt < 0 ? "" : panel.slice(confirmAt);
+  check(
+    "sample confirm scrolls into view",
+    confirmBody.includes('scrollIntoView({ block: "nearest" })'),
+    "assistant/panel.ts",
+  );
+  check(
+    "sample confirm focuses Continue",
+    confirmBody.includes("go.focus()"),
+    "assistant/panel.ts",
+  );
+  check(
+    "arrange confirm asks first",
+    panel.includes('this.addSampleConfirm("arrange")'),
+    "assistant/panel.ts",
+  );
+  check(
+    "furnish confirm asks first",
+    panel.includes('this.addSampleConfirm("furnish")'),
+    "assistant/panel.ts",
+  );
+}
+
 if (failures > 0) process.exit(1);
 console.log("labels ok");

@@ -1036,6 +1036,8 @@ export class AssistantPanel {
     card.append(note, row);
     log.appendChild(card);
     log.scrollTop = log.scrollHeight;
+    card.scrollIntoView({ block: "nearest" });
+    go.focus();
   }
 
   private async send(raw: string): Promise<void> {
