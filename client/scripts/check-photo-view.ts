@@ -8,7 +8,10 @@
  *   photo A with the stored camera. Wall A's corners come from the
  *   example's replayed solve, as `check:example-geometry` gets them. Each
  *   piece's back bottom corners land within 1 % of the image height
- *   (9.5 px) of wall A's floor line (m3-m4) and inside the frame.
+ *   (9.5 px) of wall A's floor line (m3-m4) and inside the frame. Each
+ *   piece's contact shadow (footprint plus the shadow margin) centres
+ *   inside the frame and its projected width is within 10 % of the
+ *   projected footprint width plus the margin.
  * - The view issues no request: no `fetch`, no `/api/` in the view or its
  *   app wiring; the photo loads as a static image.
  * - Exclusivity + chrome: the pill shows only in the built example room,
@@ -36,7 +39,12 @@ import {
   type WallLetter,
 } from "../../shared/src/photo-room/index.js";
 import { buildExamplePhotoRecords } from "../src/photo-room/example-cameras.js";
-import { photoCameraForRecord } from "../src/photo-room/photo-view.js";
+import {
+  PHOTO_SHADOW_MARGIN_CM,
+  photoCameraForRecord,
+  photoPieceCorners,
+  photoPieceShadowCorners,
+} from "../src/photo-room/photo-view.js";
 import type { PhotoSession } from "../src/editor/editor-store.js";
 import { PHOTO_VIEW_BUTTON, PHOTO_VIEW_LINE, photoViewOutside } from "../src/copy.js";
 
@@ -203,7 +211,9 @@ async function projectionBar(): Promise<void> {
   // example's Furnish answer places, backs flush against wall A.
   const furnished = JSON.parse(
     readFileSync(join(repoRoot, "shared", "samples", "example-furnished.json"), "utf8"),
-  ) as { items: Array<{ productId: string; position: { x: number; z: number } }> };
+  ) as {
+    items: Array<{ productId: string; position: { x: number; z: number }; rotationY?: unknown }>;
+  };
   const catalog = JSON.parse(
     readFileSync(join(repoRoot, "shared", "catalog", "catalog.json"), "utf8"),
   ) as Array<{ id: string; size: { w: number; d: number } }>;
@@ -253,6 +263,56 @@ async function projectionBar(): Promise<void> {
         `${dist.toFixed(2)} px`,
       );
       check(`piece ${item.productId} back corner lands inside the frame`, inside);
+    }
+    // Contact shadow: the footprint widened by the shadow margin all
+    // round, projected with photo A's stored camera.
+    const rotationY = typeof item.rotationY === "number" ? item.rotationY : 0;
+    const box = {
+      x: item.position.x,
+      z: item.position.z,
+      w: size.w,
+      d: size.d,
+      h: 0,
+      rotationY,
+    };
+    const shadowProjected = photoPieceShadowCorners(box).map((point) =>
+      projectWallPhotoCamera(cam, point),
+    );
+    const shadowFinite = shadowProjected.every(
+      (point) => Number.isFinite(point.x) && Number.isFinite(point.y),
+    );
+    check(`piece ${item.productId} shadow projects`, shadowFinite);
+    if (shadowFinite) {
+      // The true-size shadow is cropped by the photo edge together with
+      // the pieces' own front feet (their front corners project past the
+      // frame bottom/right), so the check asserts the shadow's contact
+      // centre — the visible mass under the piece — lies inside the frame.
+      const centre = {
+        x: shadowProjected.reduce((sum, point) => sum + point.x, 0) / shadowProjected.length,
+        y: shadowProjected.reduce((sum, point) => sum + point.y, 0) / shadowProjected.length,
+      };
+      console.log(
+        `photo-view A ${item.productId} shadow centre (${centre.x.toFixed(1)},${centre.y.toFixed(1)})`,
+      );
+      const shadowInside = centre.x >= 0 && centre.x <= 1280 && centre.y >= 0 && centre.y <= 951;
+      check(`piece ${item.productId} shadow centre lies inside the frame`, shadowInside);
+      const footProjected = photoPieceCorners(box)
+        .slice(0, 4)
+        .map((point) => projectWallPhotoCamera(cam, point));
+      const span = (points: Array<{ x: number; y: number }>): number =>
+        Math.max(...points.map((point) => point.x)) - Math.min(...points.map((point) => point.x));
+      const footW = span(footProjected);
+      const shadowW = span(shadowProjected);
+      const expected = footW * ((size.w + PHOTO_SHADOW_MARGIN_CM * 2) / size.w);
+      const within = Math.abs(shadowW - expected) / expected;
+      console.log(
+        `photo-view A ${item.productId} shadow width ${shadowW.toFixed(1)} px vs footprint-plus-margin ${expected.toFixed(1)} px (${(within * 100).toFixed(2)}%)`,
+      );
+      check(
+        `piece ${item.productId} shadow width matches the footprint plus the margin (<= 10 %)`,
+        within <= 0.1,
+        `${(within * 100).toFixed(2)} %`,
+      );
     }
   }
 }

@@ -56,6 +56,34 @@ export function photoPieceCorners(box: PhotoPieceBox): Array<{ x: number; y: num
   return out;
 }
 
+/** Contact-shadow margin all round a piece's footprint, in room cm. */
+export const PHOTO_SHADOW_MARGIN_CM = 10;
+
+/**
+ * Floor-plane corners (y 0) of a piece's contact shadow: the footprint
+ * widened by the shadow margin all round, centred under the piece and
+ * turned with it. Pure geometry for the headless check; the view draws
+ * this same rect as a soft ellipse in its three.js layer.
+ */
+export function photoPieceShadowCorners(
+  box: PhotoPieceBox,
+  marginCm: number = PHOTO_SHADOW_MARGIN_CM,
+): Array<{ x: number; y: number; z: number }> {
+  const rad = (box.rotationY * Math.PI) / 180;
+  const cos = Math.cos(rad);
+  const sin = Math.sin(rad);
+  const out: Array<{ x: number; y: number; z: number }> = [];
+  for (const [lx, lz] of [
+    [-(box.w / 2 + marginCm), -(box.d / 2 + marginCm)],
+    [box.w / 2 + marginCm, -(box.d / 2 + marginCm)],
+    [box.w / 2 + marginCm, box.d / 2 + marginCm],
+    [-(box.w / 2 + marginCm), box.d / 2 + marginCm],
+  ] as const) {
+    out.push({ x: box.x + lx * cos + lz * sin, y: 0, z: box.z - lx * sin + lz * cos });
+  }
+  return out;
+}
+
 export interface ClassifiedPiece {
   visible: boolean;
   projected: Array<{ x: number; y: number; z: number }>;
@@ -157,6 +185,9 @@ export class PhotoView {
   private stage: HTMLElement | null = null;
   private outside: HTMLElement | null = null;
   private tabs: HTMLElement | null = null;
+  private photoW = 0;
+  private photoH = 0;
+  private fitListener: (() => void) | null = null;
 
   constructor(deps: PhotoViewDeps) {
     this.deps = deps;
@@ -206,6 +237,10 @@ export class PhotoView {
     this.outside = outside;
     this.tabs = tabs;
     this.draw();
+    if (typeof window !== "undefined") {
+      this.fitListener = () => this.fitStage();
+      window.addEventListener("resize", this.fitListener);
+    }
     return this.element;
   }
 
@@ -240,6 +275,10 @@ export class PhotoView {
     } catch {
       // Disposal is best-effort; the live scene keeps its own state.
     }
+    if (typeof window !== "undefined" && this.fitListener !== null) {
+      window.removeEventListener("resize", this.fitListener);
+    }
+    this.fitListener = null;
     this.renderer = null;
     this.stage = null;
     this.outside = null;
@@ -294,7 +333,14 @@ export class PhotoView {
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
     let outsideCount = 0;
-    const shadows: Array<{ x: number; y: number }> = [];
+    this.photoW = cam.imageWidth;
+    this.photoH = cam.imageHeight;
+    const shadowMaterial = new THREE.MeshBasicMaterial({
+      map: photoShadowTexture(),
+      transparent: true,
+      depthWrite: false,
+      toneMapped: false,
+    });
     for (const item of this.deps.getItems()) {
       const entry = groups.get(item.instanceId);
       const product = catalog.get(item.productId);
@@ -312,24 +358,22 @@ export class PhotoView {
         outsideCount += 1;
         continue;
       }
+      const holder = new THREE.Group();
+      holder.position.set(item.position.x / 100, 0, item.position.z / 100);
+      holder.rotation.y = (item.rotationY * Math.PI) / 180;
+      const shadowMesh = new THREE.Mesh(
+        new THREE.PlaneGeometry(
+          (box.w + PHOTO_SHADOW_MARGIN_CM * 2) / 100,
+          (box.d + PHOTO_SHADOW_MARGIN_CM * 2) / 100,
+        ),
+        shadowMaterial,
+      );
+      shadowMesh.rotation.x = -Math.PI / 2;
+      shadowMesh.position.y = 0.002;
+      holder.add(shadowMesh);
       const clone = entry.group.clone(true);
-      clone.position.set(item.position.x / 100, 0, item.position.z / 100);
-      clone.rotation.y = (item.rotationY * Math.PI) / 180;
-      overlay.add(clone);
-      const base = classified.projected.slice(0, 4);
-      let sx = 0;
-      let sy = 0;
-      let count = 0;
-      for (const point of base) {
-        if (!Number.isFinite(point.x) || !Number.isFinite(point.y)) continue;
-        if (point.x < 0 || point.x > cam.imageWidth || point.y < 0 || point.y > cam.imageHeight) {
-          continue;
-        }
-        sx += point.x;
-        sy += point.y;
-        count += 1;
-      }
-      if (count > 0) shadows.push({ x: sx / count, y: sy / count });
+      holder.add(clone);
+      overlay.add(holder);
     }
     try {
       if (this.renderer === null) {
@@ -346,16 +390,91 @@ export class PhotoView {
     } catch {
       // Headless or WebGL-less contexts keep the photo with its caption.
     }
-    for (const shadow of shadows) {
-      const dot = document.createElement("div");
-      dot.className = "photo-view-shadow";
-      dot.style.left = `${String((shadow.x / cam.imageWidth) * 100)}%`;
-      dot.style.top = `${String((shadow.y / cam.imageHeight) * 100)}%`;
-      layer.appendChild(dot);
-    }
     if (outsideCount > 0) {
       outside.textContent = photoViewOutside(outsideCount);
       outside.removeAttribute("hidden");
     }
+    this.fitStage();
   }
+
+  /**
+   * Size the stage to the largest box that keeps the photo's aspect ratio
+   * and fits both the view's width and the height left between the view's
+   * top rows (caption, tabs, Close, the line) and the outside-photo line,
+   * never wider than the photo itself. The layer, canvas and shadows are
+   * absolutely positioned over the stage, so they stay exactly on the
+   * photo at every size and after a window resize.
+   */
+  private fitStage(): void {
+    const stage = this.stage;
+    if (stage === null) return;
+    if (this.photoW <= 0 || this.photoH <= 0) return;
+    if (typeof window === "undefined") return;
+    const view = this.element;
+    const style = window.getComputedStyle(view);
+    const padX =
+      (Number.parseFloat(style.paddingLeft) || 0) + (Number.parseFloat(style.paddingRight) || 0);
+    const padY =
+      (Number.parseFloat(style.paddingTop) || 0) + (Number.parseFloat(style.paddingBottom) || 0);
+    const gap = Number.parseFloat(style.rowGap || style.gap) || 0;
+    let usedY = padY;
+    let count = 1;
+    const bar = view.querySelector(".photo-view-bar");
+    if (bar instanceof HTMLElement) {
+      usedY += bar.offsetHeight;
+      count += 1;
+    }
+    const line = view.querySelector(".photo-view-line");
+    if (line instanceof HTMLElement) {
+      usedY += line.offsetHeight;
+      count += 1;
+    }
+    if (this.outside instanceof HTMLElement && !this.outside.hasAttribute("hidden")) {
+      usedY += this.outside.offsetHeight;
+      count += 1;
+    }
+    usedY += gap * Math.max(0, count - 1);
+    const availW = Math.max(0, view.clientWidth - padX);
+    const availH = Math.max(0, view.clientHeight - usedY);
+    if (availW <= 0 || availH <= 0) return;
+    const aspect = this.photoW / this.photoH;
+    const width = Math.min(availW, this.photoW, availH * aspect);
+    if (width <= 0) return;
+    stage.style.width = `${String(width)}px`;
+    stage.style.height = `${String(width / aspect)}px`;
+  }
+}
+
+let contactTexture: THREE.CanvasTexture | null = null;
+
+/**
+ * Shared soft-edged dark ellipse texture for contact shadows: about 0.35
+ * opacity at the centre fading to transparent at the edge. Stretched over
+ * each piece's footprint-plus-margin plane it reads as an ellipse and
+ * takes the photo's perspective from the shared camera by itself.
+ */
+function photoShadowTexture(): THREE.CanvasTexture {
+  if (contactTexture === null) {
+    const size = 256;
+    const canvas = document.createElement("canvas");
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (ctx !== null) {
+      const gradient = ctx.createRadialGradient(
+        size / 2,
+        size / 2,
+        0,
+        size / 2,
+        size / 2,
+        size / 2,
+      );
+      gradient.addColorStop(0, "rgba(0,0,0,0.35)");
+      gradient.addColorStop(1, "rgba(0,0,0,0)");
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, size, size);
+    }
+    contactTexture = new THREE.CanvasTexture(canvas);
+  }
+  return contactTexture;
 }
