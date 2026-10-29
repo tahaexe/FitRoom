@@ -47,12 +47,16 @@ import {
   SHARE_INVALID,
   SHARE_KEEP,
   SHARE_OPEN,
+  STORE_OPEN_APP,
+  STORE_SEE_IT,
+  STORE_UNKNOWN,
   TAPE_NEXT,
   TURN_ON_LIVE,
   USE_SAMPLE_ROOM,
   cartFitError,
   planOpeningName,
   resetTintLabel,
+  storeAddHint,
 } from "../src/copy.js";
 import { openingName } from "../src/editor/plan-view.js";
 import { openingBoxLabel } from "../src/editor/photo-confirm.js";
@@ -464,6 +468,54 @@ for (const file of [...fieldSourceFiles, join(clientRoot, "index.html")]) {
       `${rel}:${line} template field carries an id or name`,
       /\s(?:id|name)=/.test(tag[0]),
       `${rel}:${line} ${tag[0].slice(0, 60)}`,
+    );
+  }
+}
+
+// ---- Demo store page + `?add=` entry: every new label lives in copy.ts ----
+check("store button is See it in your room", STORE_SEE_IT === "See it in your room");
+check(
+  "store missing names the demo store",
+  STORE_UNKNOWN === "That piece isn't in the demo store.",
+);
+check("store way back opens the app", STORE_OPEN_APP === "Open FitRoom");
+check(
+  "store entry hint names the piece",
+  storeAddHint("Chester Leather Sofa") ===
+    "Drag the Chester Leather Sofa into your room, or press + Add",
+  storeAddHint("Chester Leather Sofa"),
+);
+{
+  // Comments may quote the words; only code may not carry its own literal.
+  const storeFiles = ["store.ts", "store-model.ts", "store-add.ts", "main.ts", "catalog-ui.ts"];
+  const storeLiterals = [
+    "See it in your room",
+    "That piece isn't in the demo store.",
+    "Open FitRoom",
+    "into your room, or press",
+  ];
+  for (const file of storeFiles) {
+    const code = src(file)
+      .split("\n")
+      .filter((line) => {
+        const trimmed = line.trim();
+        return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*");
+      })
+      .join("\n");
+    for (const literal of storeLiterals) {
+      check(
+        `${file} carries no store literal "${literal.slice(0, 24)}"`,
+        !code.includes(literal),
+        file,
+      );
+    }
+  }
+  const storeHtml = readFileSync(join(clientRoot, "store.html"), "utf8");
+  for (const literal of [...storeLiterals, "Demo store · invented products and prices"]) {
+    check(
+      `store.html carries no store literal "${literal.slice(0, 24)}"`,
+      !storeHtml.includes(literal),
+      "store.html",
     );
   }
 }

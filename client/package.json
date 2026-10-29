@@ -26,6 +26,8 @@
     "check:share": "tsx scripts/check-share.ts",
     "check:capped": "tsx scripts/check-capped.ts",
     "check:catalog-format": "tsx scripts/check-catalog-format.ts",
+    "check:store": "tsx scripts/check-store.ts",
+    "check:store-entry": "tsx scripts/check-store-entry.ts",
     "check:footprints": "node scripts/check-model-footprints.mjs",
     "check:first-paint": "tsx scripts/check-first-paint.ts",
     "preview": "vite preview --port 5173 --strictPort",
