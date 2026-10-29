@@ -59,6 +59,16 @@ export const CART_EMPTY_ACTION = "Add furniture to the room first";
 /** Demo-store line shown in the cart panel (and the demo product page). */
 export const DEMO_STORE_LINE = "Demo store · invented products and prices";
 
+/** Demo product page (`store.html`) and the `?add=` entry hint. */
+export const STORE_SEE_IT = "See it in your room";
+export const STORE_UNKNOWN = "That piece isn't in the demo store.";
+export const STORE_OPEN_APP = "Open FitRoom";
+
+/** Entry hint for a catalog card: names the piece, never a bare id. */
+export function storeAddHint(name: string): string {
+  return `Drag the ${name} into your room, or press + Add`;
+}
+
 /** Cart side panel and its actions. */
 export const CART_PANEL_TITLE = "Your cart";
 export const CART_CLOSE = "Close cart";
