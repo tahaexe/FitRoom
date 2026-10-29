@@ -455,6 +455,272 @@ async function main(): Promise<void> {
       }
     }
 
+    // 3c. Every billed try reaches the costs table: a retried recommend
+    // or assistant round carries both tries' usage on its one `upstream`
+    // line (summed), so the judging-window cap adds up the first billed
+    // try too. Invalid JSON on both tries writes both tries' usage and
+    // answers today's friendly error. Mocked upstream only: no live calls.
+    {
+      const { Hono } = await import("hono");
+      const { serveGatewayRequest } = await import("../src/meta/pipeline.js");
+      const { createNodeStore } = await import("../src/meta/store.js");
+      const { recommendDef, RECOMMEND_FRIENDLY_ERROR } = await import("../src/routes/recommend.js");
+      const { assistantDef, ASSISTANT_FRIENDLY_ERROR } = await import("../src/routes/assistant.js");
+      const { costUsd } = await import("../src/meta/pricing.js");
+      const { META_MODELS } = await import("../src/config.js");
+      const realFetch = globalThis.fetch;
+      type UsageShape = {
+        inputTokens: number;
+        cachedInputTokens: number;
+        outputTokens: number;
+        images: number;
+      };
+      const sparkBody = (text: string, usage: UsageShape, finishReason = "stop"): unknown => ({
+        choices: [{ message: { content: text }, finish_reason: finishReason }],
+        usage: {
+          prompt_tokens: usage.inputTokens,
+          completion_tokens: usage.outputTokens,
+          prompt_tokens_details: { cached_tokens: usage.cachedInputTokens },
+        },
+      });
+      const stubUpstream = (replies: Array<{ text: string; usage: UsageShape }>): void => {
+        let index = 0;
+        globalThis.fetch = (async () => ({
+          ok: true,
+          status: 200,
+          json: async () => {
+            const reply = replies[Math.min(index, replies.length - 1)] as {
+              text: string;
+              usage: UsageShape;
+            };
+            index += 1;
+            return sparkBody(reply.text, reply.usage);
+          },
+        })) as unknown as typeof fetch;
+      };
+      const costsRows = (logsDir: string): string[][] => {
+        const file = join(logsDir, "costs.csv");
+        if (!existsSync(file)) return [];
+        return readFileSync(file, "utf8")
+          .split("\n")
+          .map((line) => line.trim())
+          .filter((line) => line !== "")
+          .slice(1)
+          .map((line) => line.split(","));
+      };
+      const recommendBody = {
+        room: { name: "Cost room", size_cm: [420, 360], style: { tags: [], colors: [] } },
+        placed: [],
+        request: { category: "sofa" },
+        freeSpace: { runs: [], openAreas: [] },
+        candidates: [],
+      };
+      const assistantBody = (tag: string): unknown => ({
+        request: `cost check ${tag}`,
+        messages: [{ role: "user", content: `cost check ${tag}` }],
+        room: JSON.parse(
+          readFileSync(join(repoRoot, "shared", "samples", "living-420x360.json"), "utf8"),
+        ),
+        scene: JSON.parse(
+          readFileSync(join(repoRoot, "shared", "samples", "fit-tests", "valid.json"), "utf8"),
+        ),
+      });
+      const runRoute = async (
+        tag: string,
+        route: "recommend" | "assistant",
+        body: unknown,
+        replies: Array<{ text: string; usage: UsageShape }>,
+      ): Promise<{ status: number; payload: unknown; rows: string[][] }> => {
+        const caseDataDir = join(workDir, `costs-${tag}-data`);
+        const caseLogsDir = join(workDir, `costs-${tag}-logs`);
+        rmSync(caseDataDir, { recursive: true, force: true });
+        rmSync(caseLogsDir, { recursive: true, force: true });
+        mkdirSync(caseDataDir, { recursive: true });
+        mkdirSync(caseLogsDir, { recursive: true });
+        const store = createNodeStore({ dataDir: caseDataDir, logsDir: caseLogsDir });
+        const config = {
+          apiKey: "cost-test-key",
+          mock: false,
+          record: false,
+          sessionMaxCalls: 20,
+          sessionMaxUsd: 0.5,
+          globalBudgetUsd: 10,
+          globalBudgetFromIso: null,
+          ratePerMinutePerIp: 1000,
+          dataDir: caseDataDir,
+          logsDir: caseLogsDir,
+        };
+        stubUpstream(replies);
+        const app = new Hono();
+        const def = route === "recommend" ? recommendDef : assistantDef;
+        app.post(`/${route}`, (c) => serveGatewayRequest(c, { config, store }, def));
+        const res = await app.request(`/${route}`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-fitroom-live": "1" },
+          body: JSON.stringify(body),
+        });
+        let payload: unknown;
+        try {
+          payload = (await res.json()) as unknown;
+        } catch {
+          payload = null;
+        }
+        return { status: res.status, payload, rows: costsRows(caseLogsDir) };
+      };
+      const first: UsageShape = {
+        inputTokens: 1000,
+        cachedInputTokens: 0,
+        outputTokens: 100,
+        images: 0,
+      };
+      const second: UsageShape = {
+        inputTokens: 2000,
+        cachedInputTokens: 0,
+        outputTokens: 200,
+        images: 0,
+      };
+      const summed: UsageShape = {
+        inputTokens: 3000,
+        cachedInputTokens: 0,
+        outputTokens: 300,
+        images: 0,
+      };
+      const expectedUsd = costUsd(META_MODELS.spark, summed);
+      const secondUsd = costUsd(META_MODELS.spark, second);
+      try {
+        // Recommend: invalid JSON then a valid answer.
+        {
+          const { status, payload, rows } = await runRoute(
+            "recommend-retry",
+            "recommend",
+            recommendBody,
+            [
+              { text: "not json at all", usage: first },
+              { text: '{"recommendations":[]}', usage: second },
+            ],
+          );
+          const data = isRecord(payload) ? (payload["data"] as unknown) : null;
+          check(
+            "recommend retry answers ok",
+            status === 200 && isRecord(payload) && payload["status"] === "ok" && isRecord(data),
+            `status=${String(status)}`,
+          );
+          const upstream = rows.filter((r) => r[4] === "upstream");
+          check(
+            "recommend retry writes one upstream line",
+            upstream.length === 1,
+            String(rows.length),
+          );
+          const line = upstream[0];
+          check(
+            "recommend retry line carries both tries' tokens",
+            line?.[5] === "3000" && line?.[7] === "300",
+            (line ?? []).slice(5, 9).join(","),
+          );
+          check(
+            "recommend retry USD covers both tries",
+            Number(line?.[9]) === expectedUsd && Number(line?.[9]) > secondUsd,
+            String(line?.[9]),
+          );
+        }
+        // Assistant: an empty round then the final answer.
+        {
+          const { status, payload, rows } = await runRoute(
+            "assistant-retry",
+            "assistant",
+            assistantBody("retry"),
+            [
+              { text: "", usage: first },
+              { text: "All done", usage: second },
+            ],
+          );
+          const data = isRecord(payload) ? (payload["data"] as unknown) : null;
+          check(
+            "assistant retry answers ok",
+            status === 200 &&
+              isRecord(payload) &&
+              payload["status"] === "ok" &&
+              isRecord(data) &&
+              (data as Record<string, unknown>)["text"] === "All done",
+            `status=${String(status)}`,
+          );
+          const upstream = rows.filter((r) => r[4] === "upstream");
+          check(
+            "assistant retry writes one upstream line",
+            upstream.length === 1,
+            String(rows.length),
+          );
+          const line = upstream[0];
+          check(
+            "assistant retry line carries both tries' tokens",
+            line?.[5] === "3000" && line?.[7] === "300",
+            (line ?? []).slice(5, 9).join(","),
+          );
+          check(
+            "assistant retry USD covers both tries",
+            Number(line?.[9]) === expectedUsd && Number(line?.[9]) > secondUsd,
+            String(line?.[9]),
+          );
+        }
+        // Recommend: invalid JSON on both tries writes both tries' usage.
+        {
+          const { status, payload, rows } = await runRoute(
+            "recommend-fail",
+            "recommend",
+            recommendBody,
+            [
+              { text: "not json at all", usage: first },
+              { text: "still not json", usage: second },
+            ],
+          );
+          check(
+            "recommend double-invalid answers today's friendly error",
+            status === 200 &&
+              isRecord(payload) &&
+              payload["status"] === "error" &&
+              payload["message"] === RECOMMEND_FRIENDLY_ERROR,
+            JSON.stringify(payload)?.slice(0, 200),
+          );
+          const upstream = rows.filter((r) => r[4] === "upstream");
+          const line = upstream[0];
+          check(
+            "recommend double-invalid writes both tries' usage",
+            upstream.length === 1 && line?.[5] === "3000" && Number(line?.[9]) === expectedUsd,
+            (line ?? []).slice(5, 10).join(","),
+          );
+        }
+        // Assistant: empty rounds on both tries write both tries' usage.
+        {
+          const { status, payload, rows } = await runRoute(
+            "assistant-fail",
+            "assistant",
+            assistantBody("fail"),
+            [
+              { text: "", usage: first },
+              { text: "", usage: second },
+            ],
+          );
+          check(
+            "assistant double-empty answers today's friendly error",
+            status === 200 &&
+              isRecord(payload) &&
+              payload["status"] === "error" &&
+              payload["message"] === ASSISTANT_FRIENDLY_ERROR,
+            JSON.stringify(payload)?.slice(0, 200),
+          );
+          const upstream = rows.filter((r) => r[4] === "upstream");
+          const line = upstream[0];
+          check(
+            "assistant double-empty writes both tries' usage",
+            upstream.length === 1 && line?.[5] === "3000" && Number(line?.[9]) === expectedUsd,
+            (line ?? []).slice(5, 10).join(","),
+          );
+        }
+      } finally {
+        globalThis.fetch = realFetch;
+      }
+    }
+
     // 4. The built client holds no key material.
     {
       const dist = join(repoRoot, "client", "dist");

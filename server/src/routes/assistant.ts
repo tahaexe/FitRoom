@@ -91,7 +91,20 @@ async function callAssistantRound(
   const messages: ChatMessage[] = buildAssistantUpstreamMessages(input, assistantCatalog);
   let lengthRetried = false;
   let emptyRetried = false;
+  // Every billed try reaches the costs table: all attempts' usage is
+  // carried on the one line (summed), so the judging-window cap adds up
+  // the first try that was billed too.
   const attempts: UpstreamResult["usage"][] = [];
+  const summed = (): UpstreamResult["usage"] => {
+    const total = emptyUsage();
+    for (const usage of attempts) {
+      total.inputTokens += usage.inputTokens;
+      total.cachedInputTokens += usage.cachedInputTokens;
+      total.outputTokens += usage.outputTokens;
+      total.images += usage.images;
+    }
+    return total;
+  };
   for (;;) {
     const result = await callSpark(apiKey, {
       messages,
@@ -105,13 +118,12 @@ async function callAssistantRound(
     }
     const round = parseRound(result.data);
     if (round !== null && (round.text.trim() !== "" || round.toolCalls.length > 0)) {
-      return { data: round, usage: result.usage };
+      return { data: round, usage: summed() };
     }
     if (emptyRetried) break;
     emptyRetried = true;
   }
-  const billed = attempts[attempts.length - 1] ?? emptyUsage();
-  throw new UpstreamFriendlyError(ASSISTANT_FRIENDLY_ERROR, billed);
+  throw new UpstreamFriendlyError(ASSISTANT_FRIENDLY_ERROR, summed());
 }
 
 function parseAssistantBody(body: unknown): ParsedBody | { error: string } {

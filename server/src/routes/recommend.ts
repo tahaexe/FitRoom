@@ -26,7 +26,7 @@ import {
 import { Hono } from "hono";
 import { META_MODELS } from "../meta/models.js";
 import { callSpark, type ChatMessage, type UpstreamResult } from "../meta/client.js";
-import { emptyUsage } from "../meta/pricing.js";
+import { emptyUsage, type TokenUsage } from "../meta/pricing.js";
 import {
   UpstreamFriendlyError,
   serveGatewayRequest,
@@ -71,19 +71,33 @@ function dropUnknownCandidates(
   return answer.note === undefined ? { recommendations } : { recommendations, note: answer.note };
 }
 
+function sumUsage(usages: TokenUsage[]): TokenUsage {
+  const total = emptyUsage();
+  for (const usage of usages) {
+    total.inputTokens += usage.inputTokens;
+    total.cachedInputTokens += usage.cachedInputTokens;
+    total.outputTokens += usage.outputTokens;
+    total.images += usage.images;
+  }
+  return total;
+}
+
 async function callAdvisor(apiKey: string, request: RecommendRequest): Promise<UpstreamResult> {
   const messages: ChatMessage[] = [
     { role: "system", content: RECOMMEND_SYSTEM_PROMPT },
     { role: "user", content: userMessage(request) },
   ];
-  let lastUsage: UpstreamResult["usage"] | null = null;
+  // Every billed try reaches the costs table: both attempts' usage is
+  // carried on the one line (summed), so the judging-window cap adds up
+  // the first try that was billed too.
+  const usages: TokenUsage[] = [];
   for (let attempt = 0; attempt < 2; attempt += 1) {
     const result = await callSpark(apiKey, {
       messages,
       jsonSchema: { name: "recommend", schema: RECOMMEND_OUTPUT_SCHEMA },
       maxTokens: 8000,
     });
-    lastUsage = result.usage;
+    usages.push(result.usage);
     const text =
       typeof result.data === "object" && result.data !== null
         ? String((result.data as Record<string, unknown>)["text"] ?? "")
@@ -92,11 +106,14 @@ async function callAdvisor(apiKey: string, request: RecommendRequest): Promise<U
     if (parsed !== null && isRecommendAnswer(parsed)) {
       const cleaned = dropUnknownCandidates(parsed, request);
       if (cleaned.recommendations.length > 0 || request.candidates.length === 0) {
-        return { data: cleaned, usage: result.usage };
+        return { data: cleaned, usage: sumUsage(usages) };
       }
     }
   }
-  throw new UpstreamFriendlyError(RECOMMEND_FRIENDLY_ERROR, lastUsage ?? emptyUsage());
+  throw new UpstreamFriendlyError(
+    RECOMMEND_FRIENDLY_ERROR,
+    usages.length > 0 ? sumUsage(usages) : emptyUsage(),
+  );
 }
 
 /**
