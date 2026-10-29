@@ -1,38 +1,106 @@
 # FitRoom
 
-FitRoom lets furniture stores offer a true-scale 3D fitting room in the browser. This repository holds the skeleton: a Vite + Three.js client, a Hono API server and a shared types package, wired together with npm workspaces.
+FitRoom is a true-scale 3D fitting room for furniture stores, in the browser. A shopper builds a model of their room from four wall photos and two tape measurements, or draws it as a plan, and tries the store's furniture in it before buying. Every placement is checked in centimetres, and Meta's models recommend, arrange, furnish and picture the room.
 
-## Requirements
+- Live demo: https://fitroom.fitroom-demo.workers.dev (opens in Demo mode: no sign-in, no model calls)
 
-- Node.js 22 or newer
-- npm (ships with Node)
+## Try it in 30 seconds
 
-## Setup
+1. Open the live demo. A first visit opens "Set up your room" with the first step of a short guide (**Skip tour** closes it, **?** brings it back); choose **Explore the sample**. The sample living room (420 × 360 cm) opens with four pieces and the badge "✓ Everything fits". Demo mode replays recorded answers, so nothing below calls a model.
+2. Press **Visualise**. Muse Image's photoreal picture of this layout appears with a before/after slider. Close it.
+3. Drag a piece in front of the door. The badge turns red and the room shows how far the piece reaches into the door's swing, in centimetres. Press **Undo**.
+4. Press **Arrange** and pick "Put the sofa under the window and keep 80 cm free in front of the door." Muse Spark's tool calls replay, each one checked by the fit engine, and the room stays "✓ Everything fits".
+5. Open the **Furnish** tab and pick "4 seats · Classic · up to $2,500" (confirm if asked). The room is furnished from the catalog, and the card adds up the seats and the prices against the budget.
+6. Press **Add to cart**. The cart panel lists each piece with its size and price, the total and the room's fit, and **Copy link** copies a link to this layout.
+
+For your own room, open the room menu at the top left and choose **From photos** (needs Live AI) or **Build a room**.
+
+## What it does
+
+- A true-scale room in centimetres, shown as a 3D dollhouse in warm daylight and as a plan with wall lengths and each door's swing. The first view frames the whole room and turns toward its windows.
+- A sample store's catalog of 34 CC0 furniture models, 3 rugs and 4 simple pieces built in code, from sofas and dining sets to beds and wardrobes. Each piece has its real size, a price and a seat count. The Provence loveseat and armchair come in six fabrics, the Bloom chair in two.
+- Fit verdicts in centimetres. Each one names the other piece or wall and the amount. The checks cover overlaps, pieces outside the walls and the door's swing. They also cover walkways (an 80 cm path from the door, then 45 cm to each seat) and tall pieces in front of a window. Clearance shades the floor a walkway can't use.
+- Recommend (Muse Spark): "What fits here?" for a free wall and "Find a replacement" for a selected piece. Only pieces that fit are offered, each with a reason that cites the sizes.
+- Arrange (Muse Spark with tool calls): layout requests in plain words. A turn is applied only when the fit engine finds no error, and a request the room can't take is refused with the sizes, for example "The Heritage Grand Sofa is 273 cm wide but the Door wall between the door and the corner is only 30 cm, so it can't fit there." The list of tool calls gives each refused call its own line.
+- Furnish (Muse Spark with tool calls): seats, a style and a budget. Muse Spark furnishes the room from the catalog, the code refuses any piece that would pass the budget, and the result card computes the seats and the prices. "Keep the pieces already here" completes a room instead of starting over.
+- Visualise (Muse Image): a photoreal picture of the layout, with a before/after slider and a download.
+- From photos (SAM 3.1 and Muse Spark): one photo per wall and two walls taped corner to corner give a draft plan to confirm. Each wall length is marked measured or estimated, with its margin in centimetres.
+- Build a room: type the room's width and length in centimetres or feet and inches, then add its doors and windows in the plan editor.
+- Undo and redo for every change, and autosave in the browser. **Add to cart** opens a cart panel under the line "Demo store · invented products and prices". It lists each piece with its size and price, the total and "✓ Everything fits", or how many pieces don't fit yet with those pieces marked. **Download list** saves it as JSON, and the shareable link (**Copy link**) rebuilds the room and its pieces from the address alone.
+- A demo product page for every catalog piece at `/store?id=<catalog id>`. Under the line "Demo store · invented products and prices" it shows the piece's picture and its model's credit, then its size and price. Its **See it in your room** button opens FitRoom with the piece's catalog card ringed and the hint "Press + Add to put the … in your room"; on a first visit the ring waits until the first-use guide has ended and a room is open. Nothing is placed by itself.
+- Confirming a photo room: each wall photo shows its corners as handles, with a magnifier while dragging, and its doors and windows as boxes with their sizes and margins ("Door 100 ± 3 × 210"). A small plan names each wall with its length, and a wall keeps one name from the tape step on ("Wall A · door wall"). The flow's three steps, Photograph, Measure and Confirm, show on every screen. Dragging a corner re-solves the room, a length typed from the tape becomes measured (± 0.5 cm), and Undo takes either back. "Found by SAM 3.1" under each photo's checks names the model at work.
+- Floor and wall finishes from the photos: Muse Spark labels the materials, and code measures each surface's colour inside SAM 3.1's masks. It picks the closest CC0 floor texture and tints the walls, and the shopper can change both under Finishes.
+- A generated example room, labelled as such, runs the photo path in Demo mode with no model calls. Its four wall photos were made with Muse Image from the sample room, and SAM 3.1's and Muse Spark's answers for them are recorded. Its tape step fills in only wall A, so wall B is estimated from the photos and shown beside its true length. Once it is built, **See it in your photo** draws the placed pieces into its four wall photos at true size, with the camera measured from each photo, and counts any piece the photo can't show.
+- A phone layout, with the catalog in a sheet, the main actions in a bottom bar and touch targets of at least 44 px. A "Set up your room" screen on the first visit, with a four-step guide that shows once. Every step has **Skip tour**, and the **?** button brings it back.
+- An empty room says "This room is empty. Add furniture from the catalog, or Furnish it for me", and the fit badge appears with the first piece. The AI actions sit together in the toolbar under an AI tag, and one side panel opens at a time.
+
+## How it works
+
+FitRoom is one web app and one small server.
+
+The room is a JSON layout in centimetres (walls, openings, fixtures) that Three.js draws as a dollhouse and as a plan. The fit engine is deterministic TypeScript shared by the browser, the server and the checks. It tests oriented footprints at any angle with the separating-axis test and finds pieces outside the walls. Each door's swing is a quarter disc, walkways run on a 1 cm grid, and tall pieces in front of a window get a warning. Every issue names the other piece or wall and the amount.
+
+Language models never decide geometry. Muse Spark proposes and the fit engine checks. An assistant turn runs on a draft copy of the room for up to eight rounds and is applied as one undo step only if the draft has no fit error; when the engine reports a problem, the model corrects its own proposal.
+
+A room from photos: each wall photo is downscaled in the browser. SAM 3.1 marks its walls, floor, ceiling, doors and windows, one request per concept. The browser decodes the masks with Meta's `@meta-sam/parser`, and code fits straight lines to the mask boundaries to find the wall's four corners. The wall's true proportions come from perspective and the camera's focal length (Zhang and He, 2007). Doors and windows are mapped onto the wall through its homography, and one least-squares fit over the four walls gives the room, with the taped walls exact. The same homography and focal length give each photo's camera position and angle, so the built example room can draw its pieces into its own photos at true size. Muse Spark reads smaller copies of the photos and labels the room's style, colours and materials. Recommend uses the style and colours, and the materials pick the finishes: code measures each surface's colour inside SAM 3.1's masks, picks the closest CC0 floor texture and tints the walls. The shopper confirms the draft in the plan editor; when the masks miss a door, the app asks them to tap it.
+
+Visualise sends Muse Image a capture of the 3D view from the current direction, framed to the whole room. A description names every piece and opening and asks the model to keep each placement.
+
+On a first visit the setup screen paints a 640 px picture of the sample room before the room's 3D files load. The room then builds one heavy step per task, from WebP colour and roughness maps, 512 px normal maps and a 512 × 256 environment map.
+
+## Meta models
+
+| Model      | Id               | Where FitRoom uses it                                                                                                                     | What the code does around it                                                                                                     |
+| ---------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Muse Spark | `muse-spark-1.3` | Recommend (fixed JSON schema); Arrange and Furnish (ten tools); labels for a photographed room (style, colours, floor and wall materials) | Free-space analysis picks the candidates; the fit engine checks every tool call; the budget, the seats and the card are computed |
+| SAM 3.1    | `sam-3.1`        | Walls, floor, ceiling, doors and windows in each wall photo                                                                               | The browser decodes the masks; geometry turns them into centimetres; the finishes' colours are measured inside them              |
+| Muse Image | `muse-image-1.0` | Visualise; the generated example room's wall photos                                                                                       | A capture of the 3D view and a description of the exact layout                                                                   |
+| Muse Code  | coding agent     | Wrote all of FitRoom's own code                                                                                                           |                                                                                                                                  |
+
+## How it was built
+
+All of FitRoom's own code was written by Meta's Muse Code agent; room building, recommendations and pictures use Muse Spark, SAM 3.1 and Muse Image.
+
+## Architecture
+
+```text
+client/  Vite + TypeScript + Three.js, plain DOM: room, catalog, plan editor,
+         photo capture, assistant panel, Visualise
+shared/  types and JSON schemas, the fit engine, free-space analysis,
+         the assistant's tools, the photo-to-room geometry
+server/  Hono API: /api/recommend, /api/assistant, /api/render,
+         /api/room/segment, /api/room/label, /api/health
+         one gateway for every Meta call:
+         demo answers → cache → rate limit and caps → Meta → metering
+```
+
+Development runs on Node. Production is one Cloudflare Worker on the free plan that serves the built client and the API, with D1 for the cache, the caps and the cost log.
+
+## Demo mode and Live AI
+
+- **Demo** (the default) replays recorded answers. For the sample room it has six Arrange requests and three Furnish briefs, Recommend on its free walls, a replacement for its sofa and Visualise. For the example room it replays the analysis of its four photos and Recommend on its free walls. It also replays the example room's two Arrange requests, the brief "2 seats · Modern · up to $1,500" and Visualise after that brief. It makes no model call and costs nothing. Anything else answers "This answer isn't in the demo yet. Use the sample room or turn on Live AI." with two buttons, **Use the sample room** and **Turn on Live AI**. A demo request that meets a network error or an HTTP 5xx is sent once more after half a second; a Live AI request never is.
+- **Live AI** (the switch at the top) sends requests through FitRoom's server to Meta's Model API.
+  - The API key is a Worker secret and never reaches the browser.
+  - Identical requests are answered from the cache.
+  - Calls and spending are capped: per browser session 20 model calls and USD 0.50; per visitor 30 requests a minute; in total USD 10, counted from 3 November 2026, 00:00 UTC. A SAM 3.1 request counts as a fifth of a call. Demo and cache answers never count.
+  - A capped request answers "The live AI is resting. Use the sample room or try again later." So does a call that Meta's API refuses with HTTP 401, 402 or 429 or with a quota, credit or billing error. The recorded demo answers keep working.
+  - Every answered request is metered (tokens and USD) in D1. When the server asks Meta again after an unusable answer, that line carries every billed try, so the spending caps count them all. A room from photos costs about USD 0.06 (20 SAM 3.1 requests and one Muse Spark call).
+
+## Run it locally
+
+Requirements: Node.js 22 or newer and npm.
 
 ```sh
 npm ci
-```
-
-Copy `.env.example` to `.env` and fill in the values when needed. Only the server reads `META_API_KEY` from the environment; never commit a real key.
-
-## Run
-
-```sh
 npm run dev
 ```
 
-Client: http://localhost:5173 (proxies `/api` to the server). Server: http://localhost:8787 (`GET /api/health` returns `{ "ok": true, "version": "<server package version>" }`).
+Client: http://localhost:5173 (proxies `/api` to the server). Server: http://localhost:8787. Demo mode works without a key. For Live AI, copy `.env.example` to `.env` and set `META_API_KEY`; only the server reads it. `META_MOCK=1` answers from fixtures with no model call. Five variables set the caps: `META_SESSION_MAX_CALLS`, `META_SESSION_MAX_USD`, `META_RATE_PER_MIN`, `META_BUDGET_USD` and `META_BUDGET_FROM`. The total budget `META_BUDGET_USD` counts from the time in `META_BUDGET_FROM`; before it, or without it, the total is USD 5.
 
-## Scripts
-
-- `npm run dev` — run the client and the server together with one command.
-- `npm run build` — build `shared`, then `server`, then `client`.
-- `npm run typecheck` — strict TypeScript check for every workspace.
-- `npm run lint` — ESLint plus a Prettier check.
-- `npm start` — serve the built API and the built client from one process.
-- `npm run dev:worker` — build everything and run the Cloudflare Worker locally.
-- `npm run check:worker` — end-to-end Worker check, all local (no Meta call, no account).
-- `npm run deploy` — ship the Worker to Cloudflare (needs Cloudflare credentials).
+- `npm run build`, then `npm start`: the built client and the API from one Node process.
+- `npm run dev:worker`: the Cloudflare Worker locally with D1, no account needed.
+- `npm run typecheck`, `npm run lint` and `npm run validate` (the 14 fit-test scenes with known answers).
+- `npm run check:*`: one script per area, such as `check:geometry`, `check:assistant` or `check:states`. `npm run check:worker` runs the whole Worker locally with no model call and no account.
 
 ## Deploy
 
@@ -125,10 +193,6 @@ window.__fitroomCamera;
 //   room: { ... } }
 ```
 
-## How it's built
-
-All of the code in this repository was written by Meta's Muse Code agent. Recommendations and the layout assistant run on Muse Spark; the photoreal view runs on Muse Image.
-
 ## Photo-room conventions
 
 Single table, mirrored in `shared/src/photo-room/types.ts`:
@@ -189,3 +253,85 @@ words.
 | Empty cart         | Your cart is empty. Add furniture from the catalog.                                                                                                                                                              | Add furniture to the room first |
 | Cart panel         | Your cart is empty. Add furniture from the catalog.                                                                                                                                                              | Browse the catalog              |
 | Shared layout link | That share link didn't work. Use the sample room to start again.                                                                                                                                                 | Use the sample room             |
+
+## Privacy
+
+- No accounts, no sign-in and no analytics scripts.
+- FitRoom saves your room, your layout and your photos only in your browser's storage, and keeps the photos only while you build a room from them.
+- Demo mode sends nothing to Meta.
+- In Live AI, each wall photo goes through FitRoom's server to Meta's Model API: a 1280 px copy to SAM 3.1 and a 640 px copy to Muse Spark. The browser re-encodes both copies, so they carry none of the photo's metadata, such as its location. Before the first photo the app says: "Your photos are sent to Meta's AI models for analysis and may be used to improve them."
+- The server never stores a photo. Its cache keeps a SHA-256 fingerprint of each photo with the model's answer (the masks as text, the labels), so the same photo is never paid for twice. Other requests, such as a room layout or a typed request, are cached as sent, with their answers.
+- For the caps, the server sets a random session cookie. It logs each answered request's time, session, route, model, tokens and cost. For the per-minute limit it keeps a salted SHA-256 hash of the visitor's address (never the address itself) with the times of its recent requests, and deletes those rows after a day.
+- A shareable layout link holds the room and its pieces in the address itself, after the `#`, so the server keeps nothing for it. It carries no photo and no name the shopper typed.
+
+## Limitations
+
+- Rooms are rectangles with four walls, from photos or from the plan editor.
+- Fit is checked on the floor plan. Each piece is the rectangle of its width and depth, so a round table counts as its square and nothing slides under another piece; height matters only for the window warning.
+- Measured so far: on a generated 420 × 360 cm example room, walls come out exact from two tape measurements and windows within 1 cm; a door read 100 cm against 90 cm and one edit in the plan fixes it. With only wall A taped, as in the app's example, wall B read 362 ± 9 cm against 360 cm. On eight public-domain (CC0) room photos, FitRoom picked the right floor type on 6 and asked for a retake on the 2 it could not read; the wall colour came within ΔE 10 of the photo on 3 of the 6 rooms it built (on all 6 once the photo's exposure is set aside: the 3D view lights the room itself). Its accuracy on real phone photos against a tape measure has not been assessed.
+- An open door leaf can hide its doorway in a photo; when no opening is found, the app asks the shopper to tap the door.
+- Demo mode answers only its recorded requests on the sample room and the example room; everything else needs Live AI, which is capped.
+- The catalog is a sample store: product names and prices are invented for the demo, and the sizes are the CC0 models' real dimensions. A store can't upload its own catalog yet, so the "See it in your room" button exists only on the demo store's pages.
+
+## What's next
+
+- Sending a finished layout to the store with one link, pieces and prices included.
+- The "See it in your room" button on a store's own product pages, beyond the demo store's.
+- A catalog upload screen for stores, with Muse Spark tagging each product by style, colour and room type.
+- A room from a floor-plan image, and styles from an inspiration photo.
+- More room shapes (L-shaped, open plan) and room types (bedroom, dining).
+- One piece in AR on a phone.
+- Bring your own piece: a photo plus its width, depth and height. The fit engine would check it, including whether it gets through the door.
+- Erasing the furniture already standing in a photo.
+
+## Credits
+
+The downloaded 3D models, the textures and the HDRI are all CC0 (public domain); the credits are a courtesy. Per-file credits are in [CREDITS.md](CREDITS.md).
+
+| Product in the app             | Model                     | Author                       | Source                                                                                                       |
+| ------------------------------ | ------------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Chester Leather Sofa           | Sofa 02                   | Kirill Sannikov              | [Poly Haven](https://polyhaven.com/a/sofa_02)                                                                |
+| Heritage Grand Sofa            | Sofa 03                   | Fran Calvente                | [Poly Haven](https://polyhaven.com/a/sofa_03)                                                                |
+| Provence Loveseat              | Sofa 01                   | Kirill Sannikov              | [Poly Haven](https://polyhaven.com/a/Sofa_01)                                                                |
+| Orbit Swivel Lounge Chair      | Mid Century Lounge Chair  | Kuutti Siitonen              | [Poly Haven](https://polyhaven.com/a/mid_century_lounge_chair)                                               |
+| Nord Leather Armchair          | Modern Arm Chair 01       | Vibrant Nordic               | [Poly Haven](https://polyhaven.com/a/modern_arm_chair_01)                                                    |
+| Bloom Velvet Lounge Chair      | Sheen Chair               | Eric Chadwick (Wayfair, LLC) | [Khronos glTF-Sample-Assets](https://github.com/KhronosGroup/glTF-Sample-Assets/tree/main/Models/SheenChair) |
+| Victoria Accent Chair          | Green Chair 01            | Kirill Sannikov              | [Poly Haven](https://polyhaven.com/a/GreenChair_01)                                                          |
+| Provence Armchair              | Arm Chair 01              | Kirill Sannikov              | [Poly Haven](https://polyhaven.com/a/ArmChair_01)                                                            |
+| Chester Ottoman                | Ottoman 01                | Caspian Fortune              | [Poly Haven](https://polyhaven.com/a/Ottoman_01)                                                             |
+| Slate Coffee Table             | Modern Coffee Table 01    | Amin                         | [Poly Haven](https://polyhaven.com/a/modern_coffee_table_01)                                                 |
+| Luna Marble Coffee Table       | Coffee Table Round 01     | Ulan Cabanilla               | [Poly Haven](https://polyhaven.com/a/coffee_table_round_01)                                                  |
+| Pine Side Table                | Side Table 01             | James Ray Cock               | [Poly Haven](https://polyhaven.com/a/side_table_01)                                                          |
+| Rhythm TV Unit                 | Modern Wooden Cabinet     | Patrik Pangerl               | [Poly Haven](https://polyhaven.com/a/modern_wooden_cabinet)                                                  |
+| Cube Shelf 3×3                 | Wooden Display Shelves 01 | James Ray Cock               | [Poly Haven](https://polyhaven.com/a/wooden_display_shelves_01)                                              |
+| Alocasia in Terracotta         | Potted Plant 02           | Rico Cilliers                | [Poly Haven](https://polyhaven.com/a/potted_plant_02)                                                        |
+| Vintage Painted Settee         | Painted Wooden Sofa       | Kirill Sannikov              | [Poly Haven](https://polyhaven.com/a/painted_wooden_sofa)                                                    |
+| Vintage Wooden Daybed          | Vintage Day Bed           | Aron Łyczek                  | [Poly Haven](https://polyhaven.com/a/vintage_day_bed)                                                        |
+| Classic Rocking Chair          | Rockingchair 01           | Jorge Camacho                | [Poly Haven](https://polyhaven.com/a/Rockingchair_01)                                                        |
+| Round Oak Dining Table         | Round Wooden Table 01     | Ulan Cabanilla               | [Poly Haven](https://polyhaven.com/a/round_wooden_table_01)                                                  |
+| Farmhouse Painted Dining Table | Painted Wooden Table      | Kirill Sannikov              | [Poly Haven](https://polyhaven.com/a/painted_wooden_table)                                                   |
+| Country Painted Dining Chair   | Painted Wooden Chair 01   | Kuutti Siitonen              | [Poly Haven](https://polyhaven.com/a/painted_wooden_chair_01)                                                |
+| High-Back Painted Dining Chair | Painted Wooden Chair 02   | Kirill Sannikov              | [Poly Haven](https://polyhaven.com/a/painted_wooden_chair_02)                                                |
+| Duo Square Coffee Table        | Modern Coffee Table 02    | Amin                         | [Poly Haven](https://polyhaven.com/a/modern_coffee_table_02)                                                 |
+| Industrial Loft Side Table     | Industrial Coffee Table   | Ulan Cabanilla               | [Poly Haven](https://polyhaven.com/a/industrial_coffee_table)                                                |
+| Atelier Long Coffee Table      | Coffee Table 01           | Fernando Quinn               | [Poly Haven](https://polyhaven.com/a/CoffeeTable_01)                                                         |
+| Gothic Carved Double Bed       | Gothic Bed 01             | Kirill Sannikov              | [Poly Haven](https://polyhaven.com/a/GothicBed_01)                                                           |
+| Gothic Carved Armoire          | Gothic Cabinet 01         | Kirill Sannikov              | [Poly Haven](https://polyhaven.com/a/GothicCabinet_01)                                                       |
+| Vintage Panel Cabinet          | Vintage Cabinet 01        | Rico Cilliers                | [Poly Haven](https://polyhaven.com/a/vintage_cabinet_01)                                                     |
+| Compact Oak Bookcase           | Shelf 01                  | Gabriel Radić                | [Poly Haven](https://polyhaven.com/a/Shelf_01)                                                               |
+| Steel Frame Double Bookcase    | Steel Frame Shelves 01    | James Ray Cock               | [Poly Haven](https://polyhaven.com/a/steel_frame_shelves_01)                                                 |
+| Steel Frame Single Bookcase    | Steel Frame Shelves 02    | James Ray Cock               | [Poly Haven](https://polyhaven.com/a/steel_frame_shelves_02)                                                 |
+| Tall Drawer Chest              | Drawer Cabinet            | Ulan Cabanilla               | [Poly Haven](https://polyhaven.com/a/drawer_cabinet)                                                         |
+| Oak Console TV Stand           | Wooden Table 03           | Gabriel Radić                | [Poly Haven](https://polyhaven.com/a/WoodenTable_03)                                                         |
+| Vintage Chest TV Stand         | Vintage Wooden Drawer 01  | James Ray Cock               | [Poly Haven](https://polyhaven.com/a/vintage_wooden_drawer_01)                                               |
+
+- The Oslo rugs, wardrobe, bed and sofa are built in code and are FitRoom's own (all rights reserved). The rugs, the sofa, the bed's linen and the lamp's shade use ambientCG textures.
+- Textures from [ambientCG](https://ambientcg.com): WoodFloor039, WoodFloor051, WoodFloor064, WoodFloor070, WoodFloor071, Tiles107, Tiles139, Carpet012, Carpet015, Carpet016, PaintedPlaster017, Wallpaper002A, Concrete034, Fabric036, Fabric039, Fabric040, Fabric061, Fabric075.
+- HDRI: [Lebombo](https://polyhaven.com/a/lebombo) by Greg Zaal, Poly Haven.
+- Test data: SAM 3.1 answers recorded from eight CC0 room photos on Wikimedia Commons by Jarosław Ceborski, Carlos ZGZ, Artchapiz, Profpcde, Paikan06, Lo, Wilfredor and Andy Li. The photos are not in this repository.
+- `@meta-sam/parser` by Meta, under the SAM License; a copy ships in `client/public/licenses/SAM-LICENSE.txt`.
+- Libraries: three.js, Hono, Ajv and exifr (MIT), dotenv (BSD-2-Clause), Vite and TypeScript for the build. Typeface: Nunito, SIL Open Font License 1.1, via Fontsource. The licence texts of the nine npm packages in the browser bundle ship with the app at `/licenses/THIRD-PARTY-NOTICES.txt`, written by the build, and Nunito's at `/licenses/OFL-1.1-Nunito.txt`; the Credits dialog links both. The server's packages are listed in [CREDITS.md](CREDITS.md).
+
+## License
+
+Copyright © 2026 FitRoom. All rights reserved: the source is published to be read, not reused (see `LICENSE`). Assets and libraries keep their own licences (Credits above).
