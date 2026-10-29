@@ -56,6 +56,34 @@ export const EMPTY_ROOM_ACTION = "Furnish it for me";
 export const CART_EMPTY = "Your cart is empty. Add furniture from the catalog.";
 export const CART_EMPTY_ACTION = "Add furniture to the room first";
 
+/** Demo-store line shown in the cart panel (and the demo product page). */
+export const DEMO_STORE_LINE = "Demo store · invented products and prices";
+
+/** Cart side panel and its actions. */
+export const CART_PANEL_TITLE = "Your cart";
+export const CART_CLOSE = "Close cart";
+export const CART_DOWNLOAD = "Download list";
+export const CART_DOWNLOAD_TITLE = "Download your cart as JSON";
+export const CART_BROWSE_CATALOG = "Browse the catalog";
+export const CART_FIT_OK = "✓ Everything fits";
+
+/** Error fit line naming the count of pieces that name errors. */
+export function cartFitError(count: number): string {
+  if (count === 1) return "1 piece doesn't fit yet: fix it or add anyway";
+  return `${String(count)} pieces don't fit yet: fix them or add anyway`;
+}
+
+/** Share-this-layout block in the cart panel. */
+export const CART_SHARE_TITLE = "Share this layout";
+export const CART_COPY_LINK = "Copy link";
+export const CART_LINK_COPIED = "Link copied";
+export const CART_SHARE_LABEL = "Shareable link";
+export const SHARE_DIALOG_TEXT =
+  "Open the shared layout? It replaces your current room; the sample room stays in the room menu.";
+export const SHARE_OPEN = "Open";
+export const SHARE_KEEP = "Keep my room";
+export const SHARE_INVALID = "That share link didn't work. Use the sample room to start again.";
+
 /** Arrange input placeholder: short enough to fit the field at 390 px. */
 export const ARRANGE_PLACEHOLDER = "Arrange my room…";
 
@@ -291,5 +319,17 @@ export const STATES: StateRow[] = [
     where: "Empty cart",
     text: CART_EMPTY,
     action: CART_EMPTY_ACTION,
+  },
+  {
+    id: "cart-browse",
+    where: "Cart panel",
+    text: CART_EMPTY,
+    action: CART_BROWSE_CATALOG,
+  },
+  {
+    id: "share-invalid",
+    where: "Shared layout link",
+    text: SHARE_INVALID,
+    action: USE_SAMPLE_ROOM,
   },
 ];

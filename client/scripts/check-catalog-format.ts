@@ -117,14 +117,31 @@ check(
   catalogUi.includes("formatCatalogPrice(total)"),
   "formatTopBar",
 );
+check(
+  "cart rows size through the formatter",
+  main.includes("formatCatalogSize(row.w, row.d, row.h)"),
+  "main.ts renderCartPanel",
+);
+check(
+  "cart rows price through the formatter",
+  main.includes("formatCatalogPrice(row.price)"),
+  "main.ts renderCartPanel",
+);
+check(
+  "cart total uses the top-bar formatter",
+  main.includes("formatTopBar(model.count, model.total)"),
+  "main.ts renderCartPanel",
+);
 
 // No card or panel builds its own size or price string.
+const cartModel = readFileSync(join(root, "src", "cart-model.ts"), "utf8");
 for (const [file, body] of [
   ["catalog-ui.ts", catalogUi],
   ["inspector.ts", inspector],
   ["recommend/panel.ts", recommend],
   ["assistant/panel.ts", assistant],
   ["main.ts", main],
+  ["cart-model.ts", cartModel],
 ] as const) {
   check(`${file} builds no ad-hoc size`, !body.includes("×${Math.round"), file);
   check(
@@ -140,8 +157,9 @@ check(
   !inspector.includes("toLocaleString") &&
     !recommend.includes("toLocaleString") &&
     !assistant.includes("toLocaleString") &&
-    !main.includes("toLocaleString"),
-  "inspector/recommend/assistant/main",
+    !main.includes("toLocaleString") &&
+    !cartModel.includes("toLocaleString"),
+  "inspector/recommend/assistant/main/cart-model",
 );
 
 // One horizontally scrolling chip row that never shrinks in the column.

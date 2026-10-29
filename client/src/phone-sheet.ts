@@ -31,7 +31,8 @@ export const PHONE_AI_MENU_LABELS = ["Arrange", "Furnish", "Recommend"] as const
 /** Inspector toggle for the position fields on a phone. */
 export const INSPECTOR_MORE_LABEL = "More";
 
-export type PhoneSheetName = "catalog" | "inspector" | "recommend" | "assistant" | "render";
+export type PhoneSheetName =
+  "catalog" | "inspector" | "recommend" | "assistant" | "render" | "cart";
 export type PhoneSheetSize = "peek" | "full";
 
 export function isPhoneViewport(): boolean {

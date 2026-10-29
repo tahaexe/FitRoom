@@ -45,9 +45,24 @@ import { initLiveSwitch, isLive } from "./api";
 import { EMPTY_HINT_TEXT, needsDoorTip } from "./hints";
 import {
   ADD_TO_CART,
+  CART_BROWSE_CATALOG,
+  CART_CLOSE,
+  CART_COPY_LINK,
   CART_DISABLED_REASON,
+  CART_DOWNLOAD,
+  CART_DOWNLOAD_TITLE,
   CART_EMPTY,
+  CART_FIT_OK,
+  CART_LINK_COPIED,
+  CART_PANEL_TITLE,
+  CART_SHARE_LABEL,
+  CART_SHARE_TITLE,
+  DEMO_STORE_LINE,
   EMPTY_ROOM_ACTION,
+  SHARE_DIALOG_TEXT,
+  SHARE_INVALID,
+  SHARE_KEEP,
+  SHARE_OPEN,
   TOOLBAR_ARRANGE,
   TOOLBAR_CLEARANCE,
   TOOLBAR_DELETE,
@@ -58,6 +73,7 @@ import {
   TOOLBAR_ROTATE_LEFT,
   TOOLBAR_ROTATE_RIGHT,
   TOOLBAR_VISUALISE,
+  USE_SAMPLE_ROOM,
 } from "./copy";
 import { Guide, GuideView, queryGuideTarget, type GuideScreen } from "./guide";
 import {
@@ -78,7 +94,9 @@ import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
 import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
 import { OrbitResolutionController } from "./orbit-resolution";
-import { isPhoneViewport, PhoneSheets } from "./phone-sheet";
+import { isPhoneViewport, PhoneSheets, type PhoneSheetName } from "./phone-sheet";
+import { buildCartModel } from "./cart-model";
+import { decodeLayout, encodeLayout, type DecodedLayout } from "./layout-share";
 import { PointerOwnership } from "./pointer-ownership";
 import { SceneSynchronizer } from "./scene-sync";
 import { EditorStore } from "./editor/editor-store";
@@ -323,7 +341,9 @@ class FitRoomApp {
   /** Phone bottom sheets (catalog, Inspector, Recommend, AI, Visualise). */
   private sheets: PhoneSheets | null = null;
   /** Current side panel (desktop visibility + phone sheet source of truth). */
-  private sidePanel: "inspector" | "recommend" | "assistant" | "none" = "none";
+  private sidePanel: "inspector" | "recommend" | "assistant" | "cart" | "none" = "none";
+  private pendingSharedLayout: DecodedLayout | null = null;
+  private sharedInvalid = false;
   private wasPhone = false;
   /** Resize coalescing: at most one breakpoint + guide pass per frame. */
   private resizeQueued = false;
@@ -380,25 +400,61 @@ class FitRoomApp {
       }
     }
     const hasSavedRoom = storedManualRoom !== null || storedPhotosRoom !== null || hasSavedScene;
-    const firstChoice = resolveFirstOpen({ hasSavedRoom, roomParam });
-    this.firstOpenSetup = firstChoice === "setup";
-    if (roomParam === "sample") {
-      if (ROOM.id !== SAMPLE_ROOM.id) {
-        applyRoomLayout(ROOM, JSON.parse(JSON.stringify(SAMPLE_ROOM)) as RoomLayout);
+    // A shared layout fragment rebuilds the room and its pieces from the
+    // URL alone. Read once at start, beside `?room=`, then leave the
+    // address at once so the fragment never lingers.
+    const sharedHash = ((): string => {
+      try {
+        return window.location.hash;
+      } catch {
+        return "";
       }
-      this.menuChoice = "sample";
-    } else if (storedManualRoom !== null) {
-      applyRoomLayout(ROOM, storedManualRoom);
+    })();
+    let sharedLayout: DecodedLayout | null = null;
+    let sharedHashPresent = false;
+    if (sharedHash.startsWith("#layout=")) {
+      sharedHashPresent = true;
+      sharedLayout = decodeLayout(sharedHash, CATALOG_MAP);
+      try {
+        history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
+      } catch {
+        // Address cleanup is best-effort; the layout still opens.
+      }
+    }
+    this.sharedInvalid = sharedHashPresent && sharedLayout === null;
+    const firstChoice = resolveFirstOpen({ hasSavedRoom, roomParam });
+    this.firstOpenSetup = firstChoice === "setup" && sharedLayout === null;
+    if (sharedLayout !== null && !hasSavedRoom) {
+      this.stashRoomLayout();
+      applyRoomLayout(ROOM, sharedLayout.room);
       this.menuChoice = "manual";
-    } else if (storedPhotosRoom !== null) {
-      applyRoomLayout(ROOM, storedPhotosRoom);
-      this.menuChoice = "photos";
+    }
+    const sharedAppliedNow = sharedLayout !== null && !hasSavedRoom;
+    if (!sharedAppliedNow) {
+      if (roomParam === "sample") {
+        if (ROOM.id !== SAMPLE_ROOM.id) {
+          applyRoomLayout(ROOM, JSON.parse(JSON.stringify(SAMPLE_ROOM)) as RoomLayout);
+        }
+        this.menuChoice = "sample";
+      } else if (storedManualRoom !== null) {
+        applyRoomLayout(ROOM, storedManualRoom);
+        this.menuChoice = "manual";
+      } else if (storedPhotosRoom !== null) {
+        applyRoomLayout(ROOM, storedPhotosRoom);
+        this.menuChoice = "photos";
+      }
+      if (sharedLayout !== null && hasSavedRoom) this.pendingSharedLayout = sharedLayout;
     }
     // First visit (no saved room) opens the furnished demo room behind the
     // setup screen — the scene the chips reset to — while returning visits
-    // restore the autosave.
+    // restore the autosave. A shared layout applied at once opens its own
+    // furnished scene instead, never the setup card.
     const firstVisit = firstChoice !== "room";
-    this.store = new SceneStore(ROOM.id, validScene as unknown as SceneState);
+    const sharedFallback =
+      sharedAppliedNow && sharedLayout !== null
+        ? { ...sharedLayout.scene, roomId: ROOM.id }
+        : undefined;
+    this.store = new SceneStore(ROOM.id, (sharedFallback ?? validScene) as unknown as SceneState);
     // Developer camera hook: a known scene, never the saved shopper state.
     // The scene menu still works on top; `camitems=0` hides every piece.
     // Assigned directly (no replace event) so the shopper autosave survives.
@@ -636,6 +692,7 @@ class FitRoomApp {
       recommend: document.getElementById("recommend-panel"),
       assistant: document.getElementById("assistant-panel"),
       render: document.getElementById("render-viewer"),
+      cart: document.getElementById("cart-panel"),
     });
     this.wasPhone = isPhoneViewport();
     if (this.wasPhone) {
@@ -740,6 +797,13 @@ class FitRoomApp {
     } else {
       // Returning visit with no setup screen: loads its room as today.
       this.startStageLoads();
+    }
+    // A shared layout over a saved room asks once; a broken link keeps
+    // the room and says so with its way out.
+    if (this.pendingSharedLayout !== null) {
+      this.showShareDialog(this.pendingSharedLayout);
+    } else if (this.sharedInvalid) {
+      this.showShareInvalid();
     }
     // First paint of the four-moment guide: moment 1 on the first-run
     // dialog, else the moment that fits the screen — or nothing seen.
@@ -1290,6 +1354,7 @@ class FitRoomApp {
 
   /** "From photos": the capture flow floats above everything. */
   private openPhotoFlow(): void {
+    this.closeCart();
     this.sheets?.close();
     this.syncPhoneBar();
     this.syncFlowChrome();
@@ -2022,8 +2087,8 @@ class FitRoomApp {
     this.syncPhoneBar();
   }
 
-  /** Right-hand column: one panel at a time (Inspector, Recommend, Arrange). */
-  private showSidePanel(name: "inspector" | "recommend" | "assistant" | "none"): void {
+  /** Right-hand column: one panel at a time (Inspector, Recommend, Arrange, Cart). */
+  private showSidePanel(name: "inspector" | "recommend" | "assistant" | "cart" | "none"): void {
     this.sidePanel = name;
     if (name !== "none") {
       document.getElementById("fit-list")?.setAttribute("hidden", "");
@@ -2031,16 +2096,22 @@ class FitRoomApp {
       if (!isPhoneViewport()) {
         document.getElementById("render-viewer")?.setAttribute("hidden", "");
       }
+      if (name === "cart") this.renderCartPanel();
     }
     // A phone shows the same panels as bottom sheets, one at a time.
     if (this.sheets !== null && isPhoneViewport()) {
       if (name === "none") {
-        if (!this.sheets.isOpen("catalog") && !this.sheets.isOpen("render")) {
+        if (
+          !this.sheets.isOpen("catalog") &&
+          !this.sheets.isOpen("render") &&
+          !this.sheets.isOpen("cart")
+        ) {
           this.sheets.close();
         }
+        document.getElementById("cart-panel")?.setAttribute("hidden", "");
       } else if (!this.sheets.isOpen(name)) {
         // Keep the user's height (peek/full) when the sheet is already open.
-        this.sheets.open(name);
+        this.sheets.open(name as PhoneSheetName);
       }
       if (name === "assistant") this.assistantPanel?.syncMode();
       this.syncPhoneBar();
@@ -2051,6 +2122,7 @@ class FitRoomApp {
     const inspector = document.getElementById("inspector");
     const recommend = document.getElementById("recommend-panel");
     const assistant = document.getElementById("assistant-panel");
+    const cart = document.getElementById("cart-panel");
     if (name === "inspector") inspector?.removeAttribute("hidden");
     else inspector?.setAttribute("hidden", "");
     if (name === "recommend") recommend?.removeAttribute("hidden");
@@ -2061,6 +2133,8 @@ class FitRoomApp {
     } else {
       assistant?.setAttribute("hidden", "");
     }
+    if (name === "cart") cart?.removeAttribute("hidden");
+    else cart?.setAttribute("hidden", "");
     this.setToggle("tool-recommend", name === "recommend");
     this.setToggle("tool-assistant", name === "assistant");
     // Panels float over the 3D view: the stage keeps its size, so the
@@ -2080,6 +2154,7 @@ class FitRoomApp {
       ["recommend-panel", "recommend"],
       ["assistant-panel", "assistant"],
       ["inspector", "inspector"],
+      ["cart-panel", "cart"],
     ] as const;
     for (const [id, name] of pairs) {
       const el = document.getElementById(id);
@@ -2103,11 +2178,22 @@ class FitRoomApp {
     }
   }
 
-  /** Phone bottom bar: Catalog, AI, Visualise and the cart summary. */
+  /** Phone bottom bar: Catalog, AI, Visualise and the cart button. */
   private bindPhone(): void {
     const on = (id: string, fn: () => void): void => {
       document.getElementById(id)?.addEventListener("click", fn);
     };
+    on("phone-cart", () => {
+      const el = document.getElementById("phone-cart");
+      if (el instanceof HTMLButtonElement && el.disabled) return;
+      this.closePhoneMenus();
+      if (this.sidePanel === "cart" || this.sheets?.isOpen("cart") === true) {
+        this.showSidePanel("none");
+      } else {
+        this.showSidePanel("cart");
+      }
+      this.syncPhoneBar();
+    });
     on("phone-catalog", () => {
       this.closePhoneMenus();
       this.sheets?.toggle("catalog");
@@ -2181,7 +2267,14 @@ class FitRoomApp {
         closed = true;
       }
     }
-    if (this.sheets?.close() === true) closed = true;
+    if (this.sheets?.close() === true) {
+      closed = true;
+      if (this.sidePanel === "cart") {
+        this.sidePanel = "none";
+        document.getElementById("cart-panel")?.setAttribute("hidden", "");
+        this.container.classList.toggle("has-side-panel", false);
+      }
+    }
     if (closed) this.syncPhoneBar();
     return closed;
   }
@@ -2226,15 +2319,17 @@ class FitRoomApp {
     const catalog = document.getElementById("phone-catalog");
     const ai = document.getElementById("phone-ai");
     const visualise = document.getElementById("phone-visualise");
-    const sheet = (["catalog", "inspector", "recommend", "assistant", "render"] as const).find(
-      (name) => this.sheets?.isOpen(name) === true,
-    );
+    const phoneCart = document.getElementById("phone-cart");
+    const sheet = (
+      ["catalog", "inspector", "recommend", "assistant", "render", "cart"] as const
+    ).find((name) => this.sheets?.isOpen(name) === true);
     catalog?.setAttribute("data-active", String(sheet === "catalog"));
     ai?.setAttribute(
       "data-active",
       String(sheet === "assistant" || sheet === "recommend" || sheet === "inspector"),
     );
     visualise?.setAttribute("data-active", String(sheet === "render"));
+    phoneCart?.setAttribute("data-active", String(sheet === "cart"));
     // Sheets move the guide's targets (catalog, AI tab): re-seat the bubble.
     this.updateGuide();
   }
@@ -2373,7 +2468,7 @@ class FitRoomApp {
         badge.textContent = `! ${warns} warning${warns === 1 ? "" : "s"}`;
       } else {
         badge.dataset["state"] = "good";
-        badge.textContent = "✓ Everything fits";
+        badge.textContent = CART_FIT_OK;
       }
     }
     this.fitOverlay.setAnalysis(this.analysis, this.issues);
@@ -2488,20 +2583,27 @@ class FitRoomApp {
         count === 0 ? CART_EMPTY : `${formatTopBar(count, total)} in your cart`,
       );
     }
+    const inFlow = this.photoFlow !== null || this.editing;
+    const phoneCartEl = document.getElementById("phone-cart");
+    if (phoneCartEl instanceof HTMLButtonElement) {
+      phoneCartEl.disabled = total === 0 || inFlow;
+    }
     const cart = document.getElementById("tool-cart");
     if (cart instanceof HTMLButtonElement) {
       // The header's Add to cart stays live only outside the photo flow
-      // and the confirm view (which already keeps it disabled): it would
-      // otherwise compete with the flow's own button.
+      // and the confirm view (which already keeps it disabled): it opens
+      // the cart panel instead of downloading.
       cart.textContent = ADD_TO_CART;
-      const inFlow = this.photoFlow !== null || this.editing;
       if (inFlow) {
         cart.disabled = true;
         cart.title = CART_DISABLED_REASON;
       } else {
         cart.disabled = total === 0;
-        cart.title = total === 0 ? CART_EMPTY : "Download your cart as JSON";
+        cart.title = total === 0 ? CART_EMPTY : CART_PANEL_TITLE;
       }
+    }
+    if (this.sidePanel === "cart" || this.sheets?.isOpen("cart") === true) {
+      this.renderCartPanel();
     }
     this.updateEmptyHint(count);
   }
@@ -2654,6 +2756,270 @@ class FitRoomApp {
     if (!this.guide.started) return;
     this.guide.advanceOnPieceMoved(this.guideScreen());
     this.renderGuide();
+  }
+
+  /** Close the cart wherever it is open (desktop panel or phone sheet). */
+  private closeCart(): void {
+    if (this.sidePanel === "cart") this.showSidePanel("none");
+    else {
+      document.getElementById("cart-panel")?.setAttribute("hidden", "");
+      this.sheets?.close();
+      this.syncPhoneBar();
+    }
+  }
+
+  /** Share URL for the live room and its pieces, from the URL alone. */
+  private shareUrl(): string {
+    const fragment = encodeLayout(ROOM, this.store.state);
+    try {
+      return `${window.location.origin}${window.location.pathname}${window.location.search}${fragment}`;
+    } catch {
+      return fragment;
+    }
+  }
+
+  /** Cart side panel: rows, the total, the fit line and the share block. */
+  private renderCartPanel(): void {
+    const host = document.getElementById("cart-panel");
+    if (host === null) return;
+    const badge = document.getElementById("fit-badge");
+    const badgeText = badge instanceof HTMLButtonElement ? (badge.textContent ?? "") : "";
+    const badgeState = badge instanceof HTMLButtonElement ? (badge.dataset["state"] ?? "") : "";
+    const model = buildCartModel(
+      this.store.state.items,
+      CATALOG_MAP,
+      this.issues,
+      badgeText,
+      badgeState,
+    );
+    host.innerHTML = "";
+    const titleRow = document.createElement("div");
+    titleRow.className = "cart-title-row";
+    const title = document.createElement("h2");
+    title.textContent = CART_PANEL_TITLE;
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "cart-close";
+    close.textContent = "×";
+    close.setAttribute("aria-label", CART_CLOSE);
+    close.addEventListener("click", () => this.showSidePanel("none"));
+    titleRow.append(title, close);
+    host.appendChild(titleRow);
+    const storeLine = document.createElement("p");
+    storeLine.className = "cart-store";
+    storeLine.textContent = DEMO_STORE_LINE;
+    host.appendChild(storeLine);
+    if (model.rows.length === 0) {
+      const empty = document.createElement("p");
+      empty.className = "cart-empty";
+      empty.textContent = CART_EMPTY;
+      const browse = document.createElement("button");
+      browse.type = "button";
+      browse.className = "btn-secondary";
+      browse.textContent = CART_BROWSE_CATALOG;
+      browse.addEventListener("click", () => {
+        if (isPhoneViewport()) {
+          this.showSidePanel("none");
+          this.sheets?.open("catalog");
+          this.syncPhoneBar();
+        } else {
+          document.querySelector<HTMLDivElement>("#catalog")?.removeAttribute("hidden");
+          document.querySelector<HTMLInputElement>('#catalog input[type="search"]')?.focus();
+        }
+      });
+      host.append(empty, browse);
+      return;
+    }
+    const fit = document.createElement("p");
+    fit.className = "cart-fit";
+    fit.dataset["state"] = model.fit.kind;
+    fit.textContent = model.fit.line;
+    host.appendChild(fit);
+    const list = document.createElement("div");
+    list.className = "cart-list";
+    for (const row of model.rows) {
+      const entry = CATALOG_MAP.get(row.productId);
+      const dims = entry === undefined ? "" : formatCatalogSize(row.w, row.d, row.h);
+      const price = formatCatalogPrice(row.price);
+      let node: HTMLElement;
+      if (row.fitError) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.className = "cart-row";
+        b.dataset["fitError"] = "true";
+        b.setAttribute("aria-label", `${row.name}, ${dims}, ${price}: show the piece in the room`);
+        b.addEventListener("click", () => {
+          this.select(row.instanceId);
+          const item = this.store.state.items.find((i) => i.instanceId === row.instanceId);
+          if (item !== undefined) this.focusCameraOn(item.position);
+          this.showSidePanel("inspector");
+        });
+        node = b;
+      } else {
+        node = document.createElement("div");
+        node.className = "cart-row";
+      }
+      const thumb = document.createElement("img");
+      thumb.className = "cart-thumb";
+      thumb.src = row.thumbnail;
+      thumb.alt = row.name;
+      thumb.loading = "lazy";
+      const meta = document.createElement("span");
+      meta.className = "cart-meta";
+      const name = document.createElement("span");
+      name.className = "cart-name";
+      name.textContent = row.name;
+      const dimsEl = document.createElement("span");
+      dimsEl.className = "cart-dims";
+      dimsEl.textContent = dims;
+      const priceEl = document.createElement("span");
+      priceEl.className = "cart-price";
+      priceEl.textContent = price;
+      meta.append(name, dimsEl, priceEl);
+      if (row.variant !== null) {
+        const variant = document.createElement("span");
+        variant.className = "cart-variant";
+        variant.textContent = row.variant;
+        meta.appendChild(variant);
+      }
+      node.append(thumb, meta);
+      list.appendChild(node);
+    }
+    host.appendChild(list);
+    const total = document.createElement("p");
+    total.className = "cart-total-line";
+    total.textContent = formatTopBar(model.count, model.total);
+    host.appendChild(total);
+    const download = document.createElement("button");
+    download.type = "button";
+    download.className = "btn-secondary";
+    download.textContent = CART_DOWNLOAD;
+    download.title = CART_DOWNLOAD_TITLE;
+    download.addEventListener("click", () => this.downloadCart());
+    host.appendChild(download);
+    const shareTitle = document.createElement("h3");
+    shareTitle.textContent = CART_SHARE_TITLE;
+    host.appendChild(shareTitle);
+    const shareLabel = document.createElement("label");
+    shareLabel.textContent = CART_SHARE_LABEL;
+    shareLabel.htmlFor = "cart-share-link";
+    const shareField = document.createElement("input");
+    shareField.type = "text";
+    shareField.id = "cart-share-link";
+    shareField.name = "cart-share-link";
+    shareField.readOnly = true;
+    try {
+      shareField.value = this.shareUrl();
+    } catch {
+      shareField.value = "";
+    }
+    const copy = document.createElement("button");
+    copy.type = "button";
+    copy.className = "btn-secondary";
+    copy.textContent = CART_COPY_LINK;
+    copy.addEventListener("click", () => {
+      const done = (): void => {
+        copied.removeAttribute("hidden");
+      };
+      try {
+        const value = shareField.value;
+        if (typeof navigator !== "undefined" && navigator.clipboard !== undefined) {
+          void navigator.clipboard.writeText(value).then(done, () => {
+            shareField.select();
+            done();
+          });
+        } else {
+          shareField.select();
+          done();
+        }
+      } catch {
+        done();
+      }
+    });
+    const copied = document.createElement("p");
+    copied.className = "cart-copied";
+    copied.textContent = CART_LINK_COPIED;
+    copied.setAttribute("hidden", "");
+    host.append(shareLabel, shareField, copy, copied);
+  }
+
+  /** Open a shared layout as the typed-in room, without the plan editor. */
+  private applySharedLayout(decoded: DecodedLayout): void {
+    this.stashRoomLayout();
+    applyRoomLayout(ROOM, decoded.room);
+    saveRoomLayout(ROOM);
+    if (this.store.state.roomId !== ROOM.id) {
+      this.store.switchRoom(ROOM.id, { ...decoded.scene, roomId: ROOM.id });
+    } else {
+      this.store.replace({ ...decoded.scene, roomId: ROOM.id });
+    }
+    this.select(null);
+    this.syncRoomId();
+    this.rebuildRoom();
+    this.closeEditor();
+    if (this.mode !== "orbit") this.setMode("orbit");
+    this.resetView();
+    this.menuChoice = "manual";
+    this.refreshMenu();
+  }
+
+  /** One dialog when a shared layout arrives over a saved room. */
+  private showShareDialog(decoded: DecodedLayout): void {
+    if (document.getElementById("share-dialog") !== null) return;
+    const dialog = document.createElement("dialog");
+    dialog.id = "share-dialog";
+    dialog.setAttribute("aria-label", CART_SHARE_TITLE);
+    const text = document.createElement("p");
+    text.textContent = SHARE_DIALOG_TEXT;
+    const row = document.createElement("div");
+    row.className = "share-dialog-row";
+    const open = document.createElement("button");
+    open.type = "button";
+    open.className = "btn-primary";
+    open.textContent = SHARE_OPEN;
+    open.addEventListener("click", () => {
+      this.pendingSharedLayout = null;
+      dialog.close();
+      dialog.remove();
+      this.applySharedLayout(decoded);
+    });
+    const keep = document.createElement("button");
+    keep.type = "button";
+    keep.className = "btn-secondary";
+    keep.textContent = SHARE_KEEP;
+    keep.addEventListener("click", () => {
+      this.pendingSharedLayout = null;
+      dialog.close();
+      dialog.remove();
+    });
+    row.append(open, keep);
+    dialog.append(text, row);
+    document.body.appendChild(dialog);
+    dialog.showModal();
+  }
+
+  /** A broken, unknown or out-of-range link changes nothing, with a way out. */
+  private showShareInvalid(): void {
+    if (document.getElementById("share-notice") !== null) return;
+    const host = document.getElementById("scene-container") ?? document.body;
+    const notice = document.createElement("div");
+    notice.id = "share-notice";
+    notice.className = "share-notice";
+    notice.setAttribute("role", "status");
+    const text = document.createElement("span");
+    text.textContent = SHARE_INVALID;
+    const action = document.createElement("button");
+    action.type = "button";
+    action.className = "btn-secondary";
+    action.textContent = USE_SAMPLE_ROOM;
+    action.addEventListener("click", () => {
+      notice.remove();
+      this.resetDemoRoom();
+      this.menuChoice = "sample";
+      this.refreshMenu();
+    });
+    notice.append(text, action);
+    host.appendChild(notice);
   }
 
   /** Download the current cart (room + placed pieces + total) as JSON. */
@@ -3004,6 +3370,10 @@ class FitRoomApp {
           fitList.setAttribute("hidden", "");
           return;
         }
+        if (this.sidePanel === "cart" || this.sheets?.isOpen("cart") === true) {
+          this.showSidePanel("none");
+          return;
+        }
         this.select(null);
         return;
       }
@@ -3072,7 +3442,13 @@ class FitRoomApp {
     const on = (id: string, fn: () => void): void => {
       document.getElementById(id)?.addEventListener("click", fn);
     };
-    on("tool-cart", () => this.downloadCart());
+    on("tool-cart", () => {
+      const cart = document.getElementById("tool-cart");
+      if (cart instanceof HTMLButtonElement && cart.disabled) return;
+      const panel = document.getElementById("cart-panel");
+      if (panel === null) return;
+      this.showSidePanel(panel.hasAttribute("hidden") ? "cart" : "none");
+    });
     on("tool-recommend", () => {
       const panel = document.getElementById("recommend-panel");
       if (panel === null) return;

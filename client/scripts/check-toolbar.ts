@@ -234,8 +234,9 @@ check(
 // Inspector or the fit list closes every other side panel.
 check(
   "opening a side panel hides the fit list",
-  main.includes('private showSidePanel(name: "inspector" | "recommend" | "assistant" | "none")') &&
-    main.includes('document.getElementById("fit-list")?.setAttribute("hidden", "")'),
+  main.includes(
+    'private showSidePanel(name: "inspector" | "recommend" | "assistant" | "cart" | "none")',
+  ) && main.includes('document.getElementById("fit-list")?.setAttribute("hidden", "")'),
   "main.ts showSidePanel",
 );
 check(
@@ -258,7 +259,7 @@ check(
 );
 check(
   "the fit badge opens the list exclusively",
-  main.includes("if (list.hasAttribute(\"hidden\")) this.openFitList();"),
+  main.includes('if (list.hasAttribute("hidden")) this.openFitList();'),
   "main.ts fit-badge",
 );
 check(
@@ -266,6 +267,51 @@ check(
   main.includes("private watchPanelClose()") &&
     main.includes('this.setToggle("tool-recommend", false)'),
   "main.ts watchPanelClose",
+);
+// The cart is one side panel among the others: opening it closes the fit
+// list, the recommend/assistant/inspector panels and Visualise, and opening
+// any of them closes the cart; Esc closes it too.
+check(
+  "opening the cart closes the fit list",
+  main.includes('this.showSidePanel("cart")') &&
+    main.includes('document.getElementById("fit-list")?.setAttribute("hidden", "")'),
+  "main.ts showSidePanel cart",
+);
+check(
+  "opening the cart closes Visualise",
+  main.includes('this.showSidePanel("cart")') && main.includes("this.renderViewer?.close()"),
+  "main.ts showSidePanel cart",
+);
+check(
+  "opening another panel closes the cart",
+  main.includes('["recommend-panel", "recommend"]') &&
+    main.includes('["assistant-panel", "assistant"]') &&
+    main.includes('["inspector", "inspector"]') &&
+    main.includes('["cart-panel", "cart"]'),
+  "main.ts watchPanelClose cart",
+);
+check(
+  "Escape closes the cart",
+  main.includes('if (this.sidePanel === "cart" || this.sheets?.isOpen("cart") === true)') &&
+    main.includes('this.showSidePanel("none")'),
+  "main.ts bindKeys cart",
+);
+check(
+  "the photo flow closes the cart and the editor takes its place",
+  main.includes("private openPhotoFlow()") &&
+    main.includes("this.closeCart()") &&
+    main.includes("private openEditor()") &&
+    main.includes('this.showSidePanel("none")'),
+  "main.ts openPhotoFlow/openEditor",
+);
+check(
+  "the phone cart opens the cart as a bottom sheet",
+  main.includes('showSidePanel("cart")') &&
+    (main.includes('this.sheets?.open("cart"') ||
+      main.includes('this.sheets.open("cart"') ||
+      main.includes("this.sheets?.open(name") ||
+      main.includes("this.sheets.open(name")),
+  "main.ts phone cart sheet",
 );
 // Panels float over the 3D view: the stage keeps its size, so the room
 // always keeps at least half its width with any panel open.
@@ -281,6 +327,30 @@ check(
   /Side panels (live|float) over the 3D (stage|view)/.test(main) ||
     main.includes("Panels float over the 3D view"),
   "main.ts showSidePanel",
+);
+check(
+  "the cart floats over the stage like the other panels",
+  /#cart-panel\s*\{[^}]*position:\s*fixed/.test(css) &&
+    main.includes('document.getElementById("cart-panel")') &&
+    html.includes('id="cart-panel"'),
+  "cart-panel fixed",
+);
+check(
+  "the phone cart is a button",
+  /<button[^>]*id="phone-cart"[^>]*type="button"/.test(html) &&
+    main.includes('document.getElementById("phone-cart")'),
+  "index.html phone-cart",
+);
+check(
+  "the phone bar tracks the cart sheet",
+  main.includes('"cart"') && main.includes("syncPhoneBar"),
+  "main.ts syncPhoneBar cart",
+);
+check(
+  "the phone sheets know the cart",
+  readFileSync(join(root, "src", "phone-sheet.ts"), "utf8").includes('"cart"') &&
+    main.includes('cart: document.getElementById("cart-panel")'),
+  "phone-sheet.ts PhoneSheetName",
 );
 
 // The phone bar hides while the photo flow or the confirm view is open.
@@ -301,7 +371,7 @@ check(
 // visible, with the full "4 items · $3,280" as its accessible name.
 check(
   "the phone cart keeps the full summary as its accessible name",
-  main.includes('phoneCart.setAttribute(') &&
+  main.includes("phoneCart.setAttribute(") &&
     main.includes('"aria-label"') &&
     main.includes("in your cart"),
   "main.ts phoneCart",

@@ -26,12 +26,31 @@ import {
   ADD_TO_CART,
   BUILD_MY_ROOM,
   CAPPED_MESSAGE,
+  CART_BROWSE_CATALOG,
+  CART_CLOSE,
+  CART_COPY_LINK,
+  CART_DISABLED_REASON,
+  CART_DOWNLOAD,
+  CART_DOWNLOAD_TITLE,
+  CART_EMPTY,
+  CART_EMPTY_ACTION,
+  CART_FIT_OK,
+  CART_LINK_COPIED,
+  CART_PANEL_TITLE,
+  CART_SHARE_LABEL,
+  CART_SHARE_TITLE,
   DEMO_MISS_MESSAGE,
+  DEMO_STORE_LINE,
   FLOW_STEPS,
   LEAVE,
+  SHARE_DIALOG_TEXT,
+  SHARE_INVALID,
+  SHARE_KEEP,
+  SHARE_OPEN,
   TAPE_NEXT,
   TURN_ON_LIVE,
   USE_SAMPLE_ROOM,
+  cartFitError,
   planOpeningName,
   resetTintLabel,
 } from "../src/copy.js";
@@ -61,6 +80,10 @@ check("tape button is Next: confirm", TAPE_NEXT === "Next: confirm");
 check("confirm keeps Build my room", BUILD_MY_ROOM === "Build my room");
 check("exit is Leave everywhere", LEAVE === "Leave");
 check("header cart is Add to cart", ADD_TO_CART === "Add to cart");
+check(
+  "disabled cart names the photo flow",
+  CART_DISABLED_REASON === "Finish the photo flow first, then add to cart.",
+);
 check("demo-miss names its button action", DEMO_MISS_MESSAGE.includes(USE_SAMPLE_ROOM));
 check("capped names its button action", CAPPED_MESSAGE.includes(USE_SAMPLE_ROOM));
 check("live switch is one name", TURN_ON_LIVE === "Turn on Live AI");
@@ -88,6 +111,116 @@ check(
   main.includes("CART_DISABLED_REASON") && main.includes("photoFlow !== null || this.editing"),
   "main.ts",
 );
+
+// The cart panel and the share block: every new label lives in copy.ts,
+// the panel renders from the module, and no screen carries its own literal.
+check("cart panel title is Your cart", CART_PANEL_TITLE === "Your cart");
+check("cart close is Close cart", CART_CLOSE === "Close cart");
+check("cart download is Download list", CART_DOWNLOAD === "Download list");
+check("cart download title names the JSON", CART_DOWNLOAD_TITLE === "Download your cart as JSON");
+check("cart empty reads the empty-cart sentence", CART_EMPTY.startsWith("Your cart is empty."));
+check(
+  "cart empty action opens the catalog",
+  CART_EMPTY_ACTION === "Add furniture to the room first",
+);
+check("cart browse opens the catalog", CART_BROWSE_CATALOG === "Browse the catalog");
+check("cart fit ok matches the badge", CART_FIT_OK === "✓ Everything fits");
+check(
+  "cart fit error names the count",
+  cartFitError(1) === "1 piece doesn't fit yet: fix it or add anyway" &&
+    cartFitError(2) === "2 pieces don't fit yet: fix them or add anyway",
+  `${cartFitError(1)} / ${cartFitError(2)}`,
+);
+check(
+  "demo store line is the invented-products sentence",
+  DEMO_STORE_LINE === "Demo store · invented products and prices",
+);
+check("share title is Share this layout", CART_SHARE_TITLE === "Share this layout");
+check("share copy is Copy link", CART_COPY_LINK === "Copy link");
+check("share copied reads Link copied", CART_LINK_COPIED === "Link copied");
+check("share field is labelled", CART_SHARE_LABEL === "Shareable link");
+check(
+  "share dialog keeps the sample room",
+  SHARE_DIALOG_TEXT.includes("the sample room stays in the room menu") &&
+    SHARE_OPEN === "Open" &&
+    SHARE_KEEP === "Keep my room",
+  SHARE_DIALOG_TEXT,
+);
+check("share invalid names the sample room", SHARE_INVALID.includes(USE_SAMPLE_ROOM));
+for (const token of [
+  "CART_PANEL_TITLE",
+  "CART_CLOSE",
+  "CART_DOWNLOAD",
+  "CART_DOWNLOAD_TITLE",
+  "CART_BROWSE_CATALOG",
+  "CART_FIT_OK",
+  "DEMO_STORE_LINE",
+  "CART_SHARE_TITLE",
+  "CART_COPY_LINK",
+  "CART_LINK_COPIED",
+  "CART_SHARE_LABEL",
+  "SHARE_DIALOG_TEXT",
+  "SHARE_OPEN",
+  "SHARE_KEEP",
+  "SHARE_INVALID",
+  "CART_EMPTY",
+]) {
+  check(`cart panel renders ${token} from the module`, main.includes(token), "main.ts");
+}
+check("cart badge renders CART_FIT_OK from the module", main.includes("CART_FIT_OK"), "main.ts");
+{
+  // Comments may quote the words; only code may not carry its own literal.
+  const cartCodeFiles = [
+    "photo-room/flow.ts",
+    "editor/photo-confirm.ts",
+    "editor/editor.ts",
+    "editor/finishes.ts",
+    "editor/plan-view.ts",
+    "main.ts",
+    "catalog-ui.ts",
+    "cart-model.ts",
+    "layout-share.ts",
+    "assistant/panel.ts",
+    "recommend/panel.ts",
+    "render/viewer.ts",
+    "first-open.ts",
+    "api.ts",
+  ];
+  const cartLiterals = [
+    "Your cart",
+    "Close cart",
+    "Download list",
+    "Download your cart as JSON",
+    "Browse the catalog",
+    "✓ Everything fits",
+    "pieces don't fit yet",
+    "Demo store · invented products and prices",
+    "Share this layout",
+    "Copy link",
+    "Link copied",
+    "Shareable link",
+    "Open the shared layout?",
+    "Keep my room",
+    "That share link didn't work",
+    "Your cart is empty. Add furniture from the catalog.",
+  ];
+  for (const file of cartCodeFiles) {
+    const code = src(file)
+      .split("\n")
+      .filter((line) => {
+        const trimmed = line.trim();
+        return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*");
+      })
+      .join("\n");
+    for (const literal of cartLiterals) {
+      check(
+        `${file} carries no cart literal "${literal.slice(0, 24)}"`,
+        !code.includes(literal),
+        file,
+      );
+    }
+  }
+}
 
 for (const file of [
   "photo-room/flow.ts",
