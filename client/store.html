@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta
+      name="description"
+      content="A demo furniture product page: see the piece in your room with FitRoom."
+    />
+    <title>Demo store · FitRoom</title>
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: #1c1a17;
+        --muted: #6b655c;
+        --paper: #faf7f1;
+        --card: #ffffff;
+        --coral: #f54e49;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: Nunito, system-ui, sans-serif;
+        color: var(--ink);
+        background: var(--paper);
+      }
+      .store-bar {
+        position: sticky;
+        top: 0;
+        z-index: 10;
+        padding: 12px 16px;
+        text-align: center;
+        font-weight: 700;
+        background: var(--ink);
+        color: #fff;
+      }
+      .store-main {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 24px 16px 64px;
+      }
+      .store-product {
+        background: var(--card);
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 1px 6px rgb(0 0 0 / 0.08);
+      }
+      .store-thumb {
+        display: block;
+        width: 100%;
+        height: auto;
+        border-radius: 12px;
+        background: #eee;
+      }
+      .store-credit {
+        margin: 8px 0 0;
+        font-size: 13px;
+        color: var(--muted);
+      }
+      .store-name {
+        margin: 12px 0 4px;
+        font-size: 28px;
+      }
+      .store-meta {
+        margin: 4px 0;
+        color: var(--muted);
+      }
+      .store-price {
+        margin: 8px 0 16px;
+        font-size: 22px;
+        font-weight: 800;
+      }
+      .store-see-it {
+        display: inline-block;
+        padding: 12px 20px;
+        border-radius: 999px;
+        background: var(--coral);
+        color: #fff;
+        font-weight: 800;
+        text-decoration: none;
+      }
+      .store-missing {
+        text-align: center;
+        padding: 48px 16px;
+      }
+      .store-missing a {
+        color: var(--coral);
+        font-weight: 800;
+      }
+    </style>
+  </head>
+  <body>
+    <header class="store-bar"><span id="store-demo-line"></span></header>
+    <main class="store-main">
+      <section id="store-product" class="store-product" hidden>
+        <img id="store-thumb" class="store-thumb" alt="" />
+        <p id="store-credit" class="store-credit"></p>
+        <h1 id="store-name" class="store-name"></h1>
+        <p id="store-size" class="store-meta"></p>
+        <p id="store-price" class="store-price"></p>
+        <a id="store-see-it" class="store-see-it" href="/"></a>
+      </section>
+      <section id="store-missing" class="store-missing" hidden>
+        <p id="store-missing-text"></p>
+        <p><a id="store-open-app" href="/"></a></p>
+      </section>
+    </main>
+    <script type="module" src="/src/store.ts"></script>
+  </body>
+</html>
