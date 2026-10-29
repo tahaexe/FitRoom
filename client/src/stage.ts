@@ -1,7 +1,6 @@
 import * as THREE from "three";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
-
-const HDRI_URL = "assets/hdri/polyhaven/lebombo_1k.hdr";
+import { HDRI_URL, surfaceMapFiles } from "./surface-maps";
 
 export interface StageRig {
   sun: THREE.DirectionalLight;
@@ -11,7 +10,7 @@ export interface StageRig {
 }
 
 function pbrSet(
-  base: string,
+  finish: string,
   repeatX: number,
   repeatY: number,
   onLoad: () => void,
@@ -26,10 +25,13 @@ function pbrSet(
     if (srgb) tex.colorSpace = THREE.SRGBColorSpace;
     return tex;
   };
+  // File names come from the one place (`surface-maps.ts`): the finish
+  // id maps to its colour/normal/roughness URLs there, never here.
+  const files = surfaceMapFiles(finish);
   return {
-    map: load(`${base}_Color.jpg`, true),
-    normalMap: load(`${base}_NormalGL.jpg`, false),
-    roughnessMap: load(`${base}_Roughness.jpg`, false),
+    map: load(files.colorUrl, true),
+    normalMap: load(files.normalUrl, false),
+    roughnessMap: load(files.roughnessUrl, false),
   };
 }
 
@@ -82,12 +84,7 @@ export function makeFloorMaterial(
 ): THREE.MeshStandardMaterial {
   const finish = floorTextureIdFor(floorId);
   const tileM = FLOOR_TILE_M[finish] ?? 1;
-  const sets = pbrSet(
-    `assets/textures/ambientcg/${finish}/${finish}_1K-JPG`,
-    Math.max(1, roomWM / tileM),
-    Math.max(1, roomDM / tileM),
-    onLoad,
-  );
+  const sets = pbrSet(finish, Math.max(1, roomWM / tileM), Math.max(1, roomDM / tileM), onLoad);
   return new THREE.MeshStandardMaterial({
     map: sets.map,
     normalMap: sets.normalMap,

@@ -30,6 +30,7 @@
     "check:geometry": "tsx scripts/check-geometry.ts",
     "check:example-geometry": "tsx scripts/check-example-geometry.ts",
     "check:surfaces": "tsx scripts/check-surfaces.ts",
+    "check:light-maps": "tsx scripts/check-light-maps.ts",
     "check:live-rooms": "tsx scripts/check-live-rooms.ts",
     "check:photo-intake": "npm run check:photo-intake -w @fitroom/client",
     "check:photo-cards": "npm run check:photo-cards -w @fitroom/client",

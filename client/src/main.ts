@@ -94,6 +94,7 @@ import { captureView } from "./render/capture";
 import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
 import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
+import { surfaceMapFiles } from "./surface-maps";
 import { OrbitResolutionController } from "./orbit-resolution";
 import { isPhoneViewport, PhoneSheets, type PhoneSheetName } from "./phone-sheet";
 import { buildCartModel } from "./cart-model";
@@ -254,13 +255,14 @@ export function wallTintLinearFor(
 function dressWalls(onLoad: () => void, wallId?: string, wallTint?: string): void {
   const loader = new THREE.TextureLoader();
   const finish = wallTextureIdFor(wallId);
-  const base = `assets/textures/ambientcg/${finish}/${finish}_1K-JPG`;
-  const map = loader.load(`${base}_Color.jpg`, onLoad);
+  // File names come from the one place (`surface-maps.ts`), as the floor's do.
+  const files = surfaceMapFiles(finish);
+  const map = loader.load(files.colorUrl, onLoad);
   map.wrapS = THREE.RepeatWrapping;
   map.wrapT = THREE.RepeatWrapping;
   map.repeat.set(2, 1);
   map.colorSpace = THREE.SRGBColorSpace;
-  const normalMap = loader.load(`${base}_NormalGL.jpg`, onLoad);
+  const normalMap = loader.load(files.normalUrl, onLoad);
   normalMap.wrapS = THREE.RepeatWrapping;
   normalMap.wrapT = THREE.RepeatWrapping;
   normalMap.repeat.set(2, 1);
