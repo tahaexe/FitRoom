@@ -325,7 +325,7 @@ The downloaded 3D models, the textures and the HDRI are all CC0 (public domain);
 | Oak Console TV Stand           | Wooden Table 03           | Gabriel Radić                | [Poly Haven](https://polyhaven.com/a/WoodenTable_03)                                                         |
 | Vintage Chest TV Stand         | Vintage Wooden Drawer 01  | James Ray Cock               | [Poly Haven](https://polyhaven.com/a/vintage_wooden_drawer_01)                                               |
 
-- The Oslo rugs, wardrobe, bed and sofa are built in code and are FitRoom's own (all rights reserved). The rugs, the sofa, the bed's linen and the lamp's shade use ambientCG textures.
+- The Oslo rugs, wardrobe, bed and sofa and the Aria floor lamp are built in code and are FitRoom's own (all rights reserved). The rugs, the sofa, the bed's linen and the lamp's shade use ambientCG textures.
 - Textures from [ambientCG](https://ambientcg.com): WoodFloor039, WoodFloor051, WoodFloor064, WoodFloor070, WoodFloor071, Tiles107, Tiles139, Carpet012, Carpet015, Carpet016, PaintedPlaster017, Wallpaper002A, Concrete034, Fabric036, Fabric039, Fabric040, Fabric061, Fabric075.
 - HDRI: [Lebombo](https://polyhaven.com/a/lebombo) by Greg Zaal, Poly Haven.
 - Test data: SAM 3.1 answers recorded from eight CC0 room photos on Wikimedia Commons by Jarosław Ceborski, Carlos ZGZ, Artchapiz, Profpcde, Paikan06, Lo, Wilfredor and Andy Li. The photos are not in this repository.
