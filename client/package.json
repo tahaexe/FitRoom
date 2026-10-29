@@ -30,6 +30,7 @@
     "check:store-entry": "tsx scripts/check-store-entry.ts",
     "check:footprints": "node scripts/check-model-footprints.mjs",
     "check:first-paint": "tsx scripts/check-first-paint.ts",
+    "check:api-retry": "tsx scripts/check-api-retry.ts",
     "preview": "vite preview --port 5173 --strictPort",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },

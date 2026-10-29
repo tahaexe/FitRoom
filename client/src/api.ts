@@ -59,44 +59,108 @@ function toResult(payload: GatewayResponse): ApiResult {
   }
 }
 
+function isCallerTimeout(error: unknown, signal?: AbortSignal): boolean {
+  if (signal?.aborted === true) return true;
+  return error instanceof DOMException && error.name === "AbortError";
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 async function postGateway(
   route: "recommend" | "assistant" | "render" | "room/segment" | "room/label",
   body: Record<string, unknown>,
   signal?: AbortSignal,
 ): Promise<ApiResult> {
-  let res: Response;
-  try {
-    res = await fetch(`/api/${route}`, {
+  // Demo requests (no live header) retry once after ~500 ms on a network
+  // error or an HTTP 5xx, then show today's error. Live requests never
+  // retry (a second send could bill twice), nor do demo-miss, capped,
+  // not-ready, ok or the caller's own time-out.
+  const live = isLive();
+  const send = (): Promise<Response> =>
+    fetch(`/api/${route}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        ...(isLive() ? { "X-FitRoom-Live": "1" } : {}),
+        ...(live ? { "X-FitRoom-Live": "1" } : {}),
       },
       body: JSON.stringify(body),
       ...(signal !== undefined ? { signal } : {}),
     });
-  } catch (error) {
-    if (signal?.aborted === true) {
-      return { status: "error", message: "The request timed out. Try again." };
+  const readResult = async (res: Response): Promise<ApiResult | null> => {
+    let payload: unknown;
+    try {
+      payload = (await res.json()) as unknown;
+    } catch {
+      return null;
     }
-    if (error instanceof DOMException && error.name === "AbortError") {
-      return { status: "error", message: "The request timed out. Try again." };
+    if (!isGatewayResponse(payload)) return null;
+    if (res.status === 429 && payload.status !== "capped") {
+      return { status: "capped", message: CAPPED_MESSAGE };
     }
-    return { status: "error", message: AI_UNREACHABLE };
-  }
-  let payload: unknown;
+    return toResult(payload);
+  };
+  const retryableHttp = (res: Response, result: ApiResult | null): boolean => {
+    if (live) return false;
+    if (res.status < 500 || res.status > 599) return false;
+    // Only the error shape retries: ok, demo-miss, capped and not-ready
+    // never do (not-ready arrives as HTTP 501).
+    return result === null || result.status === "error";
+  };
+  let res: Response;
   try {
-    payload = (await res.json()) as unknown;
-  } catch {
-    return { status: "error", message: `The AI service answered HTTP ${String(res.status)}.` };
+    res = await send();
+  } catch (error) {
+    if (isCallerTimeout(error, signal)) {
+      return { status: "error", message: "The request timed out. Try again." };
+    }
+    if (live) return { status: "error", message: AI_UNREACHABLE };
+    await sleep(500);
+    try {
+      res = await send();
+    } catch (retryError) {
+      if (isCallerTimeout(retryError, signal)) {
+        return { status: "error", message: "The request timed out. Try again." };
+      }
+      return { status: "error", message: AI_UNREACHABLE };
+    }
   }
-  if (!isGatewayResponse(payload)) {
-    return { status: "error", message: `The AI service answered HTTP ${String(res.status)}.` };
+  let result = await readResult(res);
+  if (result === null) {
+    if (retryableHttp(res, null)) {
+      await sleep(500);
+      try {
+        res = await send();
+      } catch (retryError) {
+        if (isCallerTimeout(retryError, signal)) {
+          return { status: "error", message: "The request timed out. Try again." };
+        }
+        return { status: "error", message: AI_UNREACHABLE };
+      }
+      result = await readResult(res);
+      if (result === null) {
+        return { status: "error", message: `The AI service answered HTTP ${String(res.status)}.` };
+      }
+    } else {
+      return { status: "error", message: `The AI service answered HTTP ${String(res.status)}.` };
+    }
   }
-  if (res.status === 429 && payload.status !== "capped") {
-    return { status: "capped", message: CAPPED_MESSAGE };
+  if (retryableHttp(res, result)) {
+    await sleep(500);
+    let retryRes: Response;
+    try {
+      retryRes = await send();
+    } catch (retryError) {
+      if (isCallerTimeout(retryError, signal)) {
+        return { status: "error", message: "The request timed out. Try again." };
+      }
+      return { status: "error", message: AI_UNREACHABLE };
+    }
+    const retryResult = await readResult(retryRes);
+    return retryResult ?? result;
   }
-  return toResult(payload);
+  return result;
 }
 
 export function postRecommend(body: Record<string, unknown>): Promise<ApiResult> {
