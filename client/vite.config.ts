@@ -5,6 +5,22 @@ import { defineConfig } from "vite";
 const here = dirname(fileURLToPath(import.meta.url));
 
 export default defineConfig({
+  plugins: [
+    {
+      name: "fitroom-store-html",
+      configureServer(server) {
+        server.middlewares.use((req, _res, next) => {
+          const url = req.url ?? "";
+          const end = url.search(/[?#]/);
+          const path = end < 0 ? url : url.slice(0, end);
+          if (path === "/store" || path === "/store/") {
+            req.url = `/store.html${end < 0 ? "" : url.slice(end)}`;
+          }
+          next();
+        });
+      },
+    },
+  ],
   server: {
     port: 5173,
     strictPort: true,

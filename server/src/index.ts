@@ -108,26 +108,60 @@ app.route("/api", renderRoutes(gatewayDeps));
 app.route("/api", roomSegmentRoutes(gatewayDeps));
 app.route("/api", roomLabelRoutes(gatewayDeps));
 
+/**
+ * Choose the file to serve for a static path inside the built client.
+ *
+ * - A path with an extension serves that file when it exists inside the
+ *   dist folder.
+ * - A path without one serves `<path>.html` when that file exists (so
+ *   `/store` and `/store?id=sofa_02` serve `store.html`).
+ * - Everything else falls back to `index.html`.
+ * - Nothing outside the dist folder is ever served (`/../x`, encoded dots).
+ */
+export function resolveStaticFile(urlPath: string, distDir: string): string {
+  const indexFile = resolve(distDir, "index.html");
+  const hashAt = urlPath.indexOf("#");
+  const queryAt = urlPath.indexOf("?");
+  let end = urlPath.length;
+  if (queryAt >= 0) end = Math.min(end, queryAt);
+  if (hashAt >= 0) end = Math.min(end, hashAt);
+  let pathPart = urlPath.slice(0, end);
+  if (pathPart === "") pathPart = "/";
+  if (!pathPart.startsWith("/")) pathPart = `/${pathPart}`;
+  let decoded: string;
+  try {
+    decoded = decodeURIComponent(pathPart);
+  } catch {
+    return indexFile;
+  }
+  if (decoded.includes("\0")) return indexFile;
+  let normalized = decoded;
+  if (normalized.length > 1) normalized = normalized.replace(/\/+$/, "");
+  if (normalized === "" || normalized === "/") return indexFile;
+  const candidate = resolve(distDir, `.${normalized}`);
+  const relToDist = relative(distDir, candidate);
+  const isInside =
+    relToDist !== "" && relToDist !== ".." && !relToDist.startsWith(`..${sep}`);
+  if (!isInside) return indexFile;
+  if (extname(candidate) !== "") {
+    if (existsSync(candidate)) return candidate;
+    return indexFile;
+  }
+  const htmlCandidate = resolve(distDir, `.${normalized}.html`);
+  const htmlRel = relative(distDir, htmlCandidate);
+  const htmlInside =
+    htmlRel !== "" && htmlRel !== ".." && !htmlRel.startsWith(`..${sep}`);
+  if (htmlInside && existsSync(htmlCandidate)) return htmlCandidate;
+  return indexFile;
+}
+
 const clientDistDir = fileURLToPath(new URL("../../client/dist/", import.meta.url));
 const clientIndexFile = resolve(clientDistDir, "index.html");
 
 if (existsSync(clientIndexFile)) {
   app.get("/*", async (c) => {
     const pathname = new URL(c.req.url).pathname;
-    const relativePath = decodeURIComponent(pathname).replace(/^\/+/, "");
-    const candidate = resolve(clientDistDir, relativePath);
-    const relToDist = relative(clientDistDir, candidate);
-    const isInside = relToDist !== "" && relToDist !== ".." && !relToDist.startsWith(`..${sep}`);
-    const hasExtension = extname(candidate) !== "";
-    let filePath: string | null = null;
-    if (isInside && hasExtension && existsSync(candidate)) {
-      filePath = candidate;
-    } else if (!hasExtension) {
-      filePath = clientIndexFile;
-    }
-    if (filePath === null) {
-      return c.text("Not found", 404);
-    }
+    const filePath = resolveStaticFile(pathname, clientDistDir);
     try {
       const data = await readFile(filePath);
       const contentType = MIME_TYPES[extname(filePath)] ?? "application/octet-stream";

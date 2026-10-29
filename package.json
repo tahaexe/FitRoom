@@ -35,6 +35,7 @@
     "check:surfaces": "tsx scripts/check-surfaces.ts",
     "check:light-maps": "tsx scripts/check-light-maps.ts",
     "check:live-rooms": "tsx scripts/check-live-rooms.ts",
+    "check:static": "tsx server/scripts/check-static.ts",
     "check:photo-intake": "npm run check:photo-intake -w @fitroom/client",
     "check:photo-cards": "npm run check:photo-cards -w @fitroom/client",
     "check:example-room": "npm run check:example-room -w @fitroom/client",
