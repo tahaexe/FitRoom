@@ -31,6 +31,8 @@
     "check:store": "tsx scripts/check-store.ts",
     "check:store-entry": "tsx scripts/check-store-entry.ts",
     "check:footprints": "node scripts/check-model-footprints.mjs",
+    "check:example-cameras": "tsx scripts/check-example-cameras.ts",
+    "check:photo-view": "tsx scripts/check-photo-view.ts",
     "check:first-paint": "tsx scripts/check-first-paint.ts",
     "check:api-retry": "tsx scripts/check-api-retry.ts",
     "preview": "vite preview --port 5173 --strictPort",

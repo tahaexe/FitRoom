@@ -924,7 +924,14 @@ check(
 check(
   "phone:menu",
   JSON.stringify(PHONE_MENU_LABELS) ===
-    JSON.stringify(["Plan", "Clearance", "Reset view", "Edit room", "Credits"]),
+    JSON.stringify([
+      "Plan",
+      "Clearance",
+      "Reset view",
+      "Edit room",
+      "Credits",
+      "See it in your photo",
+    ]),
   PHONE_MENU_LABELS.join(","),
 );
 check(

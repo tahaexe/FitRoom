@@ -10,19 +10,22 @@
  * landscape height ≤ 500 px); the desktop path never touches it.
  */
 
+import { PHOTO_VIEW_BUTTON } from "./copy";
+
 /** Phone = width ≤ 720 px, or landscape height ≤ 500 px. */
 export const PHONE_MEDIA = "(max-width: 720px), (max-height: 500px) and (orientation: landscape)";
 
 /** Bottom-bar buttons on a phone: Catalog, AI, Visualise, cart summary. */
 export const PHONE_BAR_LABELS = ["Catalog", "AI", "Visualise"] as const;
 
-/** The ⋯ menu in the 48 px phone top bar. */
+/** The ⋯ menu in the 48 px phone top bar (the photo item renders from copy.ts). */
 export const PHONE_MENU_LABELS = [
   "Plan",
   "Clearance",
   "Reset view",
   "Edit room",
   "Credits",
+  PHOTO_VIEW_BUTTON,
 ] as const;
 
 /** The AI menu in the 56 px phone bottom bar. */

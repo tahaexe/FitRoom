@@ -518,3 +518,145 @@
     width: 96px;
   }
 }
+
+/* ---- "See it in your photo": pill over the room view's top-left ---- */
+
+#photo-view-button {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  z-index: 2;
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  box-shadow: var(--shadow);
+  padding: 8px 16px;
+  min-height: 44px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+#photo-view-button[hidden] {
+  display: none;
+}
+
+/* ---- "See it in your photo": the view over the 3D room ---- */
+
+.photo-view {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  background: #ffffff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 16px 16px;
+  box-sizing: border-box;
+  overflow-y: auto;
+}
+
+.photo-view-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.photo-view-bar .photo-example-caption {
+  margin: 0;
+  margin-right: auto;
+}
+
+.photo-view-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.photo-view-tab {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  min-height: 44px;
+  min-width: 44px;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.photo-view-tab[aria-pressed="true"] {
+  background: var(--ink);
+  color: #ffffff;
+  border-color: var(--ink);
+}
+
+.photo-view-close {
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 8px 16px;
+  min-height: 44px;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.photo-view-line {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.photo-view-stage {
+  position: relative;
+  width: 100%;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+
+.photo-view-img {
+  display: block;
+  width: 100%;
+  height: auto;
+  border-radius: var(--radius);
+}
+
+.photo-view-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+.photo-view-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.photo-view-shadow {
+  position: absolute;
+  width: 64px;
+  height: 20px;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(ellipse at center, rgba(0, 0, 0, 0.28) 0%, rgba(0, 0, 0, 0) 70%);
+  pointer-events: none;
+}
+
+.photo-view-outside {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+
+.photo-view-outside[hidden] {
+  display: none;
+}

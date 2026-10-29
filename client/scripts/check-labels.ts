@@ -43,6 +43,10 @@ import {
   DEMO_STORE_LINE,
   FLOW_STEPS,
   LEAVE,
+  PHOTO_VIEW_BUTTON,
+  PHOTO_VIEW_CLOSE,
+  PHOTO_VIEW_LINE,
+  photoViewOutside,
   SHARE_DIALOG_TEXT,
   SHARE_INVALID,
   SHARE_KEEP,
@@ -518,6 +522,77 @@ check(
       "store.html",
     );
   }
+}
+
+// ---- "See it in your photo": every new word lives in copy.ts ----
+check(
+  "photo button is See it in your photo",
+  PHOTO_VIEW_BUTTON === "See it in your photo",
+  PHOTO_VIEW_BUTTON,
+);
+check(
+  "photo line is the true-size sentence",
+  PHOTO_VIEW_LINE === "Pieces drawn at true size, with the camera measured from this photo.",
+  PHOTO_VIEW_LINE,
+);
+check("photo close is Close photo view", PHOTO_VIEW_CLOSE === "Close photo view");
+check(
+  "photo outside line names the quoted sentence",
+  photoViewOutside(1) === "1 piece is outside this photo" &&
+    photoViewOutside(2) === "2 pieces are outside this photo",
+  `${photoViewOutside(1)} / ${photoViewOutside(2)}`,
+);
+{
+  const photoLiterals = [
+    "See it in your photo",
+    "Pieces drawn at true size, with the camera measured from this photo.",
+    "Close photo view",
+    "piece is outside this photo",
+    "pieces are outside this photo",
+  ];
+  const photoFiles = [
+    "photo-room/photo-view.ts",
+    "photo-room/example-cameras.ts",
+    "main.ts",
+    "phone-sheet.ts",
+    "editor/photo-confirm.ts",
+    "editor/editor.ts",
+    "catalog-ui.ts",
+  ];
+  for (const file of photoFiles) {
+    const code = src(file)
+      .split("\n")
+      .filter((line) => {
+        const trimmed = line.trim();
+        return !trimmed.startsWith("//") && !trimmed.startsWith("*") && !trimmed.startsWith("/*");
+      })
+      .join("\n");
+    for (const literal of photoLiterals) {
+      check(
+        `${file} carries no photo literal "${literal.slice(0, 24)}"`,
+        !code.includes(literal),
+        file,
+      );
+    }
+  }
+  const photoHtml = readFileSync(join(clientRoot, "index.html"), "utf8");
+  for (const literal of photoLiterals) {
+    check(
+      `index.html carries no photo literal "${literal.slice(0, 24)}"`,
+      !photoHtml.includes(literal),
+      "index.html",
+    );
+  }
+  check(
+    "pill renders the button from the module",
+    src("main.ts").includes("photoViewButton.textContent = PHOTO_VIEW_BUTTON"),
+    "main.ts pill",
+  );
+  check(
+    "phone photo item renders from the module",
+    src("phone-sheet.ts").includes("PHOTO_VIEW_BUTTON"),
+    "phone-sheet.ts",
+  );
 }
 
 if (failures > 0) process.exit(1);

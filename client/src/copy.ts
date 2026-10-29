@@ -69,6 +69,18 @@ export function storeAddHint(name: string): string {
   return `Drag the ${name} into your room, or press + Add`;
 }
 
+/** Example photo view: the placed pieces drawn into the wall photo. */
+export const PHOTO_VIEW_BUTTON = "See it in your photo";
+export const PHOTO_VIEW_LINE =
+  "Pieces drawn at true size, with the camera measured from this photo.";
+export const PHOTO_VIEW_CLOSE = "Close photo view";
+
+/** One line counting the pieces outside the current photo. */
+export function photoViewOutside(count: number): string {
+  if (count === 1) return "1 piece is outside this photo";
+  return `${String(count)} pieces are outside this photo`;
+}
+
 /** Cart side panel and its actions. */
 export const CART_PANEL_TITLE = "Your cart";
 export const CART_CLOSE = "Close cart";

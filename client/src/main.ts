@@ -59,6 +59,7 @@ import {
   CART_SHARE_TITLE,
   DEMO_STORE_LINE,
   EMPTY_ROOM_ACTION,
+  PHOTO_VIEW_BUTTON,
   SHARE_DIALOG_TEXT,
   SHARE_INVALID,
   SHARE_KEEP,
@@ -113,6 +114,17 @@ import { RoomEditor } from "./editor/editor";
 import { RoomMenu } from "./editor/room-menu";
 import { PhotoFlow, type PhotoFlowDone } from "./photo-room/flow";
 import { clearAllPhotos, loadPhoto } from "./photo-room/photo-store";
+import { isExampleRoom } from "./photo-room/example";
+import {
+  buildExamplePhotoRecords,
+  clearExamplePhotoCameras,
+  exampleWallsSignature,
+  loadExamplePhotoCameras,
+  readExamplePhotoStore,
+  sameExampleWalls,
+  saveExamplePhotoCameras,
+} from "./photo-room/example-cameras";
+import { PhotoView } from "./photo-room/photo-view";
 import { FirstOpen, type RoomSize } from "./first-open";
 import { resolveFirstOpen } from "./room-units";
 import "./photo-room/photo-room.css";
@@ -331,6 +343,8 @@ class FitRoomApp {
   private menuChoice = "sample";
   private menuBeforePhotos = "sample";
   private photoFlow: PhotoFlow | null = null;
+  /** "See it in your photo" overlay (one more exclusive view, null when closed). */
+  private photoView: PhotoView | null = null;
   private firstOpen: FirstOpen | null = null;
   private firstOpenSetup = false;
   /** Four-moment first-visit guide (state machine) plus its small view. */
@@ -754,6 +768,16 @@ class FitRoomApp {
       // Every committed plan edit saves a built room beside the scene
       // autosave, so the built room survives a reload.
       if (ROOM.id === "manual-room" || ROOM.id === "photos-room") saveRoomLayout(ROOM);
+      // A plan-editor edit that changes the example room's walls drops its
+      // photo records: the photo no longer matches the walls.
+      if (ROOM.id === "photos-room" && isExampleRoom(ROOM.name)) {
+        const stored = readExamplePhotoStore();
+        if (stored !== null && !sameExampleWalls(stored.walls, exampleWallsSignature(ROOM))) {
+          clearExamplePhotoCameras();
+        }
+      }
+      this.syncPhotoViewButton();
+      this.photoView?.refresh();
       this.syncRoomId();
       this.rebuildRoom();
     });
@@ -768,6 +792,12 @@ class FitRoomApp {
       if (list.hasAttribute("hidden")) this.openFitList();
       else list.setAttribute("hidden", "");
     });
+    // "See it in your photo": every word renders from copy.ts (single source).
+    const photoViewButton = document.getElementById("photo-view-button");
+    if (photoViewButton !== null) photoViewButton.textContent = PHOTO_VIEW_BUTTON;
+    photoViewButton?.addEventListener("click", () => this.openPhotoView());
+    const photoViewMenu = document.querySelector('#phone-menu [data-phone-action="photo-view"]');
+    if (photoViewMenu instanceof HTMLElement) photoViewMenu.textContent = PHOTO_VIEW_BUTTON;
 
     window.addEventListener("resize", () => {
       // One pass per animation frame: crossing the phone/desktop breakpoint
@@ -1136,6 +1166,7 @@ class FitRoomApp {
    * then resets the layout.
    */
   private resetDemoRoom(): void {
+    this.closePhotoView();
     if (ROOM.id !== SAMPLE_ROOM.id) {
       const leavingPhotos = ROOM.id === "photos-room";
       this.stashRoomLayout();
@@ -1147,6 +1178,8 @@ class FitRoomApp {
         ),
       );
       if (leavingPhotos) clearRoomLayout("photos-room");
+      // Leaving photos-room for the sample room drops its photo records too.
+      if (leavingPhotos) clearExamplePhotoCameras();
       if (this.photoDraft !== null || leavingPhotos) this.discardPhotoSession();
       this.editor?.setPhotoDraft(null);
       this.closeEditor();
@@ -1222,6 +1255,7 @@ class FitRoomApp {
 
   /** Header room menu: sample room, size-built room, or reopen the editor. Each room keeps its own placed pieces. */
   private pickRoom(id: string): void {
+    this.closePhotoView();
     if (id === "manual") {
       // "Build a room" opens the same size screen as first open instead of
       // the fixed start: Enter builds the plan editor at the typed size.
@@ -1247,6 +1281,8 @@ class FitRoomApp {
         // Leaving the photo-built room drops its saved layout so the
         // sample room opens again on reload.
         if (leavingPhotos) clearRoomLayout("photos-room");
+        // Leaving photos-room by Reset drops its photo records too.
+        if (leavingPhotos) clearExamplePhotoCameras();
         // Leaving its plan editor by Reset drops the photo session too.
         if (this.photoDraft !== null || leavingPhotos) this.discardPhotoSession();
         this.editor?.setPhotoDraft(null);
@@ -1279,6 +1315,8 @@ class FitRoomApp {
         // Leaving the photo-built room drops its saved layout so the
         // sample room opens again on reload.
         if (leavingPhotos) clearRoomLayout("photos-room");
+        // Leaving photos-room for the sample room drops its photo records too.
+        if (leavingPhotos) clearExamplePhotoCameras();
         // Leaving its plan editor by the sample room drops the session too.
         if (this.photoDraft !== null || leavingPhotos) this.discardPhotoSession();
         const fallback = JSON.parse(JSON.stringify(validScene)) as SceneState;
@@ -1328,6 +1366,7 @@ class FitRoomApp {
       ],
       current,
     );
+    this.syncPhotoViewButton();
   }
 
   /** Build a rectangle room at the typed size, then shape it in the plan editor. */
@@ -1341,6 +1380,9 @@ class FitRoomApp {
 
   /** "Build my room": the size screen opens the plan editor at those sizes. */
   private buildRoomAtSize(size: RoomSize): void {
+    // Another room built: leaving photos-room drops its photo records.
+    if (ROOM.id === "photos-room") clearExamplePhotoCameras();
+    this.closePhotoView();
     if (this.photoDraft !== null || ROOM.id === "photos-room") this.discardPhotoSession();
     this.stashRoomLayout();
     const base = this.sizedBase(size);
@@ -1372,6 +1414,8 @@ class FitRoomApp {
     // While a guide bubble shows, the doors tip does not: the three
     // (bubble, empty hint, doors tip) can never show together.
     if (this.guide.showing) return;
+    // No doors tip shows over the photo view.
+    if (this.photoView !== null) return;
     const key = `fitroom.doors-tip-seen:${ROOM.id}`;
     const seen = ((): boolean => {
       try {
@@ -1441,10 +1485,13 @@ class FitRoomApp {
     const inFlow = this.photoFlow !== null || this.editing;
     if (inFlow) document.body.setAttribute("data-flow-open", "true");
     else document.body.removeAttribute("data-flow-open");
+    // The photo pill never shows in the photo flow or the confirm view.
+    this.syncPhotoViewButton();
   }
 
   /** "From photos": the capture flow floats above everything. */
   private openPhotoFlow(): void {
+    this.closePhotoView();
     this.closeCart();
     this.sheets?.close();
     this.syncPhoneBar();
@@ -1490,6 +1537,9 @@ class FitRoomApp {
 
   /** A solved photo draft becomes the live room, confirmed in the plan editor. */
   private openPhotoDraft(result: PhotoFlowDone): void {
+    // A new draft replaces whatever room was built: its photo records go.
+    clearExamplePhotoCameras();
+    this.closePhotoView();
     this.closePhotoFlow();
     this.stashRoomLayout();
     applyRoomLayout(ROOM, result.draft.layout);
@@ -1544,6 +1594,7 @@ class FitRoomApp {
   }
 
   private openEditor(): void {
+    this.closePhotoView();
     this.sheets?.close();
     this.syncPhoneBar();
     this.editing = true;
@@ -1578,6 +1629,17 @@ class FitRoomApp {
     if (ROOM.id === "photos-room") {
       saveRoomLayout(ROOM);
       markPhotoBuiltRoom();
+      // The example room keeps its wall-photo records with the room (before
+      // the session drops below): wall id and letter, the current corners,
+      // focalPx and the session's own image size.
+      if (isExampleRoom(ROOM.name)) {
+        const records = buildExamplePhotoRecords(this.editorStore?.photo ?? null);
+        if (records !== null) saveExamplePhotoCameras(records, ROOM);
+        else clearExamplePhotoCameras();
+      } else {
+        // A live photo room keeps nothing (its photos are not kept either).
+        clearExamplePhotoCameras();
+      }
     }
     this.editorBase = null;
     // Building consumes the photo session: drop the stored photos now that
@@ -2170,6 +2232,7 @@ class FitRoomApp {
 
   /** One side panel at a time: opening one closes every other panel. */
   private openFitList(): void {
+    this.closePhotoView();
     this.showSidePanel("none");
     this.renderViewer?.close();
     if (isPhoneViewport()) this.sheets?.close();
@@ -2180,6 +2243,7 @@ class FitRoomApp {
 
   /** Right-hand column: one panel at a time (Inspector, Recommend, Arrange, Cart). */
   private showSidePanel(name: "inspector" | "recommend" | "assistant" | "cart" | "none"): void {
+    if (name !== "none") this.closePhotoView();
     this.sidePanel = name;
     if (name !== "none") {
       document.getElementById("fit-list")?.setAttribute("hidden", "");
@@ -2384,6 +2448,10 @@ class FitRoomApp {
       this.sheets?.close();
       this.editorStore?.load(ROOM);
       this.openEditor();
+    } else if (action === "photo-view") {
+      this.sheets?.close();
+      this.closePhoneMenus();
+      this.openPhotoView();
     } else if (action === "credits") {
       const dlg = document.getElementById("credits-dialog");
       if (dlg instanceof HTMLDialogElement) dlg.showModal();
@@ -2395,6 +2463,7 @@ class FitRoomApp {
 
   /** Visualise: on a phone the viewer opens as a bottom sheet. */
   private openVisualise(): void {
+    this.closePhotoView();
     this.showSidePanel("none");
     document.getElementById("fit-list")?.setAttribute("hidden", "");
     this.select(null);
@@ -2403,6 +2472,77 @@ class FitRoomApp {
       this.syncPhoneBar();
     }
     void this.renderViewer?.visualise();
+  }
+
+  /**
+   * "See it in your photo": one more exclusive view over the 3D room.
+   * Opening it closes the side panel, the fit list and Visualise; the
+   * pieces draw from the groups the scene syncer already loaded (cloned,
+   * never moved), so the single syncer load call below stays the only one.
+   */
+  private openPhotoView(): void {
+    if (this.photoView !== null) return;
+    if (!this.isPhotoViewAvailable()) return;
+    this.showSidePanel("none");
+    document.getElementById("fit-list")?.setAttribute("hidden", "");
+    this.renderViewer?.close();
+    if (!isPhoneViewport()) {
+      document.getElementById("render-viewer")?.setAttribute("hidden", "");
+    } else {
+      this.sheets?.close();
+    }
+    this.select(null);
+    const view = new PhotoView({
+      getRoom: () => ROOM,
+      getItems: () => this.store.state.items,
+      getGroups: () =>
+        new Map([...this.instances].map(([id, entry]) => [id, { group: entry.group }] as const)),
+      getCatalog: () => CATALOG_MAP,
+      getRecords: () => loadExamplePhotoCameras(ROOM),
+      onClose: () => this.closePhotoView(),
+    });
+    this.photoView = view;
+    this.container.appendChild(view.open());
+    this.syncPhotoViewButton();
+    this.syncPhoneBar();
+    this.updateGuide();
+    this.updateEmptyHint(this.store.state.items.length);
+  }
+
+  /**
+   * Close the photo view. Its renderer, scene and camera are its own and
+   * are torn down here; the 3D view, its camera and its renderer are never
+   * touched, so they are exactly as they were.
+   */
+  private closePhotoView(): void {
+    if (this.photoView === null) return;
+    this.photoView.close();
+    this.photoView = null;
+    this.syncPhotoViewButton();
+    this.syncPhoneBar();
+    this.updateGuide();
+    this.updateEmptyHint(this.store.state.items.length);
+  }
+
+  /** The photo pill shows only in the built example room, never in flow/confirm. */
+  private isPhotoViewAvailable(): boolean {
+    if (ROOM.id !== "photos-room" || !isExampleRoom(ROOM.name)) return false;
+    if (this.photoFlow !== null || this.editing) return false;
+    return loadExamplePhotoCameras(ROOM) !== null;
+  }
+
+  private syncPhotoViewButton(): void {
+    const show = this.isPhotoViewAvailable() && this.photoView === null;
+    const pill = document.getElementById("photo-view-button");
+    if (pill !== null) {
+      if (show) pill.removeAttribute("hidden");
+      else pill.setAttribute("hidden", "");
+    }
+    const menu = document.querySelector('#phone-menu [data-phone-action="photo-view"]');
+    if (menu instanceof HTMLElement) {
+      if (show) menu.removeAttribute("hidden");
+      else menu.setAttribute("hidden", "");
+    }
   }
 
   /** Bottom-bar active states mirror the open sheet. */
@@ -2524,6 +2664,8 @@ class FitRoomApp {
     this.updateMeasure();
     // Models (and their textures) arrived asynchronously: draw + refresh shadows.
     this.markSceneChanged();
+    // Newly loaded groups redraw the photo view when it is open.
+    this.photoView?.refresh();
     // Newly loaded groups may complete the issue outlines: refresh the check.
     this.refreshIssues();
   }
@@ -2707,6 +2849,11 @@ class FitRoomApp {
       document.getElementById("empty-hint")?.setAttribute("hidden", "");
       return;
     }
+    // No guide bubble, empty-room hint or doors tip shows over the photo view.
+    if (this.photoView !== null) {
+      document.getElementById("empty-hint")?.setAttribute("hidden", "");
+      return;
+    }
     let hint = document.getElementById("empty-hint");
     if (count > 0 || this.editing) {
       hint?.setAttribute("hidden", "");
@@ -2767,7 +2914,8 @@ class FitRoomApp {
    */
   private guideScreen(): GuideScreen {
     const firstOpenVisible = this.firstOpen?.visible ?? false;
-    const roomVisible = !this.editing && this.photoFlow === null && !firstOpenVisible;
+    const roomVisible =
+      !this.editing && this.photoFlow === null && !firstOpenVisible && this.photoView === null;
     return {
       firstOpenVisible,
       exampleActionVisible: this.firstOpen?.cardsVisible ?? false,
@@ -3036,6 +3184,9 @@ class FitRoomApp {
 
   /** Open a shared layout as the typed-in room, without the plan editor. */
   private applySharedLayout(decoded: DecodedLayout): void {
+    // A shared layout opened over the photo room leaves it: its records go.
+    if (ROOM.id === "photos-room") clearExamplePhotoCameras();
+    this.closePhotoView();
     this.stashRoomLayout();
     applyRoomLayout(ROOM, decoded.room);
     saveRoomLayout(ROOM);
@@ -3438,6 +3589,10 @@ class FitRoomApp {
         const openDialog = document.querySelector("dialog[open]");
         if (openDialog !== null) return;
         if (this.photoFlow !== null) return;
+        if (this.photoView !== null) {
+          this.closePhotoView();
+          return;
+        }
         // Escape skips the guide (stored as `skipped`), like "Skip tour".
         if (this.guide.showing) {
           this.skipGuide();
