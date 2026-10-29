@@ -7,6 +7,34 @@
       {
         "role": "user",
         "content": "Furnish this room for 2 people, modern style, new pieces up to $1,500."
+      },
+      {
+        "role": "assistant",
+        "content": "I'll start by mapping your room and finding Modern seating for two.",
+        "toolCalls": [
+          {
+            "id": "call_694a0d41-9ce2-474c-bb7f-60eafb44e0b3",
+            "name": "get_room",
+            "arguments": {}
+          },
+          {
+            "id": "call_2ba8b03e-1e4c-4fa7-b63a-d53a84f86f80",
+            "name": "list_items",
+            "arguments": {}
+          }
+        ]
+      },
+      {
+        "role": "tool",
+        "content": "{\"ok\":true,\"room\":{\"name\":\"Example room (generated photos)\",\"walls\":[{\"id\":\"wall-1\",\"name\":\"Door wall\",\"start\":{\"x\":0,\"z\":0},\"end\":{\"x\":420,\"z\":0},\"length_cm\":420},{\"id\":\"wall-2\",\"name\":\"Right wall (window)\",\"start\":{\"x\":420,\"z\":0},\"end\":{\"x\":420,\"z\":362},\"length_cm\":362},{\"id\":\"wall-3\",\"name\":\"Back wall (window)\",\"start\":{\"x\":420,\"z\":362},\"end\":{\"x\":0,\"z\":362},\"length_cm\":420},{\"id\":\"wall-4\",\"name\":\"Left wall\",\"start\":{\"x\":0,\"z\":362},\"end\":{\"x\":0,\"z\":0},\"length_cm\":362}],\"openings\":[{\"id\":\"door-1\",\"wallId\":\"wall-1\",\"wall\":\"Door wall\",\"type\":\"door\",\"span_cm\":[21,121],\"sill_cm\":0,\"hinge\":\"left\",\"swing\":\"in\"},{\"id\":\"window-1\",\"wallId\":\"wall-3\",\"wall\":\"Back wall (window)\",\"type\":\"window\",\"span_cm\":[78,238],\"sill_cm\":98},{\"id\":\"window-2\",\"wallId\":\"wall-2\",\"wall\":\"Right wall (window)\",\"type\":\"window\",\"span_cm\":[121,241],\"sill_cm\":99}],\"fixtures\":[],\"freeRuns\":[{\"wallId\":\"wall-1\",\"wall\":\"Door wall\",\"start_cm\":130,\"end_cm\":415,\"length_cm\":285,\"depth_cm\":150},{\"wallId\":\"wall-2\",\"wall\":\"Right wall (window)\",\"start_cm\":5,\"end_cm\":357,\"length_cm\":352,\"depth_cm\":150},{\"wallId\":\"wall-3\",\"wall\":\"Back wall (window)\",\"start_cm\":10,\"end_cm\":415,\"length_cm\":405,\"depth_cm\":122},{\"wallId\":\"wall-4\",\"wall\":\"Left wall\",\"start_cm\":10,\"end_cm\":120,\"length_cm\":110,\"depth_cm\":150}]}}",
+        "toolCallId": "call_694a0d41-9ce2-474c-bb7f-60eafb44e0b3",
+        "name": "get_room"
+      },
+      {
+        "role": "tool",
+        "content": "{\"ok\":true,\"items\":[]}",
+        "toolCallId": "call_2ba8b03e-1e4c-4fa7-b63a-d53a84f86f80",
+        "name": "list_items"
       }
     ],
     "room": {
@@ -101,7 +129,7 @@
       "fixtures": [],
       "existing": [],
       "surfaces": {
-        "floor": "WoodFloor071",
+        "floor": "WoodFloor039",
         "wall": "PaintedPlaster017"
       },
       "style": {
@@ -144,19 +172,14 @@
     }
   },
   "response": {
-    "text": "I'll start by mapping your room and finding Modern seating for two.",
+    "text": "Room mapped – now I'll pull Modern options for your layout.",
     "toolCalls": [
       {
-        "id": "call_694a0d41-9ce2-474c-bb7f-60eafb44e0b3",
-        "name": "get_room",
-        "arguments": {}
-      },
-      {
-        "id": "call_2ba8b03e-1e4c-4fa7-b63a-d53a84f86f80",
-        "name": "list_items",
+        "id": "call_c2a594ee-2dfb-43d6-8e5c-970715e4b238",
+        "name": "list_catalog",
         "arguments": {}
       }
     ]
   },
-  "time": "2026-10-28T09:55:10.006Z"
+  "time": "2026-10-28T09:55:11.199Z"
 }

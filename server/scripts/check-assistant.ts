@@ -991,8 +991,8 @@ async function main(): Promise<void> {
     // The example room, built exactly as the client builds it after
     // "Build my room" (`client/src/photo-room/flow.ts` build + applyLabel:
     // photo-solved with tape A 420 and wall B estimated, then the recorded
-    // label answer's style tags and colours, the wood-family floor
-    // `WoodFloor071`, paint `PaintedPlaster017` and the blended wall tint
+    // shared example finishes and style, the light-oak floor
+    // `WoodFloor039`, paint `PaintedPlaster017` and the wall tint
     // `#DEDEDC`; the empty start scene is the photo build's no-piece draft):
     // its two Arrange chips replay from the store with zero upstream calls,
     // and every round's request key equals the recorded file's key.
@@ -1013,7 +1013,7 @@ async function main(): Promise<void> {
     );
     check(
       "example room carries the client floor, wall and tint",
-      exampleRoom.surfaces?.floor === "WoodFloor071" &&
+      exampleRoom.surfaces?.floor === "WoodFloor039" &&
         exampleRoom.surfaces?.wall === "PaintedPlaster017" &&
         exampleRoom.surfaces?.wallTint === "#DEDEDC",
       JSON.stringify(exampleRoom.surfaces ?? null),

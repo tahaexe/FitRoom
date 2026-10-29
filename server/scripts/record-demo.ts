@@ -168,7 +168,7 @@ async function main(): Promise<void> {
   const def = route === undefined ? undefined : DEFS[route];
   if (route === undefined || def === undefined) {
     fail(
-      "usage: npm run demo:record -- <recommend|assistant|render|label> [1-based request numbers] [--only furnish] [--dry-run]",
+      "usage: npm run demo:record -- <recommend|assistant|render|label> [1-based request numbers] [--only furnish|example] [--dry-run]",
     );
   }
   // `--only furnish` records only brief (furnish) turns: never re-records
@@ -185,12 +185,18 @@ async function main(): Promise<void> {
     args.includes("--only-furnish") ||
     args.includes("--only furnish") ||
     process.env["npm_config_only"] === "furnish";
-  if (args.includes("--only") && !onlyFurnish) {
-    fail(`invalid filter "${args.join(" ")}" (only "--only furnish" is supported).`);
+  const onlyExample =
+    (args.includes("--only") && args.includes("example")) ||
+    args.includes("--only=example") ||
+    args.includes("--only-example") ||
+    args.includes("--only example") ||
+    process.env["npm_config_only"] === "example";
+  if (args.includes("--only") && !onlyFurnish && !onlyExample) {
+    fail(`invalid filter "${args.join(" ")}" (only "--only furnish" or "--only example" is supported).`);
   }
   const only = new Set<number>();
   for (const arg of args) {
-    if (arg === "--" || arg === "--only" || arg === "furnish" || arg === "--dry-run") continue;
+    if (arg === "--" || arg === "--only" || arg === "furnish" || arg === "example" || arg === "--dry-run" || arg.startsWith("--only")) continue;
     const n = Number(arg);
     if (!Number.isInteger(n) || n < 1) {
       fail(`invalid request number "${arg}".`);
@@ -206,10 +212,17 @@ async function main(): Promise<void> {
     typeof item === "object" &&
     item !== null &&
     (item as Record<string, unknown>)["brief"] !== undefined;
+  const isExampleRequest = (item: unknown): boolean =>
+    JSON.stringify(item).includes("photos-room");
   const picked = requests.filter(
     (_, index) =>
-      (only.size === 0 || only.has(index + 1)) && (!onlyFurnish || isBriefTurn(requests[index])),
+      (only.size === 0 || only.has(index + 1)) &&
+      (!onlyFurnish || isBriefTurn(requests[index])) &&
+      (!onlyExample || isExampleRequest(requests[index])),
   );
+  if (onlyExample && picked.length !== 1) {
+    fail(`--only example selected ${String(picked.length)} request(s), not one; stopping.`);
+  }
   if (dryRun) {
     // No live call, no config needed: list the requests that would record.
     for (const item of picked) {
@@ -223,7 +236,7 @@ async function main(): Promise<void> {
   }
   console.log(
     `demo:record: selected ${String(picked.length)} of ${String(requests.length)} ` +
-      `${route} request(s)${onlyFurnish ? " (--only furnish)" : ""}.`,
+      `${route} request(s)${onlyFurnish ? " (--only furnish)" : ""}${onlyExample ? " (--only example)" : ""}.`,
   );
   if (picked.length === 0) {
     fail("no requests selected.");

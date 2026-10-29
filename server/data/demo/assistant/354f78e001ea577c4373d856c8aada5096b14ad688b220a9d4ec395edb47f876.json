@@ -73,23 +73,6 @@
         "content": "{\"ok\":false,\"doesNotFit\":true,\"needCm\":273.1,\"freeCm\":21,\"error\":\"The Heritage Grand Sofa is 273.1 cm; the free stretch between the corner and the door door-1 on the Door wall is only 21 cm (0–21 cm from the wall start). It does not fit there. Explain why it does not fit, with both lengths, and propose the closest alternative in words; do not place anything else in this turn.\"}",
         "toolCallId": "call_f24d2de2-d3bf-4b3d-bbe6-a92722acc2bc",
         "name": "place_against_wall"
-      },
-      {
-        "role": "assistant",
-        "content": "That 21 cm spot is far too narrow for a 273 cm sofa — I'll confirm the layout status.",
-        "toolCalls": [
-          {
-            "id": "call_fe132094-a991-4253-bf7e-55fe88b9a145",
-            "name": "check_fit",
-            "arguments": {}
-          }
-        ]
-      },
-      {
-        "role": "tool",
-        "content": "{\"ok\":true,\"fits\":true,\"issues\":[]}",
-        "toolCallId": "call_fe132094-a991-4253-bf7e-55fe88b9a145",
-        "name": "check_fit"
       }
     ],
     "room": {
@@ -184,7 +167,7 @@
       "fixtures": [],
       "existing": [],
       "surfaces": {
-        "floor": "WoodFloor071",
+        "floor": "WoodFloor039",
         "wall": "PaintedPlaster017"
       },
       "style": {
@@ -221,8 +204,14 @@
     }
   },
   "response": {
-    "text": "The Heritage Grand Sofa is 273 cm wide but that spot on the Door wall between the door and the corner is only 21 cm, so it can't fit there and I left it empty. The closest alternative is the longer run on the same Door wall past the door.",
-    "toolCalls": []
+    "text": "That 21 cm spot is far too narrow for a 273 cm sofa — I'll confirm the layout status.",
+    "toolCalls": [
+      {
+        "id": "call_fe132094-a991-4253-bf7e-55fe88b9a145",
+        "name": "check_fit",
+        "arguments": {}
+      }
+    ]
   },
-  "time": "2026-10-28T09:54:02.982Z"
+  "time": "2026-10-28T09:53:58.763Z"
 }

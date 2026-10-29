@@ -15,6 +15,8 @@
 import {
   blendWallTints,
   defaultRoomLabel,
+  EXAMPLE_ROOM_STYLE,
+  EXAMPLE_ROOM_SURFACES,
   LETTER_TO_WALL_ID,
   pickFloorTexture,
   pickWallTexture,
@@ -1498,6 +1500,16 @@ export class PhotoFlow {
   }
 
   private applyLabel(draft: RoomDraft, label: RoomLabelAnswer): void {
+    // The example room uses the shared example finishes and style (single
+    // source in `@fitroom/shared`), exactly as `readExampleRoom()` does.
+    if (this.exampleMode) {
+      draft.layout.style = {
+        tags: [...EXAMPLE_ROOM_STYLE.tags],
+        dominantColors: [...EXAMPLE_ROOM_STYLE.dominantColors],
+      };
+      draft.layout.surfaces = { ...EXAMPLE_ROOM_SURFACES };
+      return;
+    }
     draft.layout.style = {
       tags: [...label.style.tags],
       dominantColors: [...label.style.dominantColors],
@@ -1507,12 +1519,9 @@ export class PhotoFlow {
     // paint or wallpaper, and the per-photo wall medians blend into one tint.
     const { wallTints, floorColors } = this.surfaceColors();
     const floorMedian = blendWallTints(floorColors);
-    // The example photos show light oak: build the example room with the
-    // light-oak texture the picker knows (request data and demo answers
-    // stay as they are).
     const pickedFloor = pickFloorTexture(label.floor.family, floorMedian);
     draft.layout.surfaces = {
-      floor: this.exampleMode ? "WoodFloor039" : pickedFloor,
+      floor: pickedFloor,
       wall: pickWallTexture(label.walls.family),
       ...(blendWallTints(wallTints) === null
         ? {}

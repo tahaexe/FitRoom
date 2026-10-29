@@ -5,3 +5,4 @@ export * from "./steps.js";
 export * from "./resolve.js";
 export * from "./surfaces.js";
 export * from "./synthetic.js";
+export * from "./example-room.js";

@@ -17,6 +17,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   buildBriefRequest,
+  EXAMPLE_ROOM_STYLE,
+  EXAMPLE_ROOM_SURFACES,
   type AssistantBrief,
   type AssistantRequest,
   type RoomLayout,
@@ -83,8 +85,8 @@ export function buildAssistantDemoRequests(): AssistantRequest[] {
  * answer's style tags and colours
  * (`server/data/demo/label/27e8386c9a009618b9d692c360fb969723c6c1ee4b74d7e5b7d34a6fc56c8886.json`:
  * minimalist/scandinavian/bright, #f2eee6/#d9c19a/#8a6742), the wood-family
- * floor pick `WoodFloor071` (`pickFloorTexture` closest wood by floor
- * albedo over the photo pixels + SAM masks), paint `PaintedPlaster017`
+ * shared example finishes (`EXAMPLE_ROOM_SURFACES` /
+ * `EXAMPLE_ROOM_STYLE`): light-oak floor `WoodFloor039`, paint `PaintedPlaster017`
  * (`pickWallTexture`) and the blended wall tint `#DEDEDC`
  * (`blendWallTints` over the per-photo tints in `surfaceColors`).
  * The fixture `shared/samples/example-room.json` already holds this
@@ -95,14 +97,10 @@ export function readExampleRoom(): RoomLayout {
   const sharedDir = resolve(serverRoot(), "..", "shared");
   const room = readJson(resolve(sharedDir, "samples", "example-room.json")) as RoomLayout;
   room.style = {
-    tags: ["minimalist", "scandinavian", "bright"],
-    dominantColors: ["#f2eee6", "#d9c19a", "#8a6742"],
+    tags: [...EXAMPLE_ROOM_STYLE.tags],
+    dominantColors: [...EXAMPLE_ROOM_STYLE.dominantColors],
   };
-  room.surfaces = {
-    floor: "WoodFloor071",
-    wall: "PaintedPlaster017",
-    wallTint: "#DEDEDC",
-  };
+  room.surfaces = { ...EXAMPLE_ROOM_SURFACES };
   return room;
 }
 
