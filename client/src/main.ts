@@ -1026,23 +1026,30 @@ class FitRoomApp {
 
   /**
    * `?add=<id>` entry: bring the piece's catalog card into view with a ring
-   * and the one entry hint — only when no guide bubble shows. The link
-   * places nothing: the room, its saved copy and every demo key stay
-   * unchanged until the visitor acts.
+   * and the one entry hint — only after the first-use guide has ended and a
+   * room is open with its catalog on screen. Until then the pending id stays
+   * in memory for this page load only. The link places nothing: the room,
+   * its saved copy and every demo key stay unchanged until the visitor acts.
    */
   private maybeHighlightStoreAdd(): void {
     const id = this.pendingStoreAdd;
-    this.pendingStoreAdd = null;
     if (id === null || this.storeAddShown) return;
     if (this.guide.showing) return;
+    if (!this.guide.hasSeen()) return;
+    if (this.firstOpen?.visible ?? false) return;
+    if (!this.guideScreen().roomVisible) return;
     const entry = CATALOG_MAP.get(id);
-    if (entry === undefined) return;
+    if (entry === undefined) {
+      this.pendingStoreAdd = null;
+      return;
+    }
     const host = document.getElementById("catalog");
     if (host === null) return;
     // Phones read the card in the catalog sheet at its peek.
     if (isPhoneViewport()) this.sheets?.open("catalog");
     const card = host.querySelector(`[data-product-id="${id}"]`);
     if (card === null) return;
+    this.pendingStoreAdd = null;
     this.storeAddShown = true;
     highlightStoreAddCard(host, card, storeAddHint(entry.name), isPhoneViewport());
   }
@@ -2945,6 +2952,7 @@ class FitRoomApp {
       }
     }
     this.renderGuide();
+    this.maybeHighlightStoreAdd();
   }
 
   /** Paint the bubble by the moment's target, or hide it and let the hints work. */
@@ -2976,12 +2984,14 @@ class FitRoomApp {
       this.guide.next(this.guideScreen());
     }
     this.renderGuide();
+    this.maybeHighlightStoreAdd();
   }
 
   /** Escape / "Skip tour": stored as `skipped`, the room keeps working. */
   private skipGuide(): void {
     this.guide.skip();
     this.renderGuide();
+    this.maybeHighlightStoreAdd();
   }
 
   /** Help ("?" / "Show the guide again"): the tour at the fitting moment. */

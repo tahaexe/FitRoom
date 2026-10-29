@@ -259,6 +259,58 @@ check(
 for (const token of ["this.store.commit", "saveRoomLayout", "localStorage", "switchRoom"]) {
   check(`entry:highlight-writes-no-${token}`, !highlight.includes(token), "maybeHighlightStoreAdd");
 }
+check(
+  "entry:highlight-waits-for-guide-end",
+  highlight.includes("hasSeen()"),
+  "maybeHighlightStoreAdd",
+);
+check(
+  "entry:highlight-waits-for-setup",
+  highlight.includes("firstOpen") && highlight.includes("visible"),
+  "maybeHighlightStoreAdd",
+);
+check(
+  "entry:highlight-waits-for-room",
+  highlight.includes("guideScreen()") && highlight.includes("roomVisible"),
+  "maybeHighlightStoreAdd",
+);
+check(
+  "entry:highlight-keeps-pending",
+  highlight.includes("this.pendingStoreAdd = null") &&
+    highlight.indexOf("this.guide.showing") >= 0 &&
+    highlight.indexOf("this.guide.showing") < highlight.indexOf("this.pendingStoreAdd = null") &&
+    highlight.indexOf("hasSeen()") < highlight.indexOf("this.pendingStoreAdd = null"),
+  "maybeHighlightStoreAdd keeps the id until the guide ends",
+);
+check(
+  "entry:highlight-guards-before-ring",
+  highlight.indexOf("this.guide.showing") < highlight.indexOf("highlightStoreAddCard(") &&
+    highlight.indexOf("roomVisible") < highlight.indexOf("highlightStoreAddCard("),
+  "maybeHighlightStoreAdd",
+);
+check(
+  "entry:highlight-rings-once",
+  highlight.includes("storeAddShown") && highlight.includes("this.pendingStoreAdd = null"),
+  "maybeHighlightStoreAdd",
+);
+{
+  const ugStart = main.indexOf("private updateGuide()");
+  const ugEnd = main.indexOf("private renderGuide()");
+  const ug = ugStart >= 0 && ugEnd > ugStart ? main.slice(ugStart, ugEnd) : "";
+  check(
+    "entry:highlight-retries-on-room-change",
+    ug.includes("maybeHighlightStoreAdd"),
+    "updateGuide",
+  );
+  const ngStart = main.indexOf("private nextGuide()");
+  const ngEnd = main.indexOf("private skipGuide()");
+  const ng = ngStart >= 0 && ngEnd > ngStart ? main.slice(ngStart, ngEnd) : "";
+  check("entry:highlight-retries-on-last-step", ng.includes("maybeHighlightStoreAdd"), "nextGuide");
+  const skStart = main.indexOf("private skipGuide()");
+  const skEnd = main.indexOf("private restartGuide()");
+  const sk = skStart >= 0 && skEnd > skStart ? main.slice(skStart, skEnd) : "";
+  check("entry:highlight-retries-on-skip", sk.includes("maybeHighlightStoreAdd"), "skipGuide");
+}
 const catalogUi = readFileSync(join(clientDir, "src", "catalog-ui.ts"), "utf8");
 check(
   "entry:cards-carry-their-id",
