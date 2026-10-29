@@ -12,6 +12,11 @@
  *   piece's contact shadow (footprint plus the shadow margin) centres
  *   inside the frame and its projected width is within 10 % of the
  *   projected footprint width plus the margin.
+ * - The overlay draws each piece once, where it stands: after building
+ *   the view's own overlay for the furnished scene, each drawn clone's
+ *   world position is within 1 cm of the piece's room position and its
+ *   world rotation about Y within 0.5 deg of the piece's, and each
+ *   shadow's world centre is within 1 cm of the same point.
  * - The view issues no request: no `fetch`, no `/api/` in the view or its
  *   app wiring; the photo loads as a static image.
  * - Exclusivity + chrome: the pill shows only in the built example room,
@@ -29,6 +34,8 @@ import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import * as THREE from "three";
+import type { CatalogItem, RoomLayout, SceneItem, WallPhotoCamera } from "@fitroom/shared";
 import { EXAMPLE_SEG_SIZE } from "../src/photo-room/example.js";
 import { segmentInstances } from "../../shared/src/sam.js";
 import {
@@ -41,6 +48,7 @@ import {
 import { buildExamplePhotoRecords } from "../src/photo-room/example-cameras.js";
 import {
   PHOTO_SHADOW_MARGIN_CM,
+  buildPhotoOverlay,
   photoCameraForRecord,
   photoPieceCorners,
   photoPieceShadowCorners,
@@ -193,6 +201,88 @@ function sessionFromDraft(draft: RoomDraft): PhotoSession {
   } as PhotoSession;
 }
 
+/**
+ * The overlay draws each piece once, where it stands: after building the
+ * view's own overlay for the furnished example scene, each drawn clone's
+ * world position is within 1 cm of the piece's room position and its world
+ * rotation about Y within 0.5 deg of the piece's, and each shadow's world
+ * centre is within 1 cm of the same point. Groups stand as the scene
+ * syncer leaves them (room cm to metres, rotation about Y).
+ */
+function overlaySingleTransformBar(
+  room: RoomLayout,
+  cam: WallPhotoCamera,
+  rawItems: Array<{
+    instanceId?: unknown;
+    productId: string;
+    position: { x: number; z: number };
+    rotationY?: unknown;
+    variant?: unknown;
+  }>,
+): void {
+  const catalog = JSON.parse(
+    readFileSync(join(repoRoot, "shared", "catalog", "catalog.json"), "utf8"),
+  ) as CatalogItem[];
+  const catalogMap = new Map(catalog.map((entry) => [entry.id, entry]));
+  const items: SceneItem[] = rawItems.map((item, index) => ({
+    instanceId:
+      typeof item.instanceId === "string" ? item.instanceId : `${item.productId}-${String(index)}`,
+    productId: item.productId,
+    position: { x: item.position.x, z: item.position.z },
+    rotationY: typeof item.rotationY === "number" ? item.rotationY : 0,
+    variant: typeof item.variant === "string" ? item.variant : "default",
+  }));
+  const groups = new Map(
+    items.map((item) => {
+      const group = new THREE.Group();
+      group.position.set(item.position.x / 100, 0, item.position.z / 100);
+      group.rotation.y = (item.rotationY * Math.PI) / 180;
+      return [item.instanceId, { group }] as const;
+    }),
+  );
+  const built = buildPhotoOverlay({ items, groups, catalog: catalogMap, cam, room });
+  built.overlay.updateMatrixWorld(true);
+  check(
+    "the overlay draws each furnished piece once",
+    built.drawn.length === items.length,
+    `${String(built.drawn.length)} of ${String(items.length)}`,
+  );
+  const point = new THREE.Vector3();
+  const quat = new THREE.Quaternion();
+  const euler = new THREE.Euler();
+  for (const piece of built.drawn) {
+    piece.clone.getWorldPosition(point);
+    const expectedX = piece.item.position.x / 100;
+    const expectedZ = piece.item.position.z / 100;
+    const distM = Math.hypot(point.x - expectedX, point.z - expectedZ);
+    console.log(
+      `photo-view overlay ${piece.item.productId} world (${point.x.toFixed(3)},${point.z.toFixed(3)}) vs room (${expectedX.toFixed(3)},${expectedZ.toFixed(3)}) ${(distM * 100).toFixed(2)} cm`,
+    );
+    check(
+      `piece ${piece.item.productId} clone stands where it stands (<= 1 cm)`,
+      distM <= 0.01,
+      `${(distM * 100).toFixed(2)} cm`,
+    );
+    piece.clone.getWorldQuaternion(quat);
+    euler.setFromQuaternion(quat, "YXZ");
+    const actualDeg = (euler.y * 180) / Math.PI;
+    let diffDeg = Math.abs(actualDeg - piece.item.rotationY) % 360;
+    if (diffDeg > 180) diffDeg = 360 - diffDeg;
+    check(
+      `piece ${piece.item.productId} clone turns with the piece (<= 0.5 deg)`,
+      diffDeg <= 0.5,
+      `${diffDeg.toFixed(3)} deg`,
+    );
+    piece.shadow.getWorldPosition(point);
+    const shadowDistM = Math.hypot(point.x - expectedX, point.z - expectedZ);
+    check(
+      `piece ${piece.item.productId} shadow centres under the piece (<= 1 cm)`,
+      shadowDistM <= 0.01,
+      `${(shadowDistM * 100).toFixed(2)} cm`,
+    );
+  }
+}
+
 async function projectionBar(): Promise<void> {
   const draft = await replayExampleDraft();
   check("example replay solves for the photo view", draft !== null);
@@ -315,6 +405,7 @@ async function projectionBar(): Promise<void> {
       );
     }
   }
+  overlaySingleTransformBar(room, cam, furnished.items);
 }
 
 function wiringBars(): void {

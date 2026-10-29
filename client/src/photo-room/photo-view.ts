@@ -162,6 +162,89 @@ export interface PhotoViewGroup {
   group: THREE.Group;
 }
 
+/** One piece drawn into the photo overlay: the clone and its shadow. */
+export interface PhotoOverlayPiece {
+  item: SceneItem;
+  clone: THREE.Group;
+  shadow: THREE.Mesh;
+}
+
+/** The overlay scene with each drawn piece listed for tests. */
+export interface PhotoOverlayBuild {
+  overlay: THREE.Scene;
+  drawn: PhotoOverlayPiece[];
+  outsideCount: number;
+}
+
+/**
+ * Build the overlay scene: a holder per visible piece carries only the
+ * contact-shadow plane at the piece's position and rotation, while the
+ * piece's clone goes straight into the overlay so its transform is the
+ * scene's alone (the live group already stands at the piece's room
+ * position and rotation). Both the view and `check:photo-view` call this.
+ */
+export function buildPhotoOverlay(args: {
+  items: SceneItem[];
+  groups: Map<string, PhotoViewGroup>;
+  catalog: Map<string, CatalogItem>;
+  cam: WallPhotoCamera;
+  room: RoomLayout;
+}): PhotoOverlayBuild {
+  const { items, groups, catalog, cam, room } = args;
+  const overlay = new THREE.Scene();
+  const hemi = new THREE.HemisphereLight(0xfff6ec, 0x9aa0a6, 0.55);
+  overlay.add(hemi);
+  const span = roomSpan(room);
+  const radius = Math.max(span.widthCm, span.depthCm) / 100;
+  const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
+  sun.position.set(radius * 1.2, 2.6 + radius * 1.4, radius * 0.8);
+  overlay.add(sun);
+  const shadowMaterial = new THREE.MeshBasicMaterial({
+    ...(typeof document !== "undefined" ? { map: photoShadowTexture() } : {}),
+    transparent: true,
+    depthWrite: false,
+    toneMapped: false,
+  });
+  const drawn: PhotoOverlayPiece[] = [];
+  let outsideCount = 0;
+  for (const item of items) {
+    const entry = groups.get(item.instanceId);
+    const product = catalog.get(item.productId);
+    if (entry === undefined || product === undefined) continue;
+    const box: PhotoPieceBox = {
+      x: item.position.x,
+      z: item.position.z,
+      w: product.size.w,
+      d: product.size.d,
+      h: product.size.h,
+      rotationY: item.rotationY,
+    };
+    const classified = classifyPhotoPiece(cam, box);
+    if (!classified.visible) {
+      outsideCount += 1;
+      continue;
+    }
+    const holder = new THREE.Group();
+    holder.position.set(item.position.x / 100, 0, item.position.z / 100);
+    holder.rotation.y = (item.rotationY * Math.PI) / 180;
+    const shadowMesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(
+        (box.w + PHOTO_SHADOW_MARGIN_CM * 2) / 100,
+        (box.d + PHOTO_SHADOW_MARGIN_CM * 2) / 100,
+      ),
+      shadowMaterial,
+    );
+    shadowMesh.rotation.x = -Math.PI / 2;
+    shadowMesh.position.y = 0.002;
+    holder.add(shadowMesh);
+    overlay.add(holder);
+    const clone = entry.group.clone(true);
+    overlay.add(clone);
+    drawn.push({ item, clone, shadow: shadowMesh });
+  }
+  return { overlay, drawn, outsideCount };
+}
+
 export interface PhotoViewDeps {
   getRoom: () => RoomLayout;
   getItems: () => SceneItem[];
@@ -314,14 +397,14 @@ export class PhotoView {
     const catalog = this.deps.getCatalog();
     const groups = this.deps.getGroups();
     const three = wallPhotoCameraThree(cam);
-    const overlay = new THREE.Scene();
-    const hemi = new THREE.HemisphereLight(0xfff6ec, 0x9aa0a6, 0.55);
-    overlay.add(hemi);
-    const span = roomSpan(room);
-    const radius = Math.max(span.widthCm, span.depthCm) / 100;
-    const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
-    sun.position.set(radius * 1.2, 2.6 + radius * 1.4, radius * 0.8);
-    overlay.add(sun);
+    const built = buildPhotoOverlay({
+      items: this.deps.getItems(),
+      groups,
+      catalog,
+      cam,
+      room,
+    });
+    const overlay = built.overlay;
     const camera = new THREE.PerspectiveCamera(cam.vfovDeg, cam.aspect, 0.05, 200);
     camera.position.set(three.positionM.x, three.positionM.y, three.positionM.z);
     camera.quaternion.set(
@@ -332,49 +415,9 @@ export class PhotoView {
     );
     camera.updateProjectionMatrix();
     camera.updateMatrixWorld();
-    let outsideCount = 0;
+    const outsideCount = built.outsideCount;
     this.photoW = cam.imageWidth;
     this.photoH = cam.imageHeight;
-    const shadowMaterial = new THREE.MeshBasicMaterial({
-      map: photoShadowTexture(),
-      transparent: true,
-      depthWrite: false,
-      toneMapped: false,
-    });
-    for (const item of this.deps.getItems()) {
-      const entry = groups.get(item.instanceId);
-      const product = catalog.get(item.productId);
-      if (entry === undefined || product === undefined) continue;
-      const box: PhotoPieceBox = {
-        x: item.position.x,
-        z: item.position.z,
-        w: product.size.w,
-        d: product.size.d,
-        h: product.size.h,
-        rotationY: item.rotationY,
-      };
-      const classified = classifyPhotoPiece(cam, box);
-      if (!classified.visible) {
-        outsideCount += 1;
-        continue;
-      }
-      const holder = new THREE.Group();
-      holder.position.set(item.position.x / 100, 0, item.position.z / 100);
-      holder.rotation.y = (item.rotationY * Math.PI) / 180;
-      const shadowMesh = new THREE.Mesh(
-        new THREE.PlaneGeometry(
-          (box.w + PHOTO_SHADOW_MARGIN_CM * 2) / 100,
-          (box.d + PHOTO_SHADOW_MARGIN_CM * 2) / 100,
-        ),
-        shadowMaterial,
-      );
-      shadowMesh.rotation.x = -Math.PI / 2;
-      shadowMesh.position.y = 0.002;
-      holder.add(shadowMesh);
-      const clone = entry.group.clone(true);
-      holder.add(clone);
-      overlay.add(holder);
-    }
     try {
       if (this.renderer === null) {
         this.renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
