@@ -442,10 +442,33 @@ function main(): void {
   );
 
   // ---- Item 1: example floor is light oak, arrange placeholder fits ----
+  // The example build takes its finishes from the shared definition
+  // (`shared/src/photo-room/example-room.ts`): example mode spreads
+  // EXAMPLE_ROOM_SURFACES into the draft, and the shared definition pins
+  // the floor to WoodFloor039. A hardcoded floor in flow.ts, or a shared
+  // definition pointing elsewhere, still fails.
+  const applyAt = flowSource.indexOf("private applyLabel");
+  const applyBlock = applyAt >= 0 ? flowSource.slice(applyAt) : "";
+  const exampleAt = applyBlock.indexOf("if (this.exampleMode)");
+  const exampleReturn = exampleAt >= 0 ? applyBlock.indexOf("return;", exampleAt) : -1;
+  const exampleBranch =
+    exampleAt >= 0 && exampleReturn > exampleAt ? applyBlock.slice(exampleAt, exampleReturn) : "";
   check(
-    "the example build uses the light-oak floor",
-    flowSource.includes('this.exampleMode ? "WoodFloor039"'),
-    "flow.ts must build the example room with WoodFloor039",
+    "flow.ts example mode takes its surfaces from the shared definition",
+    flowSource.includes("EXAMPLE_ROOM_SURFACES,") &&
+      exampleBranch.includes("draft.layout.surfaces") &&
+      exampleBranch.includes("...EXAMPLE_ROOM_SURFACES") &&
+      !exampleBranch.includes('"WoodFloor'),
+    "flow.ts must spread EXAMPLE_ROOM_SURFACES in example mode (no hardcoded floor)",
+  );
+  const exampleRoomSource = readFileSync(
+    join(repoRoot, "shared", "src", "photo-room", "example-room.ts"),
+    "utf8",
+  );
+  check(
+    "the shared example definition's floor is WoodFloor039",
+    exampleRoomSource.includes('EXAMPLE_ROOM_FLOOR = "WoodFloor039"'),
+    "example-room.ts must define the floor as WoodFloor039",
   );
   const surfacesSource = readFileSync(
     join(repoRoot, "shared", "src", "photo-room", "surfaces.ts"),

@@ -153,7 +153,11 @@ function main(): void {
     };
     const ignore = new Set(recommendIgnoreIds(scene, catalog, query));
     const items = scene.items.filter((i) => !ignore.has(i.instanceId));
-    const verify = (productId: string, position: { x: number; z: number }, rot: number): boolean => {
+    const verify = (
+      productId: string,
+      position: { x: number; z: number },
+      rot: number,
+    ): boolean => {
       const probe = {
         ...scene,
         items: [
@@ -180,11 +184,19 @@ function main(): void {
     if (built.candidates.length === 0) continue;
     recommendBodies.push(built);
   }
-  check("example recommend covers at least one free run", recommendBodies.length >= 1, String(recommendBodies.length));
+  check(
+    "example recommend covers at least one free run",
+    recommendBodies.length >= 1,
+    String(recommendBodies.length),
+  );
   for (const built of recommendBodies) {
     const key = gatewayKey("recommend", META_MODELS.spark, recommendKeyInput(built));
     const spot = (built.request as { spot?: { wall?: string } }).spot;
-    check(`recommend demo exists: ${String(spot?.wall ?? "?")}`, existsSync(demoFile("recommend", key)), key);
+    check(
+      `recommend demo exists: ${String(spot?.wall ?? "?")}`,
+      existsSync(demoFile("recommend", key)),
+      key,
+    );
   }
 
   // Render: Visualise after the brief, from the recorded furnished scene.
@@ -208,7 +220,11 @@ function main(): void {
   };
   const renderInput = (renderDef.keyInput as (v: unknown) => unknown)(renderBody);
   const renderKey = gatewayKey("render", META_MODELS.image, renderInput);
-  check("render demo exists: example visualisation", existsSync(demoFile("render", renderKey)), renderKey);
+  check(
+    "render demo exists: example visualisation",
+    existsSync(demoFile("render", renderKey)),
+    renderKey,
+  );
 
   console.log(
     failures === 0

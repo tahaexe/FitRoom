@@ -759,11 +759,7 @@ async function main(): Promise<void> {
       // "What I did": one result per line, walls by name, vetoes as lines.
       for (const record of replay.records) {
         const line = formatAssistantToolRecord(room, record);
-        check(
-          `${tag}: What I did hides wall ids`,
-          !line.includes("wall-"),
-          line.slice(0, 160),
-        );
+        check(`${tag}: What I did hides wall ids`, !line.includes("wall-"), line.slice(0, 160));
         check(
           `${tag}: What I did result once`,
           (line.match(/issue\(s\)/g) ?? []).length <= 1,

@@ -13,17 +13,9 @@ export const EXAMPLE_ROOM_WALL = "PaintedPlaster017";
 
 export const EXAMPLE_ROOM_WALL_TINT = "#DEDEDC";
 
-export const EXAMPLE_ROOM_STYLE_TAGS: readonly string[] = [
-  "minimalist",
-  "scandinavian",
-  "bright",
-];
+export const EXAMPLE_ROOM_STYLE_TAGS: readonly string[] = ["minimalist", "scandinavian", "bright"];
 
-export const EXAMPLE_ROOM_STYLE_COLORS: readonly string[] = [
-  "#f2eee6",
-  "#d9c19a",
-  "#8a6742",
-];
+export const EXAMPLE_ROOM_STYLE_COLORS: readonly string[] = ["#f2eee6", "#d9c19a", "#8a6742"];
 
 export const EXAMPLE_ROOM_SURFACES = {
   floor: EXAMPLE_ROOM_FLOOR,

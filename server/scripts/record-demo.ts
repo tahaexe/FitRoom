@@ -192,11 +192,21 @@ async function main(): Promise<void> {
     args.includes("--only example") ||
     process.env["npm_config_only"] === "example";
   if (args.includes("--only") && !onlyFurnish && !onlyExample) {
-    fail(`invalid filter "${args.join(" ")}" (only "--only furnish" or "--only example" is supported).`);
+    fail(
+      `invalid filter "${args.join(" ")}" (only "--only furnish" or "--only example" is supported).`,
+    );
   }
   const only = new Set<number>();
   for (const arg of args) {
-    if (arg === "--" || arg === "--only" || arg === "furnish" || arg === "example" || arg === "--dry-run" || arg.startsWith("--only")) continue;
+    if (
+      arg === "--" ||
+      arg === "--only" ||
+      arg === "furnish" ||
+      arg === "example" ||
+      arg === "--dry-run" ||
+      arg.startsWith("--only")
+    )
+      continue;
     const n = Number(arg);
     if (!Number.isInteger(n) || n < 1) {
       fail(`invalid request number "${arg}".`);
@@ -212,8 +222,7 @@ async function main(): Promise<void> {
     typeof item === "object" &&
     item !== null &&
     (item as Record<string, unknown>)["brief"] !== undefined;
-  const isExampleRequest = (item: unknown): boolean =>
-    JSON.stringify(item).includes("photos-room");
+  const isExampleRequest = (item: unknown): boolean => JSON.stringify(item).includes("photos-room");
   const picked = requests.filter(
     (_, index) =>
       (only.size === 0 || only.has(index + 1)) &&

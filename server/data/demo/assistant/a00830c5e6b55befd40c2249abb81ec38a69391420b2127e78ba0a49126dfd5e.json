@@ -188,16 +188,8 @@
         "wall": "PaintedPlaster017"
       },
       "style": {
-        "tags": [
-          "minimalist",
-          "scandinavian",
-          "bright"
-        ],
-        "dominantColors": [
-          "#f2eee6",
-          "#d9c19a",
-          "#8a6742"
-        ]
+        "tags": ["minimalist", "scandinavian", "bright"],
+        "dominantColors": ["#f2eee6", "#d9c19a", "#8a6742"]
       },
       "source": "photos",
       "confidence": 0.7
