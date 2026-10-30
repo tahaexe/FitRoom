@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import { HDRLoader } from "three/examples/jsm/loaders/HDRLoader.js";
+import { TEXTURE_MEAN_COLORS } from "@fitroom/shared";
 import { HDRI_URL, surfaceMapFiles } from "./surface-maps";
 
 export interface StageRig {
@@ -103,7 +104,32 @@ export function makeFloorMaterial(
     metalness: 0,
   });
   material.normalScale.set(1.6, 1.6);
+  applyFloorContrast(material, finish);
   return material;
+}
+
+/** Contrast stretch per floor finish, around the finish's measured mean (linear light). */
+export const FLOOR_CONTRAST: Readonly<Record<string, number>> = { WoodFloor039: 2.5 };
+
+export function applyFloorContrast(material: THREE.MeshStandardMaterial, finish: string): void {
+  const k = FLOOR_CONTRAST[finish] ?? 1;
+  const meanHex = TEXTURE_MEAN_COLORS[finish];
+  if (k === 1 || typeof meanHex !== "string") return;
+  const mean = new THREE.Color(meanHex);
+  material.onBeforeCompile = (shader) => {
+    shader.uniforms["floorMean"] = { value: mean };
+    shader.uniforms["floorContrast"] = { value: k };
+    shader.fragmentShader = shader.fragmentShader
+      .replace(
+        "#include <common>",
+        "#include <common>\nuniform vec3 floorMean;\nuniform float floorContrast;",
+      )
+      .replace(
+        "#include <map_fragment>",
+        "#include <map_fragment>\n\tdiffuseColor.rgb = max( floorMean + ( diffuseColor.rgb - floorMean ) * floorContrast, floorMean * 0.35 );",
+      );
+  };
+  material.customProgramCacheKey = () => `fitroom-floor-contrast-${String(k)}`;
 }
 
 /**

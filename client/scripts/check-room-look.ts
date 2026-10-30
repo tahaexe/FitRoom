@@ -16,7 +16,12 @@ import * as THREE from "three";
 import type { RoomLayout } from "@fitroom/shared";
 import { facingDirForRoom } from "@fitroom/shared";
 import { buildRoom } from "../src/room.js";
-import { envYawForCameraSide, SURROUND_COLOR } from "../src/stage.js";
+import {
+  applyFloorContrast,
+  envYawForCameraSide,
+  FLOOR_CONTRAST,
+  SURROUND_COLOR,
+} from "../src/stage.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const clientDir = resolve(here, "..");
@@ -76,10 +81,7 @@ function main(): void {
     `0x${SURROUND_COLOR.toString(16)}`,
   );
 
-  for (const [label, room] of [
-    ["living", living],
-    ["example", example],
-  ] as const) {
+  for (const [label, room] of [["living", living], ["example", example]] as const) {
     const yaw = envYawForCameraSide(facingDirForRoom(room));
     const dist = Math.abs(((yaw - Math.PI + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
     check(`bright side faces the camera-side walls in ${label}`, dist < 1e-9, String(yaw));
@@ -98,7 +100,7 @@ function main(): void {
   check(
     "default wall renders through the finish-mean path",
     mainSrc.includes('wallDisplayLinear("#F3EFE8", textureId)'),
-    'main.ts must call wallDisplayLinear("#F3EFE8", textureId)',
+    "main.ts must call wallDisplayLinear(\"#F3EFE8\", textureId)",
   );
   check(
     "daylight exposure is calm",
@@ -116,10 +118,7 @@ function main(): void {
     "stage.ts must use ShadowMaterial({ opacity: 0.22 })",
   );
 
-  for (const [label, room] of [
-    ["living", living],
-    ["example", example],
-  ] as const) {
+  for (const [label, room] of [["living", living], ["example", example]] as const) {
     const withGlass = buildRoom(room, new THREE.MeshStandardMaterial({ color: 0xffffff }));
     const panes: THREE.Mesh[] = [];
     withGlass.group.traverse((obj) => {
@@ -259,6 +258,75 @@ function main(): void {
       }
     }
   }
+
+  check(
+    "light oak floor stretches contrast around its mean",
+    FLOOR_CONTRAST["WoodFloor039"] === 2.5,
+    String(FLOOR_CONTRAST["WoodFloor039"]),
+  );
+  {
+    const probed = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    applyFloorContrast(probed, "WoodFloor039");
+    check(
+      "floor contrast hooks the light oak material",
+      Object.prototype.hasOwnProperty.call(probed, "onBeforeCompile"),
+      "no own onBeforeCompile",
+    );
+    const shader = {
+      uniforms: {} as Record<string, { value: unknown }>,
+      fragmentShader: "#include <common>\nvoid main() {\n#include <map_fragment>\n}",
+    };
+    probed.onBeforeCompile?.(
+      shader as unknown as Parameters<NonNullable<typeof probed.onBeforeCompile>>[0],
+      {} as never,
+    );
+    const mean = shader.uniforms["floorMean"]?.value as THREE.Color | undefined;
+    check(
+      "floor contrast centres on the measured mean",
+      mean instanceof THREE.Color && mean.equals(new THREE.Color("#E0C59B")),
+      mean instanceof THREE.Color ? `#${mean.getHexString()}` : typeof mean,
+    );
+    check(
+      "floor contrast stretches by 2.5",
+      shader.uniforms["floorContrast"]?.value === 2.5,
+      String(shader.uniforms["floorContrast"]?.value),
+    );
+    check(
+      "floor contrast declares its uniforms",
+      shader.fragmentShader.includes("uniform vec3 floorMean;") &&
+        shader.fragmentShader.includes("uniform float floorContrast;"),
+      shader.fragmentShader,
+    );
+    check(
+      "floor contrast stretches right after the map sample",
+      shader.fragmentShader.includes(
+        "#include <map_fragment>\n\tdiffuseColor.rgb = max( floorMean + ( diffuseColor.rgb - floorMean ) * floorContrast, floorMean * 0.35 );",
+      ),
+      shader.fragmentShader,
+    );
+    check(
+      "floor contrast keys its program",
+      typeof probed.customProgramCacheKey === "function" &&
+        probed.customProgramCacheKey() === "fitroom-floor-contrast-2.5",
+      String(
+        typeof probed.customProgramCacheKey === "function"
+          ? probed.customProgramCacheKey()
+          : typeof probed.customProgramCacheKey,
+      ),
+    );
+    const plain = new THREE.MeshStandardMaterial({ color: 0xffffff });
+    applyFloorContrast(plain, "WoodFloor070");
+    check(
+      "other floors keep the stock shader",
+      !Object.prototype.hasOwnProperty.call(plain, "onBeforeCompile"),
+      "unexpected own onBeforeCompile",
+    );
+  }
+  check(
+    "floor material applies its contrast stretch",
+    stageSrc.includes("applyFloorContrast(material, finish)"),
+    "stage.ts must call applyFloorContrast(material, finish)",
+  );
 
   console.log(
     failures === 0

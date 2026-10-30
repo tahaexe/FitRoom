@@ -103,13 +103,7 @@ import { Inspector } from "./inspector";
 import { captureView } from "./render/capture";
 import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
-import {
-  envYawForCameraSide,
-  makeFloorMaterial,
-  requestContactRefresh,
-  setupStage,
-  type StageRig,
-} from "./stage";
+import { envYawForCameraSide, makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
 import { runOnePerTask } from "./boot-tasks";
 import { surfaceMapFiles } from "./surface-maps";
 import { OrbitResolutionController } from "./orbit-resolution";
@@ -561,10 +555,10 @@ class FitRoomApp {
     }
 
     this.renderer = new THREE.WebGLRenderer({ antialias: true });
-    // The app uses only built-in materials, so there are no custom shaders
-    // to validate: skip reading the GL program info log, which software
-    // renderers fill with benign driver notes (precision remarks) that would
-    // otherwise surface as console warnings.
+    // The floor adds one line to the built-in standard shader, so there is
+    // no custom shader to validate beyond it: skip reading the GL program
+    // info log, which software renderers fill with benign driver notes
+    // (precision remarks) that would otherwise surface as console warnings.
     this.renderer.debug.checkShaderErrors = false;
     this.basePixelRatio = Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO);
     this.renderer.setPixelRatio(this.basePixelRatio);
