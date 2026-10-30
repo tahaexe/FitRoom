@@ -762,7 +762,10 @@ check(
     overSheet.top + bh === 844 - 56 - sheetPeek - 8,
     `bottom edge ${String(overSheet.top + bh)} vs ${String(844 - 56 - sheetPeek - 8)}`,
   );
-  const guideSrc = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "src", "guide.ts"), "utf8");
+  const guideSrc = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "guide.ts"),
+    "utf8",
+  );
   const placeAt = guideSrc.indexOf("private place()");
   const placeBody = placeAt < 0 ? "" : guideSrc.slice(placeAt, placeAt + 3000);
   check(

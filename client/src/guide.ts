@@ -656,11 +656,7 @@ export function phoneFreeArea(area: PhoneFrameArea, sheetH: number): PhoneFrameA
  * stretch); shifting it up by half the sheet height moves the picture up
  * by the same amount, landing its centre on the free area's centre.
  */
-export function phoneViewOffset(
-  areaW: number,
-  areaH: number,
-  sheetH: number,
-): PhoneViewOffset {
+export function phoneViewOffset(areaW: number, areaH: number, sheetH: number): PhoneViewOffset {
   const w = Math.max(1, areaW);
   const h = Math.max(1, areaH);
   const sheet = Number.isFinite(sheetH) ? Math.max(0, sheetH) : 0;
