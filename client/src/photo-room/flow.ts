@@ -617,7 +617,9 @@ export class PhotoFlow {
         const example = document.createElement("button");
         example.type = "button";
         example.className = "photo-example";
-        example.textContent = this.exampleLoading ? "Loading the example photos…" : "Try with example photos";
+        example.textContent = this.exampleLoading
+          ? "Loading the example photos…"
+          : "Try with example photos";
         example.disabled = this.exampleLoading;
         example.addEventListener("click", () => void this.tryExample());
         host.append(exampleHint, example);

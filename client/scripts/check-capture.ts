@@ -339,8 +339,7 @@ function main(): void {
       const flowSrc = readFileSync(join(clientDir, "src", "photo-room", "flow.ts"), "utf8");
       const svgAt = flowSrc.indexOf("export function miniPlanSvg");
       const svgEnd = flowSrc.indexOf("\n}\n", svgAt + 1);
-      const svgBody =
-        svgAt < 0 ? "" : flowSrc.slice(svgAt, svgEnd < 0 ? svgAt + 4000 : svgEnd);
+      const svgBody = svgAt < 0 ? "" : flowSrc.slice(svgAt, svgEnd < 0 ? svgAt + 4000 : svgEnd);
       check(
         "wall A is the top edge in the photograph mini plan",
         svgBody.includes(

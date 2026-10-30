@@ -285,11 +285,7 @@ function item(productId: string, variant: string): SceneItem {
     topBarBody.includes('""') && topBarBody.includes('"none"'),
     "updateTopBar must bring the three nodes back when the room view is back",
   );
-  check(
-    "cart:empty-room-zero",
-    formatTopBar(0, 0) === "0 items · $0",
-    formatTopBar(0, 0),
-  );
+  check("cart:empty-room-zero", formatTopBar(0, 0) === "0 items · $0", formatTopBar(0, 0));
 }
 
 if (failures > 0) {

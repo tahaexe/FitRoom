@@ -2211,15 +2211,16 @@ class FitRoomApp {
     this.requestRender();
   }
 
-  /** Selection tools (rotate, delete) exist only while a piece is selected. */
+  /**
+   * Selection rotate/delete live in the Inspector now: the bottom toolbar
+   * never shows them, at any size. Keyboard shortcuts still apply.
+   */
   private updateSelectionTools(): void {
-    const has = this.selectedId !== null;
     for (const id of ["tool-rot-left", "tool-rot-right", "tool-delete"]) {
       const el = document.getElementById(id);
       if (el === null) continue;
-      if (has) el.removeAttribute("hidden");
-      else el.setAttribute("hidden", "");
-      if (el instanceof HTMLButtonElement) el.disabled = !has;
+      el.setAttribute("hidden", "");
+      if (el instanceof HTMLButtonElement) el.disabled = true;
     }
   }
 

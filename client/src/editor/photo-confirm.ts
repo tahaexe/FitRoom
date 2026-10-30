@@ -8,8 +8,9 @@
  * read "Window 120 × 140") and wall-length pills with each wall's source
  * and ± under it ("Wall B · estimated 362 ± 9 cm", plus "· truth 360 cm"
  * in the example). Right: the plan as a compact card (active wall
- * highlighted, measured/estimated legend, amber band under it). "Build my
- * room" stays in the editor foot. Rooms without photos keep today's editor.
+ * highlighted, measured/estimated legend). The estimate band lives in
+ * the editor, with its "Tape wall" button. "Build my room" stays in the
+ * editor foot. Rooms without photos keep today's editor.
  */
 
 import { applyHomography, wallHomography, type RoomLayout } from "@fitroom/shared";
@@ -24,7 +25,6 @@ import { wallLetterLabel } from "@fitroom/shared";
 import type { EditorStore, PhotoSession } from "./editor-store";
 import { renderFinishesPicker } from "./finishes";
 import type { PhotoDraftMeta } from "../photo-room/flow";
-import { photoBandText } from "./source-mark";
 import { FLOW_STEPS, LEAVE, confirmOpeningLabel, wallChipFound } from "../copy";
 
 export type WallLetter = "A" | "B" | "C" | "D";
@@ -698,7 +698,7 @@ export class PhotoConfirmView {
     // Rebuilding the photo stage mid-drag would drop pointer capture, so the
     // handles follow the pointer directly while the plan and pills update.
     if (!this.dragging()) void this.renderStage(session);
-    this.renderPlan(session, this.store.draft);
+    this.renderPlan(session);
   }
 
   private openingsOn(letter: WallLetter): { doors: number; windows: number } {
@@ -1419,7 +1419,7 @@ export class PhotoConfirmView {
    * every wall with its length, and doors (leaf + swing arc) drawn apart
    * from windows (double line). Pure data, headless-testable.
    */
-  private renderPlan(session: PhotoSession, meta: PhotoDraftMeta | null): void {
+  private renderPlan(session: PhotoSession): void {
     this.planEl.innerHTML = "";
     const title = document.createElement("h2");
     title.textContent = "Plan";
@@ -1535,14 +1535,8 @@ export class PhotoConfirmView {
       );
       this.planEl.appendChild(truth);
     }
-    if (meta !== null && meta.estimatedWallCount > 0) {
-      const band = document.createElement("div");
-      band.className = "photo-draft-band";
-      const text = document.createElement("span");
-      text.textContent = photoBandText(meta.estimatedWallCount, meta.estimatedWallPm);
-      band.appendChild(text);
-      this.planEl.appendChild(band);
-    }
+    // The estimate band lives in the editor (`renderBand`, with its
+    // "Tape wall" button): the small plan never draws a second one.
     renderFinishesPicker(this.store, this.planEl);
   }
 }

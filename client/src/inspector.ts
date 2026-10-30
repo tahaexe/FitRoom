@@ -70,26 +70,6 @@ export class Inspector {
       this.root.appendChild(dims);
     }
 
-    // Main actions first (the phone sheet shows these at peek): quick
-    // rotate steps, then variants and delete below. Hidden on desktop.
-    const actions = document.createElement("div");
-    actions.className = "inspector-actions";
-    for (const [label, delta] of [
-      ["⟲ −15°", -15],
-      ["⟳ +15°", 15],
-    ] as const) {
-      const b = document.createElement("button");
-      b.type = "button";
-      b.className = "btn-secondary";
-      b.textContent = label;
-      b.setAttribute("aria-label", `Rotate ${delta} degrees`);
-      b.addEventListener("click", () =>
-        this.opts.onRotate(item.instanceId, item.rotationY + delta),
-      );
-      actions.appendChild(b);
-    }
-    this.root.appendChild(actions);
-
     // Position fields sit behind "More" on a phone; desktop shows all.
     const more = document.createElement("button");
     more.type = "button";
@@ -209,6 +189,26 @@ export class Inspector {
     });
     rotRow.append(rLabel, rInput);
     this.root.appendChild(rotRow);
+
+    // Quick rotate steps beside the Rotation field, at every size; the
+    // toolbar no longer carries them and Delete follows below.
+    const actions = document.createElement("div");
+    actions.className = "inspector-actions";
+    for (const [label, delta] of [
+      ["⟲ −15°", -15],
+      ["⟳ +15°", 15],
+    ] as const) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "btn-secondary";
+      b.textContent = label;
+      b.setAttribute("aria-label", `Rotate ${delta} degrees`);
+      b.addEventListener("click", () =>
+        this.opts.onRotate(item.instanceId, item.rotationY + delta),
+      );
+      actions.appendChild(b);
+    }
+    this.root.appendChild(actions);
 
     this.renderNote();
 

@@ -4,8 +4,10 @@
  *
  * - The AI actions (Recommend, Arrange, Visualise) sit together in one
  *   group carrying a small "AI" tag; Orbit and Plan form one two-way
- *   switch; Clearance and Reset view form the view tools; Rotate and Delete
- *   live in a selection group that stays hidden until a piece is selected;
+ *   switch; Clearance and Reset view form the view tools; the selection
+ *   group's Rotate and Delete stay hidden at every size — the Inspector
+ *   carries its own quick rotate buttons beside its Rotation field and
+ *   Delete instead (keyboard shortcuts still apply);
  * - every toolbar label renders from `client/src/copy.ts` (the HTML shows
  *   the same words and `main.ts` assigns each button from its constant);
  * - the switch announces its state (`data-active` + `aria-pressed` per side);
@@ -146,7 +148,8 @@ check(
   "tool-reset-view",
 );
 
-// Selection tools only while a piece is selected (as today).
+// Selection tools never reach the toolbar: hidden at every size, even
+// with a piece selected. The Inspector carries the quick rotate buttons.
 check(
   "Rotate left starts hidden",
   toolbarHtml.includes('id="tool-rot-left"') && /id="tool-rot-left"[^>]*hidden/.test(toolbarHtml),
@@ -158,12 +161,44 @@ check(
   "tool-rot-right",
 );
 check("Delete starts hidden", /id="tool-delete"[^>]*hidden/.test(toolbarHtml), "tool-delete");
+{
+  const selAt = main.indexOf("private updateSelectionTools(");
+  const selEnd = main.indexOf("\n  private ", selAt + 1);
+  const selBody = selAt < 0 ? "" : main.slice(selAt, selEnd < 0 ? selAt + 2000 : selEnd);
+  check(
+    "selection tools stay hidden on selection",
+    selBody.includes('for (const id of ["tool-rot-left", "tool-rot-right", "tool-delete"])') &&
+      selBody.includes('el.setAttribute("hidden", "")') &&
+      !selBody.includes('removeAttribute("hidden")'),
+    "updateSelectionTools",
+  );
+}
 check(
-  "selection tools toggle on selection",
-  main.includes('for (const id of ["tool-rot-left", "tool-rot-right", "tool-delete"])') &&
-    main.includes('el.setAttribute("hidden", "")'),
-  "updateSelectionTools",
+  "rotate and delete shortcuts stay on the keyboard",
+  main.includes('event.key === "Delete"') && main.includes('"r"') && main.includes("nudgeRotate"),
+  "Delete/Backspace and R still rotate and delete the selection",
 );
+// The Inspector's quick rotate buttons show at every size, beside its
+// Rotation field with Delete below — not hidden on desktop any more.
+{
+  const baseCss = css.slice(0, css.indexOf("@media (max-width: 720px)"));
+  check(
+    "inspector quick rotate shows on desktop too",
+    inspectorSrc.includes("inspector-actions") &&
+      inspectorSrc.includes('"⟲ −15°"') &&
+      inspectorSrc.includes('"⟳ +15°"') &&
+      !/\.inspector-actions\s*\{[^}]*display:\s*none/.test(baseCss),
+    ".inspector-actions must not hide outside the phone layout",
+  );
+  const actionsAt = inspectorSrc.indexOf("inspector-actions");
+  const rotAt = inspectorSrc.indexOf("Rotation (°)");
+  const delAt = inspectorSrc.indexOf('"Delete (Del)"');
+  check(
+    "inspector quick rotate sits beside Rotation and Delete",
+    actionsAt >= 0 && rotAt >= 0 && delAt >= 0 && rotAt < actionsAt && actionsAt < delAt,
+    "actions render after the Rotation field and before Delete",
+  );
+}
 
 // Every label from copy.ts.
 const labels: Array<[string, string]> = [

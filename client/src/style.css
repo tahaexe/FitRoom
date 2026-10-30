@@ -2616,13 +2616,17 @@ button.cart-row {
   background: var(--panel-bg);
 }
 
-/* Sheet handles and inspector quick actions only exist on a phone. */
+/* Sheet handles only exist on a phone; the inspector quick rotate
+ * buttons show at every size, beside the Rotation field. */
 .sheet-handle {
   display: none;
 }
 
 .inspector-actions {
-  display: none;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 8px 0;
 }
 
 /* ---- phone layout: width ≤ 720 px, or landscape height ≤ 500 px ----

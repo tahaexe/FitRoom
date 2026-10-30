@@ -37,7 +37,8 @@ export const GUIDE_MARGIN_PX = 8;
 /** Gap between the target's ring and the bubble. */
 export const GUIDE_GAP_PX = 10;
 
-export const GUIDE_TEXT_1 = "Start here: try it with our example photos, or enter your own room size.";
+export const GUIDE_TEXT_1 =
+  "Start here: try it with our example photos, or enter your own room size.";
 export const GUIDE_TEXT_2 = "Add a piece from the catalog.";
 export const GUIDE_TEXT_2_PHONE = "Open the catalog and add a piece.";
 export const GUIDE_TEXT_3 = "Drag it around. Its outline shows whether it fits.";

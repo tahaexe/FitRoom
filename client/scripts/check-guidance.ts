@@ -473,9 +473,9 @@ check(
     "utf8",
   );
   check(
-    "band:hidden-when-none-confirm",
-    confirmSource.includes("meta.estimatedWallCount > 0"),
-    "confirm band must render only with estimated walls",
+    "band:confirm-has-no-second-band",
+    !confirmSource.includes("photo-draft-band") && !confirmSource.includes("photoBandText"),
+    "the small plan draws no band; the editor band with its Tape wall button is the only one",
   );
 }
 // The plan editor frames what is drawn (room, real arcs, pills): the room
