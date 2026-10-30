@@ -517,5 +517,17 @@ check(
   "phone-path label updates must skip a missing overlay, or the overlay must be created before the constructor's first frame",
 );
 
+const refreshAt = mainSource.indexOf("private refreshIssues(");
+const refreshEnd = refreshAt < 0 ? -1 : mainSource.indexOf("\n  private ", refreshAt + 1);
+const refreshBody =
+  refreshAt < 0 ? "" : mainSource.slice(refreshAt, refreshEnd < 0 ? refreshAt + 6000 : refreshEnd);
+check(
+  "phone-frame:labels-frame-after-rebuild",
+  refreshBody.includes("setAnalysis(") &&
+    refreshBody.includes("this.requestRender()") &&
+    refreshBody.indexOf("setAnalysis(") < refreshBody.indexOf("this.requestRender()"),
+  "refreshIssues must call this.requestRender() after setAnalysis(",
+);
+
 if (failures > 0) process.exit(1);
 console.log("phone-frame: all checks passed");

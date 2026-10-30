@@ -2799,6 +2799,7 @@ class FitRoomApp {
     // Room changes re-evaluate the guide: never a moment whose target is
     // missing (an empty room falls back to the catalog moment).
     this.updateGuide();
+    this.requestRender();
   }
 
   /** Live fit feedback while dragging, re-checked at most once per frame. */
