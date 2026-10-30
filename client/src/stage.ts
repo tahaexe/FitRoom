@@ -35,7 +35,15 @@ function pbrSet(
   };
 }
 
-export const SURROUND_COLOR = 0xece8e3;
+export const SURROUND_COLOR = 0xe2dbd3;
+
+/** Azimuth of the HDRI map's bright, neutral side (as atan2(z, x)). */
+export const ENV_BRIGHT_AZ = Math.PI / 4;
+
+/** Yaw that turns the map's bright side toward the camera-side walls. */
+export function envYawForCameraSide(toCam: { x: number; z: number }): number {
+  return ENV_BRIGHT_AZ - Math.atan2(toCam.z, toCam.x);
+}
 
 /** Known on-disk ambientCG floor finishes (plus legacy sample ids). */
 export const FLOOR_TEXTURE_IDS = [
@@ -112,7 +120,7 @@ export function setupStage(
   onLoad: () => void = () => {},
 ): StageRig {
   renderer.toneMapping = THREE.NeutralToneMapping;
-  renderer.toneMappingExposure = 1.35;
+  renderer.toneMappingExposure = 1.15;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.shadowMap.autoUpdate = false;
@@ -138,7 +146,7 @@ export function setupStage(
   const hemi = new THREE.HemisphereLight(0xfff6ec, 0x9aa0a6, 0.55);
   scene.add(hemi);
 
-  const sun = new THREE.DirectionalLight(0xfff1dc, 2.6);
+  const sun = new THREE.DirectionalLight(0xfff1dc, 2.3);
   const R = Math.max(floorSize.wM, floorSize.dM);
   sun.position.set(floorSize.cxM + R * 1.2, wallHeightM + R * 1.4, floorSize.czM + R * 0.8);
   sun.target.position.set(floorSize.cxM, 0, floorSize.czM);
@@ -154,7 +162,7 @@ export function setupStage(
   scene.add(sun);
   scene.add(sun.target);
 
-  const contactMat = new THREE.ShadowMaterial({ opacity: 0.38 });
+  const contactMat = new THREE.ShadowMaterial({ opacity: 0.22 });
   const contactPlane = new THREE.Mesh(
     new THREE.PlaneGeometry(floorSize.wM, floorSize.dM),
     contactMat,

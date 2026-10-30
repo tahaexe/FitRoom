@@ -103,7 +103,13 @@ import { Inspector } from "./inspector";
 import { captureView } from "./render/capture";
 import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
-import { makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
+import {
+  envYawForCameraSide,
+  makeFloorMaterial,
+  requestContactRefresh,
+  setupStage,
+  type StageRig,
+} from "./stage";
 import { runOnePerTask } from "./boot-tasks";
 import { surfaceMapFiles } from "./surface-maps";
 import { OrbitResolutionController } from "./orbit-resolution";
@@ -253,10 +259,11 @@ function hexToLinearTriple(hex: string): [number, number, number] {
 
 /**
  * Display colour over the wall texture in linear light: the photo albedo
- * divided by the finish mean (the texture is normalised to a mean of 1),
- * else neutral (`#F3EFE8`, warm-white matte, converted). Channels
- * may exceed 1 — `Color.setRGB` takes them as is — so a wall lighter than
- * the texture keeps its hue and renders light instead of clipping to the
+ * divided by the finish mean (the texture is normalised to a mean of 1).
+ * A wall without a colour of its own renders the default albedo `#F3EFE8`
+ * through the same divide-by-the-finish-mean path. Channels may exceed
+ * 1 — `Color.setRGB` takes them as is — so a wall lighter than the
+ * texture keeps its hue and renders light instead of clipping to the
  * texture's own grey.
  */
 export function wallTintLinearFor(
@@ -264,7 +271,7 @@ export function wallTintLinearFor(
   textureId?: string | null,
 ): [number, number, number] {
   if (typeof surfaceId !== "string" || !/^#[0-9a-fA-F]{6}$/.test(surfaceId)) {
-    return hexToLinearTriple("#F3EFE8");
+    return wallDisplayLinear("#F3EFE8", textureId) ?? hexToLinearTriple("#F3EFE8");
   }
   if (textureId !== undefined && textureId !== null) {
     const display = wallDisplayLinear(surfaceId, textureId);
@@ -1031,6 +1038,7 @@ class FitRoomApp {
         this.rig = setupStage(this.renderer, this.scene, floorSize, wallHeightM, () =>
           this.requestRender(),
         );
+        this.scene.environmentRotation.set(0, envYawForCameraSide(facingDirForRoom(ROOM)), 0);
       },
       () => this.syncInstances(),
       () => {
@@ -1791,6 +1799,7 @@ class FitRoomApp {
     const floorMat = makeFloorMaterial(wM, dM, () => this.requestRender(), ROOM.surfaces.floor);
     this.floorMaterial = floorMat;
     const built = buildRoom(ROOM, floorMat);
+    this.scene.environmentRotation.set(0, envYawForCameraSide(facingDirForRoom(ROOM)), 0);
     this.scene.add(built.group);
     this.roomGroup = built.group;
     this.roomWalls = built.group;

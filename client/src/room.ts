@@ -15,13 +15,7 @@ export const FRAME_MATERIAL = new THREE.MeshStandardMaterial({
   metalness: 0.05,
 });
 
-export const GLASS_MATERIAL = new THREE.MeshStandardMaterial({
-  color: 0xbcd4e6,
-  roughness: 0.08,
-  metalness: 0,
-  transparent: true,
-  opacity: 0.35,
-});
+export const GLASS_MATERIAL = new THREE.MeshBasicMaterial({ color: 0xf3f7fa, toneMapped: false });
 
 export const SKIRTING_MATERIAL = new THREE.MeshStandardMaterial({
   color: 0xf5f3ef,

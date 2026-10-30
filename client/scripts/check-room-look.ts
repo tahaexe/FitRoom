@@ -14,8 +14,9 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import * as THREE from "three";
 import type { RoomLayout } from "@fitroom/shared";
+import { facingDirForRoom } from "@fitroom/shared";
 import { buildRoom } from "../src/room.js";
-import { SURROUND_COLOR } from "../src/stage.js";
+import { envYawForCameraSide, SURROUND_COLOR } from "../src/stage.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const clientDir = resolve(here, "..");
@@ -71,11 +72,72 @@ function main(): void {
 
   check(
     "surround colour is the calm warm grey",
-    SURROUND_COLOR === 0xece8e3,
+    SURROUND_COLOR === 0xe2dbd3,
     `0x${SURROUND_COLOR.toString(16)}`,
   );
 
+  for (const [label, room] of [
+    ["living", living],
+    ["example", example],
+  ] as const) {
+    const yaw = envYawForCameraSide(facingDirForRoom(room));
+    const dist = Math.abs(((yaw - Math.PI + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
+    check(`bright side faces the camera-side walls in ${label}`, dist < 1e-9, String(yaw));
+  }
+
   const stageSrc = readFileSync(join(clientDir, "src", "stage.ts"), "utf8");
+  const mainSrc = readFileSync(join(clientDir, "src", "main.ts"), "utf8");
+  const yawUses =
+    mainSrc.split("environmentRotation.set(0, envYawForCameraSide(facingDirForRoom(ROOM)), 0)")
+      .length - 1;
+  check(
+    "camera side sets the environment yaw on start and rebuild",
+    yawUses >= 2,
+    `${String(yawUses)} use(s)`,
+  );
+  check(
+    "default wall renders through the finish-mean path",
+    mainSrc.includes('wallDisplayLinear("#F3EFE8", textureId)'),
+    'main.ts must call wallDisplayLinear("#F3EFE8", textureId)',
+  );
+  check(
+    "daylight exposure is calm",
+    stageSrc.includes("toneMappingExposure = 1.15"),
+    "stage.ts must set toneMappingExposure = 1.15",
+  );
+  check(
+    "sun reads as soft daylight",
+    stageSrc.includes("DirectionalLight(0xfff1dc, 2.3)"),
+    "stage.ts must use DirectionalLight(0xfff1dc, 2.3)",
+  );
+  check(
+    "contact shadows stay light",
+    stageSrc.includes("ShadowMaterial({ opacity: 0.22 })"),
+    "stage.ts must use ShadowMaterial({ opacity: 0.22 })",
+  );
+
+  for (const [label, room] of [
+    ["living", living],
+    ["example", example],
+  ] as const) {
+    const withGlass = buildRoom(room, new THREE.MeshStandardMaterial({ color: 0xffffff }));
+    const panes: THREE.Mesh[] = [];
+    withGlass.group.traverse((obj) => {
+      if (obj instanceof THREE.Mesh && obj.name.startsWith("opening-glass-")) panes.push(obj);
+    });
+    check(`${label} room has daylight panes`, panes.length > 0, "no opening-glass-* mesh");
+    for (const pane of panes) {
+      const mat = pane.material as THREE.Material;
+      check(
+        `${label} ${pane.name} is unlit daylight glass`,
+        mat instanceof THREE.MeshBasicMaterial &&
+          mat.toneMapped === false &&
+          (mat as THREE.MeshBasicMaterial).color.getHex() === 0xf3f7fa,
+        mat.type,
+      );
+    }
+  }
+
   check(
     "floor material sets normalScale to 1.6 on both axes",
     /normalScale\.set\(\s*1\.6\s*,\s*1\.6\s*\)/.test(stageSrc),

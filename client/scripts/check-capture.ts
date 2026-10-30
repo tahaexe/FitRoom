@@ -253,8 +253,8 @@ function main(): void {
     "light oak planks use the real 190 cm tile",
     stageSrc.includes("WoodFloor039: 1.9") && stageSrc.includes("FLOOR_TILE_M[finish]"),
   );
-  check("daylight is warm and bright", stageSrc.includes("1.35") && stageSrc.includes("2.6"));
-  check("contact shadows read under every piece", stageSrc.includes("0.38"));
+  check("daylight is warm and bright", stageSrc.includes("1.15") && stageSrc.includes("2.3"));
+  check("contact shadows read under every piece", stageSrc.includes("0.22"));
   check(
     "every piece carries the dark silhouette outline",
     modelsSrc.includes("OUTLINE_COLOR = 0x2b2c30") && modelsSrc.includes("OUTLINE_OPACITY = 0.6"),
