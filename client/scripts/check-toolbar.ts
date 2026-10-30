@@ -263,6 +263,12 @@ check(
   "main.ts fit-badge",
 );
 check(
+  "adding a piece opens the list on desktop only (phones keep the room)",
+  /private async addItem\([\s\S]{0,2500}this\.openFitList\(\)/.test(main) &&
+    /private async addItem\([\s\S]{0,2500}!isPhoneViewport\(\)/.test(main),
+  "main.ts addItem phone guard",
+);
+check(
   "a panel close button drops the app side state",
   main.includes("private watchPanelClose()") &&
     main.includes('this.setToggle("tool-recommend", false)'),
@@ -435,6 +441,11 @@ check(
   "the details toggle answers 44 px tall",
   /\.assistant-did summary\s*\{[^}]*min-height:\s*44px/.test(phoneCss),
   "style.css .assistant-did summary",
+);
+check(
+  "the phone fit list scrolls inside 40% of the room area",
+  /\.fit-list\s*\{[^}]*max-height:\s*40%[^}]*overflow-y:\s*auto/s.test(phoneCss),
+  "style.css phone .fit-list",
 );
 check(
   "phone text runs bigger (pills 15px, size tag 14px, Undo/Redo 16px)",

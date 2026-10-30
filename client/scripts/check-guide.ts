@@ -730,5 +730,50 @@ check(
   );
 }
 
+// ---- Phones, moments 2-4: the bubble docks at the bottom of the free room
+// area, 8 px above the 56 px bottom bar (or the open sheet), full width
+// less 8 px a side; moment 1 keeps its place by its button. ----
+{
+  const viewport = { x: 0, y: 0, w: 390, h: 844 };
+  const target = { x: 135, y: 300, w: 120, h: 40 };
+  const bubble = { x: 0, y: 0, w: 300, h: 140 };
+  const placed = placeBubble(target, bubble, viewport, GUIDE_MARGIN_PX, 10, {
+    bottomChrome: 56,
+  });
+  const bh = Math.min(bubble.h, viewport.h - GUIDE_MARGIN_PX * 2);
+  const bottomEdge = placed.top + bh;
+  check(
+    "guide:placement-phone-dock-8px-above-bar",
+    bottomEdge === 844 - 56 - 8 && placed.left === GUIDE_MARGIN_PX,
+    `bottom edge ${String(bottomEdge)} vs ${String(844 - 56 - 8)}, left ${String(placed.left)}`,
+  );
+  const dockedW = viewport.w - GUIDE_MARGIN_PX * 2;
+  check(
+    "guide:placement-phone-dock-full-width",
+    placed.left === GUIDE_MARGIN_PX && dockedW === 390 - 16,
+    `docked width ${String(dockedW)} at 390 px`,
+  );
+  const sheetPeek = Math.round(0.4 * viewport.h);
+  const overSheet = placeBubble(target, bubble, viewport, GUIDE_MARGIN_PX, 10, {
+    bottomChrome: 56 + sheetPeek,
+  });
+  check(
+    "guide:placement-phone-dock-8px-above-sheet",
+    overSheet.top + bh === 844 - 56 - sheetPeek - 8,
+    `bottom edge ${String(overSheet.top + bh)} vs ${String(844 - 56 - sheetPeek - 8)}`,
+  );
+  const guideSrc = readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "src", "guide.ts"), "utf8");
+  const placeAt = guideSrc.indexOf("private place()");
+  const placeBody = placeAt < 0 ? "" : guideSrc.slice(placeAt, placeAt + 3000);
+  check(
+    "guide:phone-dock-keeps-ring-on-target",
+    placeBody.includes("this.ring.style.left") &&
+      placeBody.includes("bottomChrome") &&
+      placeBody.indexOf("this.ring.style.left") < placeBody.indexOf("bottomChrome") &&
+      placeBody.includes("shownMoment !== 1"),
+    "guide.ts ring stays on target, moment 1 undocked",
+  );
+}
+
 if (failures > 0) process.exit(1);
 console.log("guide: all checks passed");

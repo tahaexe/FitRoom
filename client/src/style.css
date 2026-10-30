@@ -2853,7 +2853,7 @@ button.cart-row {
 
   body[data-sheet-open="true"] .fit-list {
     z-index: 30;
-    max-height: calc(100dvh - var(--sheet-peek) - 120px);
+    max-height: min(calc(100dvh - var(--sheet-peek) - 120px), 40%);
     overflow-y: auto;
   }
 
@@ -2872,6 +2872,8 @@ button.cart-row {
     left: 16px;
     right: 16px;
     width: auto;
+    max-height: 40%;
+    overflow-y: auto;
   }
 
   .delete-toast,

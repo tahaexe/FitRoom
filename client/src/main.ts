@@ -1095,8 +1095,13 @@ class FitRoomApp {
     });
     this.select(instance.instanceId);
     // The fit engine already picked the nearest spot with no problems when
-    // one exists; when the best spot still has a problem, show the list.
-    if (this.issues.some((issue) => issue.itemIds.includes(instance.instanceId))) {
+    // one exists; when the best spot still has a problem, show the list on
+    // desktops. On phones the badge and in-scene pills carry the problem
+    // and a tap on the badge opens the list, so the room stays in view.
+    if (
+      this.issues.some((issue) => issue.itemIds.includes(instance.instanceId)) &&
+      !isPhoneViewport()
+    ) {
       this.openFitList();
     }
   }

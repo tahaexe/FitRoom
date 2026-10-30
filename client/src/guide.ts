@@ -306,15 +306,30 @@ export interface GuidePlaced {
  * does not, shifted sideways to stay inside the window with an 8 px margin.
  * The bubble box itself is always fully inside the window.
  */
+export interface GuideDock {
+  /** Chrome reserved at the viewport bottom (bottom bar plus an open sheet). */
+  bottomChrome: number;
+}
+
 export function placeBubble(
   target: GuideRect,
   bubble: GuideRect,
   viewport: GuideRect,
   margin: number = GUIDE_MARGIN_PX,
   gap: number = GUIDE_GAP_PX,
+  dock?: GuideDock,
 ): GuidePlaced {
   const vw = Math.max(1, viewport.w);
   const vh = Math.max(1, viewport.h);
+  if (dock !== undefined) {
+    // Phones, moments 2-4: the bubble docks at the bottom of the free room
+    // area, 8 px above the bottom bar or the open sheet, full width less
+    // 8 px a side. The highlight ring stays on its target (see the caller).
+    const bh = Math.max(1, Math.min(bubble.h, vh - margin * 2));
+    const bottom = Math.max(0, dock.bottomChrome);
+    const top = Math.max(margin, vh - bottom - margin - bh);
+    return { left: margin, top: Math.round(top), side: "below" };
+  }
   const bw = Math.max(1, Math.min(bubble.w, vw - margin * 2));
   const bh = Math.max(1, Math.min(bubble.h, vh - margin * 2));
   let left = target.x + target.w / 2 - bw / 2;
@@ -393,6 +408,7 @@ export class GuideView {
   private ring: HTMLElement | null = null;
   private target: Element | null = null;
   private shownMoment: GuideMoment | null = null;
+  private isPhone = false;
 
   constructor(private readonly handlers: { onNext: () => void; onSkip: () => void }) {}
 
@@ -422,6 +438,7 @@ export class GuideView {
     }
     this.target = target;
     this.shownMoment = moment;
+    this.isPhone = isPhone;
     this.ensure();
     const content = guideBubble(moment, isPhone);
     const text = this.bubble?.querySelector(".guide-text");
@@ -536,6 +553,39 @@ export class GuideView {
       this.bubble.offsetHeight,
       viewport.w,
     );
+    // Phones, moments 2-4: dock the bubble at the bottom of the free room
+    // area, 8 px above the bottom bar or the open sheet, full width less
+    // 8 px a side. The ring above already highlights the target, and
+    // moment 1 keeps its place by its button in the first-run dialog.
+    if (this.isPhone && this.shownMoment !== null && this.shownMoment !== 1) {
+      const vw = Math.max(1, window.innerWidth);
+      const vh = Math.max(1, window.innerHeight);
+      let bottomChrome = 56;
+      try {
+        if (document.body.getAttribute("data-sheet-open") === "true") {
+          const size = document.body.getAttribute("data-sheet-size");
+          bottomChrome += (size === "full" ? 0.88 : 0.4) * vh;
+        }
+      } catch {
+        // DOM may be unavailable; the bottom bar still reserves 56 px.
+      }
+      const placed = placeBubble(
+        { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
+        { x: 0, y: 0, w: measured.w, h: measured.h },
+        { x: 0, y: 0, w: vw, h: vh },
+        GUIDE_MARGIN_PX,
+        GUIDE_GAP_PX,
+        { bottomChrome },
+      );
+      this.bubble.style.left = `${String(placed.left)}px`;
+      this.bubble.style.top = `${String(placed.top)}px`;
+      this.bubble.style.width = `${String(Math.max(1, vw - GUIDE_MARGIN_PX * 2))}px`;
+      this.bubble.style.maxWidth = "none";
+      this.bubble.dataset["side"] = placed.side;
+      return;
+    }
+    this.bubble.style.width = "";
+    this.bubble.style.maxWidth = "";
     const placed = placeBubble(
       { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
       { x: 0, y: 0, w: measured.w, h: measured.h },
