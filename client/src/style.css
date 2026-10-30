@@ -2942,6 +2942,29 @@ button.cart-row {
     display: flex;
     align-items: center;
   }
+
+  /* Bigger text on phones: in-scene pills, tags, confirm chips and Undo/Redo. */
+  .fit-issue-label,
+  .fit-dim-label {
+    font-size: 15px;
+    padding: 4px 12px;
+  }
+
+  #size-tag.size-tag {
+    font-size: 14px;
+    padding: 3px 10px;
+  }
+
+  .editor-pill,
+  .photo-draft-tape,
+  .fit-list button {
+    font-size: 15px;
+  }
+
+  #tool-undo,
+  #tool-redo {
+    font-size: 16px;
+  }
 }
 
 /* Landscape phones (844 x 390): sheets peek at most a quarter of the

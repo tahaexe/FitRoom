@@ -437,6 +437,18 @@ check(
   "style.css .assistant-did summary",
 );
 check(
+  "phone text runs bigger (pills 15px, size tag 14px, Undo/Redo 16px)",
+  /\.fit-issue-label,\s*\.fit-dim-label\s*\{[^}]*font-size:\s*15px[^}]*padding:\s*4px 12px/s.test(
+    phoneCss,
+  ) &&
+    /#size-tag\.size-tag\s*\{[^}]*font-size:\s*14px[^}]*padding:\s*3px 10px/s.test(phoneCss) &&
+    /\.editor-pill,\s*\.photo-draft-tape,\s*\.fit-list button\s*\{[^}]*font-size:\s*15px/s.test(
+      phoneCss,
+    ) &&
+    /#tool-undo,\s*#tool-redo\s*\{[^}]*font-size:\s*16px/s.test(phoneCss),
+  "style.css phone text sizes",
+);
+check(
   "corner handles keep their 28 px dot with a 44 px hit area",
   /\.photo-handle\s*\{[^}]*width:\s*28px/.test(phoneCss) &&
     /\.photo-handle::after\s*\{[^}]*inset:\s*-8px/s.test(editorCss),
