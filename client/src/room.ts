@@ -22,6 +22,17 @@ export const GLASS_MATERIAL = new THREE.MeshStandardMaterial({
   opacity: 0.35,
 });
 
+export const SKIRTING_MATERIAL = new THREE.MeshStandardMaterial({
+  color: 0xf5f3ef,
+  roughness: 0.55,
+  metalness: 0,
+});
+
+function markDecor(mesh: THREE.Mesh): void {
+  mesh.userData.decor = true;
+  mesh.raycast = () => {};
+}
+
 export interface WallMeshEntry {
   wallId: string;
   meshes: THREE.Mesh[];
@@ -134,6 +145,37 @@ export function buildRoom(room: RoomLayout, floorMaterial: THREE.Material): Room
     const openings: Opening[] = room.openings
       .filter((o) => o.wallId === wall.id)
       .sort((a, b) => a.offset - b.offset);
+    // Outward normal: polygon is CCW from above, so outward is right of direction.
+    const outward = new THREE.Vector3(dirZ, 0, -dirX).normalize();
+    const inward = outward.clone().negate();
+    let skirtN = 0;
+    const addSkirting = (aCm: number, bCm: number): void => {
+      let a = aCm;
+      let b = bCm;
+      const insetCm = thickCm / 2 + 0.75;
+      if (a <= 0) a = Math.min(b, a + insetCm);
+      if (b >= lenCm) b = Math.max(a, b - insetCm);
+      const spanCm = b - a;
+      if (spanCm <= 0.01) return;
+      const mid = (a + b) / 2;
+      const p = pointAlongWall(wall, mid);
+      const offM = cmToMeters(thickCm / 2 + 0.75);
+      const geo = new THREE.BoxGeometry(cmToMeters(spanCm), cmToMeters(8), cmToMeters(1.5));
+      const mesh = new THREE.Mesh(geo, SKIRTING_MATERIAL);
+      mesh.position.set(
+        cmToMeters(p.x) + inward.x * offM,
+        cmToMeters(4),
+        cmToMeters(p.z) + inward.z * offM,
+      );
+      mesh.rotation.y = angleY;
+      mesh.castShadow = false;
+      mesh.receiveShadow = true;
+      mesh.name = `skirting-${wall.id}-${String(skirtN)}`;
+      skirtN += 1;
+      markDecor(mesh);
+      group.add(mesh);
+      meshes.push(mesh);
+    };
 
     // Wall runs between openings.
     let cursor = 0;
@@ -149,6 +191,8 @@ export function buildRoom(room: RoomLayout, floorMaterial: THREE.Material): Room
       const p = pointAlongWall(wall, mid);
       addBox(group, meshes, p.x, p.z, b - a, wall.height, 0, thickCm, angleY, WALL_MATERIAL);
     }
+
+    for (const [a, b] of runs) addSkirting(a, b);
 
     // Lintel / sill / frame per opening.
     for (const o of openings) {
@@ -228,6 +272,7 @@ export function buildRoom(room: RoomLayout, floorMaterial: THREE.Material): Room
         pane.name = `opening-glass-${o.id}`;
         group.add(pane);
         meshes.push(pane);
+        addSkirting(o.offset, o.offset + o.width);
       } else {
         // Door leaf shown ajar at 30deg from the hinge side.
         const hingeOffset = o.offset + 3;
@@ -274,8 +319,6 @@ export function buildRoom(room: RoomLayout, floorMaterial: THREE.Material): Room
       }
     }
 
-    // Outward normal: polygon is CCW from above, so outward is right of direction.
-    const outward = new THREE.Vector3(dirZ, 0, -dirX).normalize();
     wallEntries.push({ wallId: wall.id, meshes, outward });
   }
 
