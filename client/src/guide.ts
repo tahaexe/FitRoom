@@ -503,6 +503,19 @@ export class GuideView {
     }
   }
 
+  /** Free area left of the open right-hand panel (the whole window when none). */
+  private freeViewport(): GuideRect {
+    const h = window.innerHeight;
+    let freeW = Math.max(1, window.innerWidth);
+    for (const id of ["inspector", "recommend-panel", "assistant-panel", "cart-panel"]) {
+      const el = document.getElementById(id);
+      if (el === null || el.hasAttribute("hidden")) continue;
+      const left = el.getBoundingClientRect().left;
+      if (Number.isFinite(left) && left > 0) freeW = Math.min(freeW, left);
+    }
+    return { x: 0, y: 0, w: Math.max(1, freeW), h: Math.max(1, h) };
+  }
+
   private place(): void {
     if (this.bubble === null || this.ring === null || this.target === null) return;
     const rect = this.target.getBoundingClientRect();
@@ -517,15 +530,16 @@ export class GuideView {
     this.ring.style.top = `${String(Math.max(2, rect.top - pad))}px`;
     this.ring.style.width = `${String(Math.max(1, rect.width + pad * 2))}px`;
     this.ring.style.height = `${String(Math.max(1, rect.height + pad * 2))}px`;
+    const viewport = this.freeViewport();
     const measured = bubbleMeasuredSize(
       this.bubble.offsetWidth,
       this.bubble.offsetHeight,
-      window.innerWidth,
+      viewport.w,
     );
     const placed = placeBubble(
       { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
       { x: 0, y: 0, w: measured.w, h: measured.h },
-      { x: 0, y: 0, w: window.innerWidth, h: window.innerHeight },
+      viewport,
     );
     this.bubble.style.left = `${String(placed.left)}px`;
     this.bubble.style.top = `${String(placed.top)}px`;

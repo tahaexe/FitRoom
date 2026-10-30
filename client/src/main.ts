@@ -2966,15 +2966,17 @@ class FitRoomApp {
   /** Paint the bubble by the moment's target, or hide it and let the hints work. */
   private renderGuide(): void {
     if (this.guideView === null) return;
-    // An open side panel covers the bubble's corner: hide the bubble while
-    // any panel is open (the tour keeps its step and shows again on close).
-    if (this.sidePanel !== "none") {
+    const screen = this.guideScreen();
+    // On phones an open sheet covers the bubble's corner: hide the bubble
+    // while a sheet is open (the tour keeps its step and shows again on
+    // close). On desktops the bubble stays showing beside the open
+    // right-hand panel, clear of it (see `GuideView.place`).
+    if (this.sidePanel !== "none" && screen.isPhone) {
       this.guideView.hide();
       this.updateEmptyHint(this.store.state.items.length);
       this.maybeShowDoorTip();
       return;
     }
-    const screen = this.guideScreen();
     // While a guide bubble shows, the empty-room hint and the doors tip do
     // not: the three can never show together. When the guide is done or
     // skipped they work as today.

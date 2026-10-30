@@ -681,14 +681,16 @@ check(
   "a built photo room opens built; only a never-built one resumes confirm",
 );
 
-// ---- An open side panel hides the bubble, closing shows it again ----
+// ---- A phone sheet hides the bubble; a desktop panel keeps it clear ----
 {
   const renderAt = mainSource.indexOf("private renderGuide()");
   const renderBody = renderAt < 0 ? "" : mainSource.slice(renderAt, renderAt + 1200);
   check(
     "guide:panel-hides-bubble",
-    renderBody.includes('this.sidePanel !== "none"') && renderBody.includes("guideView.hide()"),
-    "an open panel hides the bubble in renderGuide",
+    renderBody.includes('this.sidePanel !== "none"') &&
+      renderBody.includes("isPhone") &&
+      renderBody.includes("guideView.hide()"),
+    "only a phone sheet hides the bubble in renderGuide",
   );
   check(
     "guide:panel-keeps-step",
@@ -708,6 +710,23 @@ check(
     mainSource.includes("private watchPanelClose()") &&
       /watchPanelClose\(\)[\s\S]{0,2000}this\.renderGuide\(\)/.test(mainSource),
     "a panel × close shows the guide again",
+  );
+}
+
+// ---- The bubble stays inside the free area left of the open panel ----
+{
+  // A target at the free area's top right (like the fit badge beside the
+  // open Inspector) keeps the bubble's right edge inside the free area.
+  const freeW = 1520;
+  const viewport = { x: 0, y: 0, w: freeW, h: 951 };
+  const target = { x: freeW - 52, y: 4, w: 48, h: 24 };
+  const bubble = { x: 0, y: 0, w: 300, h: 140 };
+  const placed = placeBubble(target, bubble, viewport);
+  const bw = Math.min(bubble.w, freeW - GUIDE_MARGIN_PX * 2);
+  check(
+    "guide:placement-free-area-top-right",
+    placed.left >= GUIDE_MARGIN_PX && placed.left + bw <= freeW - GUIDE_MARGIN_PX,
+    `bubble right ${String(placed.left + bw)} vs free width ${String(freeW)}`,
   );
 }
 
