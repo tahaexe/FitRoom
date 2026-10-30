@@ -360,6 +360,33 @@ export function buildRoom(room: RoomLayout, floorMaterial: THREE.Material): Room
         meshes.push(pane);
         addSkirting(o.offset, o.offset + o.width);
         addFloorSeam(o.offset, o.offset + o.width);
+        const barMid = pointAlongWall(wall, o.offset + o.width / 2);
+        const vGeo = new THREE.BoxGeometry(cmToMeters(4), cmToMeters(o.height - 4), 0.03);
+        const vBar = new THREE.Mesh(vGeo, FRAME_MATERIAL);
+        vBar.position.set(
+          cmToMeters(barMid.x),
+          cmToMeters(o.sillHeight + o.height / 2),
+          cmToMeters(barMid.z),
+        );
+        vBar.rotation.y = angleY;
+        vBar.castShadow = true;
+        vBar.name = `opening-bar-${o.id}-v`;
+        markDecor(vBar);
+        group.add(vBar);
+        meshes.push(vBar);
+        const hGeo = new THREE.BoxGeometry(cmToMeters(o.width - 4), cmToMeters(4), 0.03);
+        const hBar = new THREE.Mesh(hGeo, FRAME_MATERIAL);
+        hBar.position.set(
+          cmToMeters(barMid.x),
+          cmToMeters(o.sillHeight + 0.55 * o.height),
+          cmToMeters(barMid.z),
+        );
+        hBar.rotation.y = angleY;
+        hBar.castShadow = true;
+        hBar.name = `opening-bar-${o.id}-h`;
+        markDecor(hBar);
+        group.add(hBar);
+        meshes.push(hBar);
       } else {
         // Door leaf shown ajar at 30deg from the hinge side.
         const hingeOffset = o.offset + 3;
