@@ -854,8 +854,7 @@ check(
   );
   check(
     "guide:frame-never-repositions",
-    !mainSource.includes("guideView?.reposition(") &&
-      !mainSource.includes("guideView.reposition("),
+    !mainSource.includes("guideView?.reposition(") && !mainSource.includes("guideView.reposition("),
     "main.ts re-picks the dock via redock(), never reposition()",
   );
   const styleSrc = readFileSync(

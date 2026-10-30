@@ -565,7 +565,8 @@ const phoneEnd = phoneCssText.indexOf(
   "@media (max-height: 500px) and (orientation: landscape) {",
   phoneStart,
 );
-const phoneOnly = phoneStart < 0 ? "" : phoneCssText.slice(phoneStart, phoneEnd < 0 ? undefined : phoneEnd);
+const phoneOnly =
+  phoneStart < 0 ? "" : phoneCssText.slice(phoneStart, phoneEnd < 0 ? undefined : phoneEnd);
 const labelRule = /\.fit-issue-label,\s*\.fit-dim-label\s*\{([^}]*)\}/.exec(phoneOnly)?.[1] ?? "";
 for (const decl of [
   "white-space: normal",
@@ -574,7 +575,11 @@ for (const decl of [
   "line-height: 1.25",
   "text-align: center",
 ]) {
-  check(`phone-frame:label-${decl}`, labelRule.includes(decl), labelRule === "" ? "rule missing" : decl);
+  check(
+    `phone-frame:label-${decl}`,
+    labelRule.includes(decl),
+    labelRule === "" ? "rule missing" : decl,
+  );
 }
 function wrapLineCount(text: string): number {
   const max = 0.92 * 390 - 27;
@@ -598,7 +603,8 @@ const catalogJson = JSON.parse(
 const catalogItems = Array.isArray(catalogJson) ? catalogJson : catalogJson.items;
 const longest = [...catalogItems].map((i) => i.name).sort((a, b) => b.length - a.length);
 const verdictA = `\u2715 ${longest[0]} overlaps the ${longest[1]} by 99 cm`;
-const verdictB = "\u2715 Seat can't be reached: 43 cm clear, needs 44 cm within 60 cm of the walkway";
+const verdictB =
+  "\u2715 Seat can't be reached: 43 cm clear, needs 44 cm within 60 cm of the walkway";
 check(
   "phone-frame:worst-verdict-wraps-in-two",
   wrapLineCount(verdictA) <= 2,
