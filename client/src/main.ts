@@ -847,6 +847,7 @@ class FitRoomApp {
         this.firstOpen?.hide();
         this.menuChoice = "sample";
         this.refreshMenu();
+        this.updateTopBar();
         this.updateGuide();
       },
       onBuildRoom: (size) => this.buildRoomAtSize(size),
@@ -858,6 +859,7 @@ class FitRoomApp {
       onSkip: () => this.skipGuide(),
     });
     if (this.firstOpenSetup && roomParam !== "sample") this.firstOpen.showCards();
+    if (this.firstOpenSetup && roomParam !== "sample") this.updateTopBar();
     const showsSetup = this.firstOpenSetup && roomParam !== "sample";
     if (showsSetup) {
       // First visit: the setup card goes up first; the stage's downloads
@@ -1280,6 +1282,7 @@ class FitRoomApp {
       // the fixed start: Enter builds the plan editor at the typed size.
       this.closeEditor();
       this.firstOpen?.showSize();
+      this.updateTopBar();
       this.menuChoice = "manual";
     } else if (id === "edit") {
       this.editorStore?.load(ROOM);
@@ -1416,10 +1419,11 @@ class FitRoomApp {
     this.rebuildRoom();
     this.editorStore?.load(ROOM);
     this.editor?.setPhotoDraft(null);
-    this.openEditor();
     this.firstOpen?.hide();
+    this.openEditor();
     this.menuChoice = "manual";
     this.refreshMenu();
+    this.updateTopBar();
   }
 
   /** Plan-editor link: open the editor at the typed size for shaping. */
@@ -1528,6 +1532,7 @@ class FitRoomApp {
           loadRoomLayout("photos-room") === null
         ) {
           this.firstOpen?.showCards();
+          this.updateTopBar();
         }
       },
       onUseSample: () => {
@@ -2831,8 +2836,6 @@ class FitRoomApp {
 
   /** Room total in the top bar: "4 items · $3,280" (labelled, tabular figures). */
   private updateTopBar(): void {
-    const el = document.getElementById("cart-total");
-    if (el === null) return;
     let total = 0;
     let count = 0;
     for (const item of this.store.state.items) {
@@ -2841,6 +2844,19 @@ class FitRoomApp {
       total += entry.price;
       count += 1;
     }
+    // While the first-run dialog or the photo walkthrough is on screen the
+    // cart stays out of sight: no count, no total and no Add to cart change
+    // behind the visitor's back. The room view brings them back; an empty
+    // room then shows its own "0 items".
+    const setupVisible = this.firstOpen?.visible ?? false;
+    const walkthrough = this.photoFlow !== null;
+    const hideCart = setupVisible || walkthrough;
+    for (const id of ["cart-total", "tool-cart", "phone-cart"]) {
+      const node = document.getElementById(id);
+      if (node instanceof HTMLElement) node.style.display = hideCart ? "none" : "";
+    }
+    const el = document.getElementById("cart-total");
+    if (el === null) return;
     el.textContent = formatTopBar(count, total);
     el.title = count === 0 ? CART_EMPTY : `${formatTopBar(count, total)} in your cart`;
     // The phone cart fits 390 px without clipping: the short "4 · $3,280"

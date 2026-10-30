@@ -256,6 +256,42 @@ function item(productId: string, variant: string): SceneItem {
   );
 }
 
+// ---- Cart chrome hides during setup and the photo walkthrough ----
+{
+  const mainSrc = readFileSync(join(root, "src", "main.ts"), "utf8");
+  const topBarAt = mainSrc.indexOf("private updateTopBar(");
+  const topBarEnd = mainSrc.indexOf("\n  private ", topBarAt + 1);
+  const topBarBody =
+    topBarAt < 0 ? "" : mainSrc.slice(topBarAt, topBarEnd < 0 ? topBarAt + 8000 : topBarEnd);
+  check(
+    "cart:setup-hides",
+    topBarBody.includes("firstOpen") &&
+      topBarBody.includes("cart-total") &&
+      topBarBody.includes("tool-cart") &&
+      topBarBody.includes("phone-cart") &&
+      topBarBody.includes('"none"'),
+    "updateTopBar must hide #cart-total, #tool-cart and #phone-cart while the first-run dialog is open",
+  );
+  check(
+    "cart:photos-hide",
+    topBarBody.includes("photoFlow") &&
+      topBarBody.includes("cart-total") &&
+      topBarBody.includes("tool-cart") &&
+      topBarBody.includes("phone-cart"),
+    "updateTopBar must hide the same three nodes while the photo walkthrough is open",
+  );
+  check(
+    "cart:room-shows-again",
+    topBarBody.includes('""') && topBarBody.includes('"none"'),
+    "updateTopBar must bring the three nodes back when the room view is back",
+  );
+  check(
+    "cart:empty-room-zero",
+    formatTopBar(0, 0) === "0 items · $0",
+    formatTopBar(0, 0),
+  );
+}
+
 if (failures > 0) {
   console.log(`check:cart: ${String(failures)} check(s) failed`);
   process.exitCode = 1;
