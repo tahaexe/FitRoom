@@ -432,7 +432,7 @@ check(
   );
   const barPad = 8 * 2;
   const barGaps = 4 * 3;
-  const charW = 7.5;
+  const charW = 8;
   const btnPad = 4 * 2 + 2;
   const buttons = ["Catalog", "AI", "Visualise"];
   const buttonsWidth = buttons.reduce((sum, text) => sum + text.length * charW + btnPad, 0);
@@ -443,6 +443,13 @@ check(
     estimate <= 390,
     `buttons ${String(Math.round(buttonsWidth))}px, cart ${String(Math.round(cartWidth))}px`,
   );
+  for (const label of [...buttons, short]) {
+    check(
+      `the phone bar fits "${label}" in its equal share`,
+      label.length * 8 + 10 <= (390 - 16 - 12) / 4,
+      `${label} needs ${String(label.length * 8 + 10)}px of ${String((390 - 16 - 12) / 4)}px`,
+    );
+  }
 }
 
 // Every button, chip, toggle and handle answers in at least 44 x 44 px at
@@ -535,6 +542,43 @@ for (const selector of [
   check(
     `phone ${selector} is 14px`,
     phoneDecl(selector, "font-size") === "14px",
+    `font-size: ${phoneDecl(selector, "font-size") ?? "missing"}`,
+  );
+}
+check(
+  "phone bar buttons carry 15px labels",
+  phoneDecl("#phone-bar > button", "font-size") === "15px",
+  `font-size: ${phoneDecl("#phone-bar > button", "font-size") ?? "missing"}`,
+);
+for (const selector of ["#tool-undo", "#tool-redo"]) {
+  check(
+    `phone ${selector} is 64px wide, 16px bold`,
+    phoneDecl(selector, "min-width") === "64px" &&
+      phoneDecl(selector, "font-size") === "16px" &&
+      phoneDecl(selector, "font-weight") === "700",
+    `min-width: ${phoneDecl(selector, "min-width") ?? "missing"}, font-size: ${phoneDecl(selector, "font-size") ?? "missing"}, font-weight: ${phoneDecl(selector, "font-weight") ?? "missing"}`,
+  );
+}
+for (const selector of [".guide-next", ".guide-skip"]) {
+  check(
+    `phone ${selector} is 48px tall, 16px`,
+    phoneDecl(selector, "min-height") === "48px" &&
+      phoneDecl(selector, "padding") === "10px 20px" &&
+      phoneDecl(selector, "font-size") === "16px",
+    `min-height: ${phoneDecl(selector, "min-height") ?? "missing"}, padding: ${phoneDecl(selector, "padding") ?? "missing"}, font-size: ${phoneDecl(selector, "font-size") ?? "missing"}`,
+  );
+}
+check(
+  "phone confirm pills carry 16px labels on 48px targets",
+  phoneDecl("button.editor-pill", "min-height") === "48px" &&
+    phoneDecl("button.editor-pill", "padding") === "10px 18px" &&
+    phoneDecl("button.editor-pill", "font-size") === "16px",
+  `min-height: ${phoneDecl("button.editor-pill", "min-height") ?? "missing"}, padding: ${phoneDecl("button.editor-pill", "padding") ?? "missing"}, font-size: ${phoneDecl("button.editor-pill", "font-size") ?? "missing"}`,
+);
+for (const selector of [".delete-toast button", ".setup-go", ".setup-secondary"]) {
+  check(
+    `phone ${selector} is 16px`,
+    phoneDecl(selector, "font-size") === "16px",
     `font-size: ${phoneDecl(selector, "font-size") ?? "missing"}`,
   );
 }
