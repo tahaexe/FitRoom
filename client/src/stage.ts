@@ -120,10 +120,7 @@ export function applyFloorContrast(material: THREE.MeshStandardMaterial, finish:
     shader.uniforms["floorMean"] = { value: mean };
     shader.uniforms["floorContrast"] = { value: k };
     shader.fragmentShader = shader.fragmentShader
-      .replace(
-        "#include <common>",
-        "#include <common>\nuniform vec3 floorMean;\nuniform float floorContrast;",
-      )
+      .replace("#include <common>", "#include <common>\nuniform vec3 floorMean;\nuniform float floorContrast;")
       .replace(
         "#include <map_fragment>",
         "#include <map_fragment>\n\tdiffuseColor.rgb = max( floorMean + ( diffuseColor.rgb - floorMean ) * floorContrast, floorMean * 0.35 );",

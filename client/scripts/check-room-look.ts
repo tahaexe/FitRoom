@@ -16,12 +16,7 @@ import * as THREE from "three";
 import type { RoomLayout } from "@fitroom/shared";
 import { facingDirForRoom } from "@fitroom/shared";
 import { buildRoom } from "../src/room.js";
-import {
-  applyFloorContrast,
-  envYawForCameraSide,
-  FLOOR_CONTRAST,
-  SURROUND_COLOR,
-} from "../src/stage.js";
+import { applyFloorContrast, envYawForCameraSide, FLOOR_CONTRAST, SURROUND_COLOR } from "../src/stage.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const clientDir = resolve(here, "..");

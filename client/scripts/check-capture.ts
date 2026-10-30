@@ -256,8 +256,13 @@ function main(): void {
   check("daylight is warm and bright", stageSrc.includes("1.15") && stageSrc.includes("2.3"));
   check("contact shadows read under every piece", stageSrc.includes("0.22"));
   check(
-    "every piece carries the dark silhouette outline",
-    modelsSrc.includes("OUTLINE_COLOR = 0x2b2c30") && modelsSrc.includes("OUTLINE_OPACITY = 0.6"),
+    "pieces' fold lines draw in the Plan view only",
+    modelsSrc.includes("OUTLINE_COLOR = 0x2b2c30") &&
+      modelsSrc.includes("OUTLINE_OPACITY = 0.6") &&
+      modelsSrc.includes("OUTLINE_LAYER = 1") &&
+      modelsSrc.includes("lines.layers.set(OUTLINE_LAYER)") &&
+      mainSrc.includes("this.planCam.layers.enable(OUTLINE_LAYER)") &&
+      !mainSrc.includes("orbitCam.layers.enable("),
   );
   check(
     "existing blocks carry the same outline",

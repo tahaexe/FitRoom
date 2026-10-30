@@ -96,7 +96,7 @@ import {
 } from "./catalog-ui";
 import { RecommendPanel } from "./recommend/panel";
 import { AssistantPanel } from "./assistant/panel";
-import { applyVariant, loadModel } from "./models";
+import { OUTLINE_LAYER, applyVariant, loadModel } from "./models";
 import { PlanOverlay } from "./plan";
 import { FitOverlay } from "./fit-overlay";
 import { Inspector } from "./inspector";
@@ -589,6 +589,7 @@ class FitRoomApp {
     this.planCam.position.set(cxM, 12, czM);
     this.planCam.up.set(0, 0, -1);
     this.planCam.lookAt(cxM, 0, czM);
+    this.planCam.layers.enable(OUTLINE_LAYER);
 
     this.controls = new OrbitControls(this.orbitCam, this.renderer.domElement);
     this.controls.enableDamping = true;

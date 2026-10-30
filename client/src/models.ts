@@ -31,6 +31,7 @@ export const MODEL_YAW_FIX_DEG: Record<string, number> = {
  */
 export const OUTLINE_COLOR = 0x2b2c30;
 export const OUTLINE_OPACITY = 0.6;
+export const OUTLINE_LAYER = 1;
 
 function addOutlines(root: THREE.Object3D): void {
   const mat = new THREE.LineBasicMaterial({
@@ -46,6 +47,7 @@ function addOutlines(root: THREE.Object3D): void {
     const geometry = mesh.geometry as THREE.BufferGeometry | undefined;
     if (geometry === undefined) continue;
     const lines = new THREE.LineSegments(new THREE.EdgesGeometry(geometry, 25), mat);
+    lines.layers.set(OUTLINE_LAYER);
     lines.name = "fitroom-outline";
     mesh.add(lines);
   }
