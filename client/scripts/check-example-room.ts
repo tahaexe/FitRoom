@@ -209,7 +209,7 @@ function main(): void {
   const tryAt = flowSource.indexOf("async tryExample");
   const tryEnd = flowSource.indexOf("private currentLetter");
   const tryBlock = tryAt >= 0 && tryEnd > tryAt ? flowSource.slice(tryAt, tryEnd) : "";
-  check("the flow offers Try the example room", flowSource.includes("Try the example room"));
+  check("the flow offers Try with example photos", flowSource.includes("Try with example photos"));
   check(
     "tryExample prefills only wall A and leaves B empty to estimate",
     tryBlock.includes("EXAMPLE_TAPE_A") &&

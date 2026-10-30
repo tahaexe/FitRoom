@@ -129,7 +129,7 @@ export class FirstOpen {
     return !this.element.hasAttribute("hidden");
   }
 
-  /** The cards view (with "Try the example room") is the one on screen. */
+  /** The cards view (with "Try with example photos") is the one on screen. */
   get cardsVisible(): boolean {
     return this.visible && !this.cardsView.hasAttribute("hidden");
   }
@@ -140,7 +140,7 @@ export class FirstOpen {
     const sub = el(
       "p",
       "setup-sub",
-      "Tell us your room size, use photos, or explore the sample room.",
+      "See if furniture fits your room before you buy. Start with your room's size, your photos, or the sample room.",
     );
     const grid = el("div", "setup-grid");
 
@@ -163,7 +163,7 @@ export class FirstOpen {
     photoBtn.type = "button";
     photoBtn.addEventListener("click", () => this.callbacks.onUsePhotos());
     photoCard.appendChild(photoBtn);
-    const exampleBtn = el("button", "setup-secondary setup-try-example", "Try the example room");
+    const exampleBtn = el("button", "setup-secondary setup-try-example", "Try with example photos");
     exampleBtn.type = "button";
     exampleBtn.addEventListener("click", () => this.callbacks.onTryExample());
     photoCard.appendChild(exampleBtn);
@@ -174,7 +174,7 @@ export class FirstOpen {
       sampleThumb(),
       el("p", "setup-card-text", "See the furnished demo right away."),
     );
-    const sampleBtn = el("button", "setup-secondary", "Explore the sample");
+    const sampleBtn = el("button", "setup-secondary", "Open the furnished sample");
     sampleBtn.type = "button";
     sampleBtn.addEventListener("click", () => this.callbacks.onExploreSample());
     sampleCard.appendChild(sampleBtn);

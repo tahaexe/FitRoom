@@ -6,8 +6,8 @@
  * target — the rest of the page stays usable, nothing is blocked or dimmed.
  *
  * Moments:
- *  1. On the first-run dialog: "Start here: try the example room, or enter
- *     your own room size." → the "Try the example room" button.
+ *  1. On the first-run dialog: "Start here: try it with our example photos,
+ *     or enter your own room size." → the "Try with example photos" button.
  *  2. A room on screen with no piece: "Add a piece from the catalog."
  *     (phones: "Open the catalog and add a piece.") → the catalog (the left
  *     panel on desktops; the Catalog tab or the open sheet on phones).
@@ -37,7 +37,7 @@ export const GUIDE_MARGIN_PX = 8;
 /** Gap between the target's ring and the bubble. */
 export const GUIDE_GAP_PX = 10;
 
-export const GUIDE_TEXT_1 = "Start here: try the example room, or enter your own room size.";
+export const GUIDE_TEXT_1 = "Start here: try it with our example photos, or enter your own room size.";
 export const GUIDE_TEXT_2 = "Add a piece from the catalog.";
 export const GUIDE_TEXT_2_PHONE = "Open the catalog and add a piece.";
 export const GUIDE_TEXT_3 = "Drag it around. Its outline shows whether it fits.";
@@ -89,7 +89,7 @@ export function guideAction(moment: GuideMoment): string {
 export interface GuideScreen {
   /** The first-run dialog is open. */
   firstOpenVisible: boolean;
-  /** The "Try the example room" button is on screen (the cards view, not the size form). */
+  /** The "Try with example photos" button is on screen (the cards view, not the size form). */
   exampleActionVisible: boolean;
   /** The 3D room is on screen (no dialog, no editor, no photo flow). */
   roomVisible: boolean;
@@ -351,7 +351,7 @@ export function placeBubble(
 
 /**
  * Target lookup, first visible candidate wins. Desktop and phone targets:
- *  1. the "Try the example room" button in the first-run dialog (both);
+ *  1. the "Try with example photos" button in the first-run dialog (both);
  *  2. the catalog: the left panel on desktops, the open sheet or the
  *     Catalog tab on phones;
  *  3. the placed piece's fit status: the fit badge (both);

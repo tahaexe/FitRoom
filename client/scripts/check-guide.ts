@@ -95,7 +95,7 @@ const piecesScreen: GuideScreen = {
 // ---- The four texts, word for word ----
 check(
   "guide:text-1",
-  guideText(1, false) === "Start here: try the example room, or enter your own room size.",
+  guideText(1, false) === "Start here: try it with our example photos, or enter your own room size.",
   guideText(1, false),
 );
 check("guide:text-2", guideText(2, false) === "Add a piece from the catalog.", guideText(2, false));

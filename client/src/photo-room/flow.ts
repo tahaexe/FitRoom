@@ -414,7 +414,7 @@ export class PhotoFlow {
   }
 
   /**
-   * "Try the example room": load the four generated example photos, prefill
+   * "Try with example photos": load the four generated example photos, prefill
    * wall A from the example's tape measurement (wall B stays empty so the
    * solver estimates it from the photos, as for a shopper who leaves one
    * empty), and replay every analysis from the demo store (no upstream call
@@ -614,7 +614,7 @@ export class PhotoFlow {
         const example = document.createElement("button");
         example.type = "button";
         example.className = "photo-example";
-        example.textContent = this.exampleLoading ? "Loading the example…" : "Try the example room";
+        example.textContent = this.exampleLoading ? "Loading the example photos…" : "Try with example photos";
         example.disabled = this.exampleLoading;
         example.addEventListener("click", () => void this.tryExample());
         host.append(exampleHint, example);
