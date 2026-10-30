@@ -2258,7 +2258,6 @@ class FitRoomApp {
       if (!isPhoneViewport()) {
         document.getElementById("render-viewer")?.setAttribute("hidden", "");
       }
-      if (name === "cart") this.renderCartPanel();
     }
     // A phone shows the same panels as bottom sheets, one at a time.
     if (this.sheets !== null && isPhoneViewport()) {
@@ -2275,6 +2274,7 @@ class FitRoomApp {
         // Keep the user's height (peek/full) when the sheet is already open.
         this.sheets.open(name as PhoneSheetName);
       }
+      if (name === "cart") this.renderCartPanel();
       if (name === "assistant") this.assistantPanel?.syncMode();
       this.syncPhoneBar();
       this.container.classList.toggle("has-side-panel", false);
@@ -2298,6 +2298,7 @@ class FitRoomApp {
     }
     if (name === "cart") cart?.removeAttribute("hidden");
     else cart?.setAttribute("hidden", "");
+    if (name === "cart") this.renderCartPanel();
     this.setToggle("tool-recommend", name === "recommend");
     this.setToggle("tool-assistant", name === "assistant");
     // Panels float over the 3D view: the stage keeps its size, so the
@@ -2846,7 +2847,11 @@ class FitRoomApp {
       }
     }
     if (this.sidePanel === "cart" || this.sheets?.isOpen("cart") === true) {
-      this.renderCartPanel();
+      // The rows build only while the panel is visible (hidden images never
+      // paint); the next open renders.
+      if (document.getElementById("cart-panel")?.hasAttribute("hidden") !== true) {
+        this.renderCartPanel();
+      }
     }
     this.updateEmptyHint(count);
   }
@@ -3123,7 +3128,6 @@ class FitRoomApp {
       thumb.className = "cart-thumb";
       thumb.src = row.thumbnail;
       thumb.alt = row.name;
-      thumb.loading = "lazy";
       const meta = document.createElement("span");
       meta.className = "cart-meta";
       const name = document.createElement("span");

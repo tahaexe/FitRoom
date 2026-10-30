@@ -227,6 +227,35 @@ function item(productId: string, variant: string): SceneItem {
   );
 }
 
+// ---- Cart rows build only while the panel is visible ----
+{
+  const mainSrc = readFileSync(join(root, "src", "main.ts"), "utf8");
+  const showAt = mainSrc.indexOf("private showSidePanel(");
+  const nextAt = mainSrc.indexOf("\n  private ", showAt + 1);
+  const showBody = showAt < 0 ? "" : mainSrc.slice(showAt, nextAt < 0 ? showAt + 6000 : nextAt);
+  const cartUnhide = showBody.indexOf('cart?.removeAttribute("hidden")');
+  const sheetOpen = showBody.indexOf("this.sheets.open(");
+  const renders: number[] = [];
+  let from = 0;
+  while (true) {
+    const idx = showBody.indexOf("renderCartPanel()", from);
+    if (idx < 0) break;
+    renders.push(idx);
+    from = idx + 1;
+  }
+  check(
+    "cart:showSidePanel-unhide-found",
+    showBody.length > 0 && cartUnhide >= 0 && sheetOpen >= 0,
+    "showSidePanel must unhide the cart panel and open its sheet",
+  );
+  check(
+    "cart:render-after-visible",
+    renders.length > 0 &&
+      renders.every((idx) => idx > cartUnhide || (idx > sheetOpen && idx < cartUnhide)),
+    'renderCartPanel() inside showSidePanel must run after the cart panel\'s removeAttribute("hidden") (desktop) or after its sheet is open (phone)',
+  );
+}
+
 if (failures > 0) {
   console.log(`check:cart: ${String(failures)} check(s) failed`);
   process.exitCode = 1;
