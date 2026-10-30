@@ -596,3 +596,111 @@ export class GuideView {
     this.bubble.dataset["side"] = placed.side;
   }
 }
+
+/**
+ * Portrait-phone room framing (pure, no DOM): the room fills the free area
+ * (the scene container less an open sheet) instead of a third of it.
+ *
+ * - `PHONE_FRAME_WIDTH_SHARE`: the room's projected box spans 92 % of the
+ *   free area's width;
+ * - `PHONE_FRAME_HEIGHT_SHARE`: ... or 80 % of its height, whichever comes
+ *   first.
+ * - The picture's centre sits in the middle of the free area through a
+ *   same-size `setViewOffset` window shifted up by half the sheet height,
+ *   so the camera never moves for it (the shopper's orbit and zoom stay).
+ */
+export const PHONE_FRAME_WIDTH_SHARE = 0.92;
+export const PHONE_FRAME_HEIGHT_SHARE = 0.8;
+
+export interface PhoneFrameBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface PhoneFrameArea {
+  w: number;
+  h: number;
+}
+
+export interface PhoneViewOffset {
+  fullW: number;
+  fullH: number;
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+export interface PhoneFrameFit {
+  /** Grow the projected box by this (move the camera closer by 1/scale). */
+  scale: number;
+  /** Free area: the container less the open sheet. */
+  free: PhoneFrameArea;
+  /** Same-size `setViewOffset` arguments centring the free area. */
+  viewOffset: PhoneViewOffset;
+  /** Predicted box on the canvas after scaling and the view offset. */
+  screen: PhoneFrameBox;
+}
+
+/** Free area for a container with an open sheet of `sheetH` px (0 closed). */
+export function phoneFreeArea(area: PhoneFrameArea, sheetH: number): PhoneFrameArea {
+  const sheet = Number.isFinite(sheetH) ? Math.max(0, sheetH) : 0;
+  return { w: Math.max(1, area.w), h: Math.max(1, area.h - sheet) };
+}
+
+/**
+ * Same-size `setViewOffset` arguments keeping the picture's centre in the
+ * middle of the free area. The window keeps the container's size (no
+ * stretch); shifting it up by half the sheet height moves the picture up
+ * by the same amount, landing its centre on the free area's centre.
+ */
+export function phoneViewOffset(
+  areaW: number,
+  areaH: number,
+  sheetH: number,
+): PhoneViewOffset {
+  const w = Math.max(1, areaW);
+  const h = Math.max(1, areaH);
+  const sheet = Number.isFinite(sheetH) ? Math.max(0, sheetH) : 0;
+  return { fullW: w, fullH: h, x: 0, y: sheet / 2, w, h };
+}
+
+/**
+ * Fit a projected room box to the free area: move along the view direction
+ * until the box spans 92 % of the free width or 80 % of the free height,
+ * whichever comes first. Scaling happens about the image centre (where the
+ * orbit target projects); the returned view offset then carries the picture
+ * to the free area's middle.
+ */
+export function fitBoxToArea(
+  box: PhoneFrameBox,
+  area: PhoneFrameArea,
+  sheetH: number,
+): PhoneFrameFit {
+  const free = phoneFreeArea(area, sheetH);
+  const bw = Math.max(1, box.w);
+  const bh = Math.max(1, box.h);
+  const widthScale = (PHONE_FRAME_WIDTH_SHARE * free.w) / bw;
+  const heightScale = (PHONE_FRAME_HEIGHT_SHARE * free.h) / bh;
+  const scale =
+    Number.isFinite(widthScale) && Number.isFinite(heightScale)
+      ? Math.max(0.01, Math.min(widthScale, heightScale))
+      : 1;
+  const imgCx = Math.max(1, area.w) / 2;
+  const imgCy = Math.max(1, area.h) / 2;
+  const boxCx = box.x + box.w / 2;
+  const boxCy = box.y + box.h / 2;
+  const sheet = Number.isFinite(sheetH) ? Math.max(0, sheetH) : 0;
+  const scaledCx = imgCx + (boxCx - imgCx) * scale;
+  const scaledCy = imgCy + (boxCy - imgCy) * scale;
+  const viewOffset = phoneViewOffset(area.w, area.h, sheetH);
+  const screen: PhoneFrameBox = {
+    w: box.w * scale,
+    h: box.h * scale,
+    x: scaledCx - (box.w * scale) / 2,
+    y: scaledCy - (box.h * scale) / 2 - sheet / 2,
+  };
+  return { scale, free, viewOffset, screen };
+}

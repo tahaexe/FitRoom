@@ -77,7 +77,14 @@ import {
   USE_SAMPLE_ROOM,
   storeAddHint,
 } from "./copy";
-import { Guide, GuideView, queryGuideTarget, type GuideScreen } from "./guide";
+import {
+  Guide,
+  GuideView,
+  fitBoxToArea,
+  phoneViewOffset,
+  queryGuideTarget,
+  type GuideScreen,
+} from "./guide";
 import {
   CatalogPanel,
   formatCatalogPrice,
@@ -2347,6 +2354,19 @@ class FitRoomApp {
         if (viewer.hasAttribute("hidden")) this.syncPhoneBar();
       }).observe(viewer, { attributes: true, attributeFilter: ["hidden"] });
     }
+    // Sheets opened from their own drag handle never pass through
+    // showSidePanel: a body-attribute change still re-seats the picture in
+    // the free area without moving the camera.
+    try {
+      new MutationObserver(() => {
+        this.applyPhoneViewOffset();
+      }).observe(document.body, {
+        attributes: true,
+        attributeFilter: ["data-sheet-open", "data-sheet-size"],
+      });
+    } catch {
+      // Non-browser context: no sheet to watch.
+    }
   }
 
   /** Phone bottom bar: Catalog, AI, Visualise and the cart button. */
@@ -2579,6 +2599,9 @@ class FitRoomApp {
     phoneCart?.setAttribute("data-active", String(sheet === "cart"));
     // Sheets move the guide's targets (catalog, AI tab): re-seat the bubble.
     this.updateGuide();
+    // An open sheet covers the scene container's bottom: re-seat the
+    // picture in the free area without moving the camera (cleared elsewhere).
+    this.applyPhoneViewOffset();
   }
 
   /**
@@ -2616,6 +2639,8 @@ class FitRoomApp {
     // Both crossings re-pick the text and target for the current layout;
     // the desktop branch never called syncPhoneBar, so update here.
     this.updateGuide();
+    // Desktop clears the phone offset; a fresh phone seats it again.
+    this.applyPhoneViewOffset();
   }
 
   /** Hide developer controls unless the address has `?dev=1`. */
@@ -3783,6 +3808,11 @@ class FitRoomApp {
    * fields of view.
    */
   private frameDollhouse(cxM: number, czM: number, wM: number, dM: number, aspect: number): void {
+    if (!this.devCam && this.isPortraitPhone()) {
+      this.framePhonePortrait(cxM, czM, wM, dM);
+      return;
+    }
+    this.orbitCam.clearViewOffset();
     const wallHeightM = 2.6;
     const radius = Math.sqrt(
       (wM / 2) * (wM / 2) + (dM / 2) * (dM / 2) + (wallHeightM / 2) * (wallHeightM / 2),
@@ -3795,6 +3825,147 @@ class FitRoomApp {
     this.controls.target.set(cxM, 0.3, czM);
     this.orbitCam.position.set(cxM + dir.x * dist, 0.3 + dir.y * dist, czM + dir.z * dist);
     this.controls.update();
+  }
+
+  /** Portrait phone in the orbit view: the room fills the free area. */
+  private isPortraitPhone(): boolean {
+    if (this.mode !== "orbit" || !isPhoneViewport()) return false;
+    const w = Math.max(1, this.container.clientWidth);
+    const h = Math.max(1, this.container.clientHeight);
+    return h >= w;
+  }
+
+  /** Open sheet height on a phone (0 when closed): the free area's cover. */
+  private openSheetHeight(): number {
+    if (!isPhoneViewport()) return 0;
+    try {
+      if (document.body.getAttribute("data-sheet-open") !== "true") return 0;
+    } catch {
+      return 0;
+    }
+    for (const id of [
+      "catalog",
+      "inspector",
+      "recommend-panel",
+      "assistant-panel",
+      "render-viewer",
+      "cart-panel",
+    ]) {
+      const el = document.getElementById(id);
+      if (el === null || el.hasAttribute("hidden")) continue;
+      if (el.dataset["sheet"] === undefined) continue;
+      try {
+        const h = el.getBoundingClientRect().height;
+        if (Number.isFinite(h) && h > 0) return h;
+      } catch {
+        // Unmeasurable sheet: fall through to no cover.
+      }
+    }
+    return 0;
+  }
+
+  /**
+   * Keep the picture's centre in the middle of the free area (the scene
+   * container less an open sheet) with `setViewOffset`, without moving the
+   * camera, so the shopper's own orbit and zoom stay. Runs whenever a sheet
+   * opens or closes and on resize; desktop and the Plan view clear it.
+   */
+  private applyPhoneViewOffset(): void {
+    if (this.devCam) return;
+    const w = Math.max(1, this.container.clientWidth);
+    const h = Math.max(1, this.container.clientHeight);
+    if (!this.isPortraitPhone()) {
+      this.orbitCam.clearViewOffset();
+      this.orbitCam.aspect = w / h;
+      this.orbitCam.updateProjectionMatrix();
+      return;
+    }
+    const v = phoneViewOffset(w, h, this.openSheetHeight());
+    this.orbitCam.setViewOffset(v.fullW, v.fullH, v.x, v.y, v.w, v.h);
+    this.orbitCam.updateProjectionMatrix();
+    this.requestRender();
+  }
+
+  /** Project the room's eight corners (floor and wall height) to pixels. */
+  private projectRoomBox(
+    cxM: number,
+    czM: number,
+    wM: number,
+    dM: number,
+    wallHeightM: number,
+    pxW: number,
+    pxH: number,
+  ): { x: number; y: number; w: number; h: number } {
+    const corners: THREE.Vector3[] = [];
+    for (const y of [0, wallHeightM]) {
+      for (const sx of [-0.5, 0.5]) {
+        for (const sz of [-0.5, 0.5]) {
+          corners.push(new THREE.Vector3(cxM + sx * wM, y, czM + sz * dM));
+        }
+      }
+    }
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    let maxY = -Infinity;
+    for (const corner of corners) {
+      const ndc = corner.project(this.orbitCam);
+      const x = (ndc.x * 0.5 + 0.5) * pxW;
+      const y = (-ndc.y * 0.5 + 0.5) * pxH;
+      minX = Math.min(minX, x);
+      minY = Math.min(minY, y);
+      maxX = Math.max(maxX, x);
+      maxY = Math.max(maxY, y);
+    }
+    if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
+      return { x: 0, y: 0, w: Math.max(1, pxW), h: Math.max(1, pxH) };
+    }
+    return { x: minX, y: minY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) };
+  }
+
+  /**
+   * Portrait-phone framing: project the room's eight corners with the
+   * framing camera and move along the view direction until that box spans
+   * 92 % of the free area's width or 80 % of its height, whichever first.
+   */
+  private framePhonePortrait(cxM: number, czM: number, wM: number, dM: number): void {
+    const wallHeightM = 2.6;
+    const w = Math.max(1, this.container.clientWidth);
+    const h = Math.max(1, this.container.clientHeight);
+    this.orbitCam.clearViewOffset();
+    this.orbitCam.aspect = w / h;
+    this.orbitCam.updateProjectionMatrix();
+    const dir = this.dollhouseDir();
+    const target = new THREE.Vector3(cxM, 0.3, czM);
+    this.controls.target.copy(target);
+    const vFov = (this.orbitCam.fov * Math.PI) / 180;
+    const hFov = 2 * Math.atan(Math.tan(vFov / 2) * (w / h));
+    const fitFov = Math.min(vFov, hFov);
+    const radius = Math.sqrt(
+      (wM / 2) * (wM / 2) + (dM / 2) * (dM / 2) + (wallHeightM / 2) * (wallHeightM / 2),
+    );
+    let dist = (radius / Math.sin(fitFov / 2)) * 1.12;
+    for (let step = 0; step < 4; step += 1) {
+      this.orbitCam.position.set(
+        target.x + dir.x * dist,
+        target.y + dir.y * dist,
+        target.z + dir.z * dist,
+      );
+      this.orbitCam.lookAt(target);
+      this.orbitCam.updateMatrixWorld();
+      const box = this.projectRoomBox(cxM, czM, wM, dM, wallHeightM, w, h);
+      const fit = fitBoxToArea(box, { w, h }, this.openSheetHeight());
+      if (!Number.isFinite(fit.scale) || fit.scale <= 0) break;
+      dist = Math.min(18, Math.max(1.2, dist / fit.scale));
+      if (Math.abs(fit.scale - 1) < 0.01) break;
+    }
+    this.orbitCam.position.set(
+      target.x + dir.x * dist,
+      target.y + dir.y * dist,
+      target.z + dir.z * dist,
+    );
+    this.controls.update();
+    this.applyPhoneViewOffset();
   }
 
   /** Preset name for the render key: plan, eye-level, or dollhouse. */
@@ -3869,6 +4040,9 @@ class FitRoomApp {
     // them: otherwise the orbit view's wall shadows spill outside the room.
     requestContactRefresh(this.rig);
     this.shadowNeedsUpdate = true;
+    // Entering or leaving Plan changes the free area: clear the phone
+    // offset in Plan, re-seat it back in Orbit, never moving the camera.
+    this.applyPhoneViewOffset();
     this.requestRender();
   }
 
@@ -3895,6 +4069,9 @@ class FitRoomApp {
     const h = Math.max(1, this.container.clientHeight);
     this.orbitCam.aspect = w / h;
     this.orbitCam.updateProjectionMatrix();
+    // A resize moves the free area: re-seat the picture without touching
+    // the shopper's orbit or zoom (portrait phones; cleared elsewhere).
+    this.applyPhoneViewOffset();
     this.planCam.left = -this.planCam.top * (w / h);
     this.planCam.right = this.planCam.top * (w / h);
     this.planCam.updateProjectionMatrix();

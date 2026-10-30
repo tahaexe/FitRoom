@@ -18,6 +18,7 @@
     "check:pointer-ownership": "tsx scripts/check-pointer-ownership.ts",
     "check:guidance": "tsx scripts/check-guidance.ts",
     "check:guide": "tsx scripts/check-guide.ts",
+    "check:phone-frame": "tsx scripts/check-phone-frame.ts",
     "check:states": "tsx scripts/check-states.ts",
     "check:labels": "tsx scripts/check-labels.ts",
     "check:confirm-walls": "tsx scripts/check-confirm-walls.ts",
