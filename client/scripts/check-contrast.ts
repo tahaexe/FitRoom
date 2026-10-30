@@ -154,11 +154,23 @@ const pairs: Pair[] =
           background: panelBg,
           usedBy: "warning text on the side-panel grey",
         },
+        {
+          name: "coral on white",
+          text: coral,
+          background: white,
+          usedBy: ".catalog-add, .guide-next phone secondary",
+        },
+        {
+          name: "coral on light tint",
+          text: coral,
+          background: "#fdecea",
+          usedBy: "phone active chip, tab and style tint",
+        },
       ];
 
 check(
   "contrast pairs cover buttons, chips, badges, pills and header",
-  pairs.length === 10,
+  pairs.length === 12,
   `${String(pairs.length)} pairs`,
 );
 

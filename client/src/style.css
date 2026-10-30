@@ -14,10 +14,10 @@
   --border-color: #e4e2e0;
   --ink: #2b2c30;
   --muted: #646973;
-  --coral: #d63a35;
+  --coral: #c62f2a;
   --coral-bright: #f54e49;
-  --coral-hover: #c93732;
-  --coral-pressed: #a92d28;
+  --coral-hover: #b52d28;
+  --coral-pressed: #9a2823;
   --on-coral: #ffffff;
   --green: #0a8167;
   --red: #b3261e;
@@ -2964,6 +2964,35 @@ button.cart-row {
   #tool-undo,
   #tool-redo {
     font-size: 16px;
+  }
+
+  /* One filled red button per screen: the main action keeps the coral
+   * fill; every other red control drops to white or a light tint. */
+  .setup-go,
+  .editor-build,
+  .photo-primary,
+  .recommend-go,
+  .assistant-go,
+  .render-go {
+    background: var(--coral);
+    color: var(--on-coral);
+    border-color: var(--coral);
+  }
+
+  .catalog-add,
+  .guide-next {
+    background: #ffffff;
+    color: var(--coral);
+    border: 1.5px solid var(--coral);
+  }
+
+  .chips button[data-active="true"],
+  #phone-bar > button[data-active="true"],
+  .assistant-tab[data-active="true"],
+  .furnish-style[data-active="true"] {
+    background: #fdecea;
+    color: var(--coral);
+    border-color: var(--coral);
   }
 }
 
