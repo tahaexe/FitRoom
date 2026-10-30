@@ -33,6 +33,32 @@ function markDecor(mesh: THREE.Mesh): void {
   mesh.raycast = () => {};
 }
 
+function makeSeamGradientTexture(): THREE.DataTexture {
+  const data = new Uint8Array(1 * 64 * 4);
+  for (let y = 0; y < 64; y += 1) {
+    const alpha = Math.round(0.22 * 255 * (y / 63));
+    data[y * 4] = 0;
+    data[y * 4 + 1] = 0;
+    data[y * 4 + 2] = 0;
+    data[y * 4 + 3] = alpha;
+  }
+  const tex = new THREE.DataTexture(data, 1, 64);
+  tex.needsUpdate = true;
+  return tex;
+}
+
+export const SEAM_GRADIENT_TEXTURE = makeSeamGradientTexture();
+
+export const SEAM_MATERIAL = new THREE.MeshBasicMaterial({
+  map: SEAM_GRADIENT_TEXTURE,
+  transparent: true,
+  depthWrite: false,
+  toneMapped: false,
+  polygonOffset: true,
+  polygonOffsetFactor: -1,
+  polygonOffsetUnits: -1,
+});
+
 export interface WallMeshEntry {
   wallId: string;
   meshes: THREE.Mesh[];
@@ -192,7 +218,67 @@ export function buildRoom(room: RoomLayout, floorMaterial: THREE.Material): Room
       addBox(group, meshes, p.x, p.z, b - a, wall.height, 0, thickCm, angleY, WALL_MATERIAL);
     }
 
+    let seamN = 0;
+    const seamSpan = (aCm: number, bCm: number): [number, number] | null => {
+      let a = aCm;
+      let b = bCm;
+      const insetCm = thickCm / 2 + 0.75;
+      if (a <= 0) a = Math.min(b, a + insetCm);
+      if (b >= lenCm) b = Math.max(a, b - insetCm);
+      if (b - a <= 0.01) return null;
+      return [a, b];
+    };
+    const addFloorSeam = (aCm: number, bCm: number): void => {
+      const span = seamSpan(aCm, bCm);
+      if (span === null) return;
+      const [a, b] = span;
+      const mid = (a + b) / 2;
+      const p = pointAlongWall(wall, mid);
+      const offM = cmToMeters(thickCm / 2 + 15);
+      const geo = new THREE.PlaneGeometry(cmToMeters(b - a), cmToMeters(30));
+      geo.rotateX(-Math.PI / 2);
+      const mesh = new THREE.Mesh(geo, SEAM_MATERIAL);
+      mesh.position.set(
+        cmToMeters(p.x) + inward.x * offM,
+        0.001,
+        cmToMeters(p.z) + inward.z * offM,
+      );
+      mesh.rotation.y = angleY;
+      mesh.name = `seam-${wall.id}-${String(seamN)}`;
+      seamN += 1;
+      markDecor(mesh);
+      group.add(mesh);
+      meshes.push(mesh);
+    };
+    const addCornerSeam = (atStart: boolean): void => {
+      const widthM = cmToMeters(20);
+      const heightM = cmToMeters(wall.height);
+      const geo = new THREE.PlaneGeometry(widthM, heightM);
+      const uv = geo.attributes.uv as THREE.BufferAttribute;
+      for (let i = 0; i < uv.count; i += 1) {
+        const u = uv.getX(i);
+        uv.setY(i, atStart ? 1 - u : u);
+      }
+      uv.needsUpdate = true;
+      const alongCm = atStart ? 10 : lenCm - 10;
+      const p = pointAlongWall(wall, alongCm);
+      const offM = cmToMeters(thickCm / 2 + 0.1);
+      const mesh = new THREE.Mesh(geo, SEAM_MATERIAL);
+      mesh.position.set(
+        cmToMeters(p.x) + inward.x * offM,
+        heightM / 2,
+        cmToMeters(p.z) + inward.z * offM,
+      );
+      mesh.rotation.y = angleY;
+      mesh.name = `seam-${wall.id}-${String(seamN)}`;
+      seamN += 1;
+      markDecor(mesh);
+      group.add(mesh);
+      meshes.push(mesh);
+    };
+
     for (const [a, b] of runs) addSkirting(a, b);
+    for (const [a, b] of runs) addFloorSeam(a, b);
 
     // Lintel / sill / frame per opening.
     for (const o of openings) {
@@ -273,6 +359,7 @@ export function buildRoom(room: RoomLayout, floorMaterial: THREE.Material): Room
         group.add(pane);
         meshes.push(pane);
         addSkirting(o.offset, o.offset + o.width);
+        addFloorSeam(o.offset, o.offset + o.width);
       } else {
         // Door leaf shown ajar at 30deg from the hinge side.
         const hingeOffset = o.offset + 3;
@@ -319,6 +406,8 @@ export function buildRoom(room: RoomLayout, floorMaterial: THREE.Material): Room
       }
     }
 
+    addCornerSeam(true);
+    addCornerSeam(false);
     wallEntries.push({ wallId: wall.id, meshes, outward });
   }
 
