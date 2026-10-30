@@ -80,10 +80,12 @@ import {
 import {
   Guide,
   GuideView,
-  fitBoxToArea,
+  phoneFrameReady,
   phoneViewOffset,
   queryGuideTarget,
+  solvePhoneFrame,
   type GuideScreen,
+  type PhoneFrameProjection,
 } from "./guide";
 import {
   CatalogPanel,
@@ -385,6 +387,11 @@ class FitRoomApp {
   /** Throttled live fit feedback while dragging (moved id, consumed once per frame). */
   private liveDirty: string | null = null;
   private container: HTMLElement;
+  /**
+   * A phone frame deferred for lack of layout (0 × 0 container): the camera
+   * keeps its pose and the frame runs again on the next resize or layout.
+   */
+  private pendingPhoneFrame = false;
   /** Render-on-demand: a queued rAF id (0 = none) plus a shadow refresh flag. */
   private rafId = 0;
   private shadowNeedsUpdate = true;
@@ -502,7 +509,6 @@ class FitRoomApp {
     // setup screen — the scene the chips reset to — while returning visits
     // restore the autosave. A shared layout applied at once opens its own
     // furnished scene instead, never the setup card.
-    const firstVisit = firstChoice !== "room";
     const sharedFallback =
       sharedAppliedNow && sharedLayout !== null
         ? { ...sharedLayout.scene, roomId: ROOM.id }
@@ -591,7 +597,10 @@ class FitRoomApp {
     this.controls.maxPolarAngle = MAX_POLAR;
     this.controls.minDistance = 1.2;
     this.controls.maxDistance = 18;
-    if (firstVisit) this.frameDollhouse(cxM, czM, wM, dM, aspect);
+    // The first view frames like the first visit even on a reload: a
+    // returning visit otherwise keeps the close default pose. Before layout
+    // (0 × 0) the phone path keeps the camera and reframes on resize/layout.
+    this.frameDollhouse(cxM, czM, wM, dM, aspect);
 
     // The first 3D downloads start in `startStageLoads` (after the setup
     // card's first paint on a first visit, at once on a returning visit),
@@ -1029,6 +1038,27 @@ class FitRoomApp {
       },
       () => {
         this.refreshIssues();
+      },
+      () => {
+        // A reload that booted before layout frames once the room is laid
+        // out, so its first view matches the framing right after a build.
+        if (this.pendingPhoneFrame && !this.devCam && this.isPortraitPhone()) {
+          const bounds = roomBounds(ROOM);
+          const wM = cmToMeters(bounds.maxX - bounds.minX);
+          const dM = cmToMeters(bounds.maxZ - bounds.minZ);
+          const aspect =
+            Math.max(1, this.container.clientWidth) /
+            Math.max(1, this.container.clientHeight);
+          this.frameDollhouse(
+            cmToMeters((bounds.minX + bounds.maxX) / 2),
+            cmToMeters((bounds.minZ + bounds.maxZ) / 2),
+            wM,
+            dM,
+            aspect,
+          );
+          this.clampTarget();
+          this.controls.update();
+        }
       },
     ]);
   }
@@ -3903,7 +3933,11 @@ class FitRoomApp {
     this.requestRender();
   }
 
-  /** Project the room's eight corners (floor and wall height) to pixels. */
+  /**
+   * Project the room's eight corners (floor and wall height) to pixels,
+   * with every corner's depth in front of the camera (positive = in
+   * front). A corner behind the camera reports a non-positive depth.
+   */
   private projectRoomBox(
     cxM: number,
     czM: number,
@@ -3912,7 +3946,7 @@ class FitRoomApp {
     wallHeightM: number,
     pxW: number,
     pxH: number,
-  ): { x: number; y: number; w: number; h: number } {
+  ): PhoneFrameProjection {
     const corners: THREE.Vector3[] = [];
     for (const y of [0, wallHeightM]) {
       for (const sx of [-0.5, 0.5]) {
@@ -3925,7 +3959,10 @@ class FitRoomApp {
     let minY = Infinity;
     let maxX = -Infinity;
     let maxY = -Infinity;
+    const depths: number[] = [];
     for (const corner of corners) {
+      const depth = -corner.clone().applyMatrix4(this.orbitCam.matrixWorldInverse).z;
+      depths.push(depth);
       const ndc = corner.project(this.orbitCam);
       const x = (ndc.x * 0.5 + 0.5) * pxW;
       const y = (-ndc.y * 0.5 + 0.5) * pxH;
@@ -3935,20 +3972,35 @@ class FitRoomApp {
       maxY = Math.max(maxY, y);
     }
     if (!Number.isFinite(minX) || !Number.isFinite(minY)) {
-      return { x: 0, y: 0, w: Math.max(1, pxW), h: Math.max(1, pxH) };
+      return { box: { x: 0, y: 0, w: Math.max(1, pxW), h: Math.max(1, pxH) }, depths };
     }
-    return { x: minX, y: minY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) };
+    return {
+      box: { x: minX, y: minY, w: Math.max(1, maxX - minX), h: Math.max(1, maxY - minY) },
+      depths,
+    };
   }
 
   /**
    * Portrait-phone framing: project the room's eight corners with the
    * framing camera and move along the view direction until that box spans
    * 92 % of the free area's width or 80 % of its height, whichever first.
+   * The distance never drops below the bounding-sphere radius plus 0.5 m
+   * and a step with a corner behind the camera widens instead of narrowing,
+   * so the camera never ends up inside the room. Before layout (a
+   * container below 100 × 100 px) the camera keeps its pose and the frame
+   * runs again on the next resize or layout.
    */
   private framePhonePortrait(cxM: number, czM: number, wM: number, dM: number): void {
     const wallHeightM = 2.6;
-    const w = Math.max(1, this.container.clientWidth);
-    const h = Math.max(1, this.container.clientHeight);
+    const rawW = this.container.clientWidth;
+    const rawH = this.container.clientHeight;
+    if (!phoneFrameReady(rawW, rawH)) {
+      this.pendingPhoneFrame = true;
+      return;
+    }
+    this.pendingPhoneFrame = false;
+    const w = rawW;
+    const h = rawH;
     this.orbitCam.clearViewOffset();
     this.orbitCam.aspect = w / h;
     this.orbitCam.updateProjectionMatrix();
@@ -3961,8 +4013,9 @@ class FitRoomApp {
     const radius = Math.sqrt(
       (wM / 2) * (wM / 2) + (dM / 2) * (dM / 2) + (wallHeightM / 2) * (wallHeightM / 2),
     );
-    let dist = (radius / Math.sin(fitFov / 2)) * 1.12;
-    for (let step = 0; step < 4; step += 1) {
+    const sheetH = this.openSheetHeight();
+    const area = { w, h };
+    const measureAt = (dist: number): PhoneFrameProjection => {
       this.orbitCam.position.set(
         target.x + dir.x * dist,
         target.y + dir.y * dist,
@@ -3970,12 +4023,9 @@ class FitRoomApp {
       );
       this.orbitCam.lookAt(target);
       this.orbitCam.updateMatrixWorld();
-      const box = this.projectRoomBox(cxM, czM, wM, dM, wallHeightM, w, h);
-      const fit = fitBoxToArea(box, { w, h }, this.openSheetHeight());
-      if (!Number.isFinite(fit.scale) || fit.scale <= 0) break;
-      dist = Math.min(18, Math.max(1.2, dist / fit.scale));
-      if (Math.abs(fit.scale - 1) < 0.01) break;
-    }
+      return this.projectRoomBox(cxM, czM, wM, dM, wallHeightM, w, h);
+    };
+    const dist = solvePhoneFrame(radius, fitFov, area, sheetH, measureAt);
     this.orbitCam.position.set(
       target.x + dir.x * dist,
       target.y + dir.y * dist,
@@ -4089,6 +4139,18 @@ class FitRoomApp {
     // A resize moves the free area: re-seat the picture without touching
     // the shopper's orbit or zoom (portrait phones; cleared elsewhere).
     this.applyPhoneViewOffset();
+    // A phone frame deferred for lack of layout runs once laid out, so the
+    // first view after a reload matches the framing right after a build.
+    if (this.pendingPhoneFrame && !this.devCam && this.isPortraitPhone()) {
+      const bounds = roomBounds(ROOM);
+      const wM = cmToMeters(bounds.maxX - bounds.minX);
+      const dM = cmToMeters(bounds.maxZ - bounds.minZ);
+      const cxM = cmToMeters((bounds.minX + bounds.maxX) / 2);
+      const czM = cmToMeters((bounds.minZ + bounds.maxZ) / 2);
+      this.frameDollhouse(cxM, czM, wM, dM, w / h);
+      this.clampTarget();
+      this.controls.update();
+    }
     this.planCam.left = -this.planCam.top * (w / h);
     this.planCam.right = this.planCam.top * (w / h);
     this.planCam.updateProjectionMatrix();

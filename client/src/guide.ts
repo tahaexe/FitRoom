@@ -701,3 +701,95 @@ export function fitBoxToArea(
   };
   return { scale, free, viewOffset, screen };
 }
+
+/**
+ * Smallest laid-out container a phone frame may use (px). Below this the
+ * container is not laid out yet (0 × 0 at boot): the camera keeps its pose
+ * and the frame runs again on the next resize or layout.
+ */
+export const PHONE_FRAME_MIN_PX = 100;
+
+/** True when the container has its laid-out size for phone framing. */
+export function phoneFrameReady(areaW: number, areaH: number): boolean {
+  return (
+    Number.isFinite(areaW) &&
+    Number.isFinite(areaH) &&
+    areaW >= PHONE_FRAME_MIN_PX &&
+    areaH >= PHONE_FRAME_MIN_PX
+  );
+}
+
+/** The phone framing distance never drops below the bounding-sphere radius
+ * plus this (m), so the camera can never sit inside the room. */
+export const PHONE_FRAME_CLEAR_M = 0.5;
+
+/** Closest the framing camera may sit to the room target (m). */
+export function phoneFrameMinDistance(radiusM: number): number {
+  return radiusM + PHONE_FRAME_CLEAR_M;
+}
+
+/** Farthest the framing camera ever moves from the target (m). */
+export const PHONE_FRAME_MAX_M = 18;
+
+/** Bounding-sphere margin before the iterative fit (12 % stand-off). */
+export const PHONE_FRAME_FIT_MARGIN = 1.12;
+
+/**
+ * Widening factor when a step cannot narrow: a corner behind the camera or
+ * a box with no finite size moves the camera away instead of closer
+ * (dividing by a number below one grows the distance).
+ */
+export const PHONE_FRAME_WIDEN_STEP = 0.8;
+
+/** One framing-camera measurement: the projected box and every corner's
+ * depth in front of the camera (positive = in front, metres). */
+export interface PhoneFrameProjection {
+  box: PhoneFrameBox;
+  /** Eight depths, one per room corner; positive while in front. */
+  depths: number[];
+}
+
+/**
+ * Iterative phone framing distance (pure, no DOM): start at the
+ * bounding-sphere stand-off, then move along the view direction until the
+ * projected box spans the free area's share. A step with a corner behind
+ * the camera (non-positive depth) or a non-finite box widens instead of
+ * narrowing; the distance never drops below the bounding-sphere radius
+ * plus 0.5 m, so the camera never ends up inside the room.
+ */
+export function solvePhoneFrame(
+  radiusM: number,
+  fitFovRad: number,
+  area: PhoneFrameArea,
+  sheetH: number,
+  project: (distM: number) => PhoneFrameProjection,
+  maxSteps = 4,
+): number {
+  const minDist = phoneFrameMinDistance(radiusM);
+  const standOff = radiusM / Math.sin(fitFovRad / 2);
+  let dist =
+    Number.isFinite(standOff) && standOff > 0
+      ? Math.min(PHONE_FRAME_MAX_M, Math.max(minDist, standOff * PHONE_FRAME_FIT_MARGIN))
+      : minDist;
+  for (let step = 0; step < maxSteps; step += 1) {
+    const proj = project(dist);
+    const finiteBox =
+      Number.isFinite(proj.box.x) &&
+      Number.isFinite(proj.box.y) &&
+      Number.isFinite(proj.box.w) &&
+      Number.isFinite(proj.box.h) &&
+      proj.box.w > 0 &&
+      proj.box.h > 0;
+    const allInFront =
+      proj.depths.length === 8 &&
+      proj.depths.every((depth) => Number.isFinite(depth) && depth > 0);
+    const fit = finiteBox ? fitBoxToArea(proj.box, area, sheetH) : null;
+    if (!allInFront || fit === null || !Number.isFinite(fit.scale) || fit.scale <= 0) {
+      dist = Math.min(PHONE_FRAME_MAX_M, dist / PHONE_FRAME_WIDEN_STEP);
+      continue;
+    }
+    dist = Math.min(PHONE_FRAME_MAX_M, Math.max(minDist, dist / fit.scale));
+    if (Math.abs(fit.scale - 1) < 0.01) break;
+  }
+  return dist;
+}
