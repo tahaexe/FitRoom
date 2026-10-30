@@ -281,6 +281,15 @@ function item(productId: string, variant: string): SceneItem {
     "updateTopBar must hide the same three nodes while the photo walkthrough is open",
   );
   check(
+    "cart:confirm-hides",
+    topBarBody.includes("editing") &&
+      topBarBody.includes("cart-total") &&
+      topBarBody.includes("tool-cart") &&
+      topBarBody.includes("phone-cart") &&
+      topBarBody.includes('"none"'),
+    "updateTopBar must hide the same three nodes while the confirm view is open",
+  );
+  check(
     "cart:room-shows-again",
     topBarBody.includes('""') && topBarBody.includes('"none"'),
     "updateTopBar must bring the three nodes back when the room view is back",

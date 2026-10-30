@@ -209,7 +209,8 @@ check(
 
 const frameAt = mainSource.indexOf("private framePhonePortrait(");
 const frameEnd = mainSource.indexOf("\n  private ", frameAt + 1);
-const frameBody = frameAt < 0 ? "" : mainSource.slice(frameAt, frameEnd < 0 ? frameAt + 6000 : frameEnd);
+const frameBody =
+  frameAt < 0 ? "" : mainSource.slice(frameAt, frameEnd < 0 ? frameAt + 6000 : frameEnd);
 check(
   "phone-frame:keeps-camera-when-not-laid-out",
   frameBody.includes("phoneFrameReady") &&
@@ -276,7 +277,10 @@ function exampleFacing(room: ExampleRoom): { x: number; z: number } {
   return { x: -ax / hl, z: -az / hl };
 }
 
-function exampleRig(pxW: number, pxH: number): {
+function exampleRig(
+  pxW: number,
+  pxH: number,
+): {
   radius: number;
   fitFov: number;
   wallH: number;

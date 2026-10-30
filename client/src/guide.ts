@@ -781,8 +781,7 @@ export function solvePhoneFrame(
       proj.box.w > 0 &&
       proj.box.h > 0;
     const allInFront =
-      proj.depths.length === 8 &&
-      proj.depths.every((depth) => Number.isFinite(depth) && depth > 0);
+      proj.depths.length === 8 && proj.depths.every((depth) => Number.isFinite(depth) && depth > 0);
     const fit = finiteBox ? fitBoxToArea(proj.box, area, sheetH) : null;
     if (!allInFront || fit === null || !Number.isFinite(fit.scale) || fit.scale <= 0) {
       dist = Math.min(PHONE_FRAME_MAX_M, dist / PHONE_FRAME_WIDEN_STEP);

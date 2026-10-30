@@ -1047,8 +1047,7 @@ class FitRoomApp {
           const wM = cmToMeters(bounds.maxX - bounds.minX);
           const dM = cmToMeters(bounds.maxZ - bounds.minZ);
           const aspect =
-            Math.max(1, this.container.clientWidth) /
-            Math.max(1, this.container.clientHeight);
+            Math.max(1, this.container.clientWidth) / Math.max(1, this.container.clientHeight);
           this.frameDollhouse(
             cmToMeters((bounds.minX + bounds.maxX) / 2),
             cmToMeters((bounds.minZ + bounds.maxZ) / 2),
@@ -2875,13 +2874,14 @@ class FitRoomApp {
       total += entry.price;
       count += 1;
     }
-    // While the first-run dialog or the photo walkthrough is on screen the
-    // cart stays out of sight: no count, no total and no Add to cart change
-    // behind the visitor's back. The room view brings them back; an empty
-    // room then shows its own "0 items".
+    // While the first-run dialog, the photo walkthrough or the confirm view is
+    // on screen the cart stays out of sight: no count, no total and no Add
+    // to cart change behind the visitor's back. The room view brings them
+    // back; an empty room then shows its own "0 items".
     const setupVisible = this.firstOpen?.visible ?? false;
     const walkthrough = this.photoFlow !== null;
-    const hideCart = setupVisible || walkthrough;
+    const confirmView = this.editing;
+    const hideCart = setupVisible || walkthrough || confirmView;
     for (const id of ["cart-total", "tool-cart", "phone-cart"]) {
       const node = document.getElementById(id);
       if (node instanceof HTMLElement) node.style.display = hideCart ? "none" : "";
