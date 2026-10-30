@@ -1,5 +1,6 @@
 import type { CatalogItem, SceneItem } from "@fitroom/shared";
 import { formatCatalogPrice, formatCatalogSize } from "./catalog-ui";
+import { INSPECTOR_SEE_IN_AR } from "./copy";
 import { clampFootprintToRoom } from "./state";
 
 export interface InspectorBounds {
@@ -25,6 +26,10 @@ export class Inspector {
       onRotate: (id: string, deg: number) => void;
       onVariant: (id: string, variant: string) => void;
       onDelete: (id: string) => void;
+      ar?: {
+        isAvailable: () => boolean;
+        onOpen: () => void;
+      };
     },
   ) {}
 
@@ -68,6 +73,22 @@ export class Inspector {
       const dims = document.createElement("p");
       dims.textContent = `Size ${formatCatalogSize(entry.size.w, entry.size.d, entry.size.h)} · ${formatCatalogPrice(entry.price)}`;
       this.root.appendChild(dims);
+    }
+
+    // "See it in AR" lives in its own row right under the size line, so it
+    // shows in the side panel and in the phone sheet at peek. It renders
+    // only while the shared element reports it can open this piece; that
+    // flag lives outside the Inspector (render() rebuilds the root).
+    if (this.opts.ar !== undefined && this.opts.ar.isAvailable()) {
+      const arRow = document.createElement("div");
+      arRow.className = "inspector-ar";
+      const arButton = document.createElement("button");
+      arButton.type = "button";
+      arButton.className = "btn-secondary";
+      arButton.textContent = INSPECTOR_SEE_IN_AR;
+      arButton.addEventListener("click", () => this.opts.ar?.onOpen());
+      arRow.appendChild(arButton);
+      this.root.appendChild(arRow);
     }
 
     // Position fields sit behind "More" on a phone; desktop shows all.

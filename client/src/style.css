@@ -493,6 +493,15 @@ button {
   color: var(--ink);
 }
 
+/* "See it in AR" sits in its own row right under the Inspector's size line. */
+.inspector-ar {
+  margin: 8px 0;
+}
+
+.inspector-ar .btn-secondary {
+  width: 100%;
+}
+
 .inspector-pos {
   display: flex;
   flex-direction: column;
@@ -3099,6 +3108,14 @@ button.cart-row {
   .setup-secondary {
     font-size: 16px;
   }
+
+  /* "See it in AR" on a phone: a 16 px label on a 44 px target across the
+   * sheet's content width. */
+  .inspector-ar .btn-secondary {
+    width: 100%;
+    min-height: 44px;
+    font-size: 16px;
+  }
 }
 
 /* Landscape phones (844 x 390): sheets peek at most a quarter of the
@@ -3126,6 +3143,54 @@ button.cart-row {
   cursor: pointer;
   width: 100%;
   margin-top: 8px;
+}
+
+/* Full-screen AR layer: covers the viewport above the phone sheet and the
+ * side panel, with a Close button at least 44 x 44 px. */
+.ar-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  padding-top: calc(16px + env(safe-area-inset-top));
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  background: #ffffff;
+  color: var(--ink);
+}
+
+.ar-layer[hidden] {
+  display: none;
+}
+
+.ar-layer-name {
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--ink);
+}
+
+.ar-layer-viewer {
+  flex: 1 1 auto;
+  width: 100%;
+  min-height: 0;
+}
+
+.ar-layer-back {
+  align-self: stretch;
+  min-height: 44px;
+  min-width: 44px;
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
 }
 
 /* ---- touch screens: every control is a 44 px target in one button style ---- */

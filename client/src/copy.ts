@@ -358,3 +358,14 @@ export const STATES: StateRow[] = [
     action: USE_SAMPLE_ROOM,
   },
 ];
+
+/** Inspector row that opens the piece in AR (AR-capable browsers only). */
+export const INSPECTOR_SEE_IN_AR = "See it in AR";
+
+/** AR layer: the tap opens it, Back closes it. */
+export const AR_BACK_TO_ROOM = "Back to the room";
+
+/** AR layer title names the piece shown at true size. */
+export function arLayerTitle(name: string): string {
+  return `${name} in your room`;
+}

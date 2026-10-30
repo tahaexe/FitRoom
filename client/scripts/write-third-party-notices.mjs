@@ -17,8 +17,11 @@
  * full text of its own licence file (`require-from-string`'s is the
  * lower-case `license`). Known licences: MIT, BSD-3-Clause, OFL-1.1 and the
  * SAM License (`@meta-sam/parser`'s entry reads `SEE LICENSE IN LICENSE`;
- * its `LICENSE` opens `SAM License`). Exits non-zero on a package with no
- * licence text or a licence outside that list, so the build fails.
+ * its `LICENSE` opens `SAM License`) and Apache-2.0 (`@google/model-viewer`
+ * and its worker helper). `@lit-labs/ssr-dom-shim` ships no licence file:
+ * its entry takes the licence text from `lit` (same repository) and says
+ * so. Exits non-zero on a package with no licence text or a licence
+ * outside that list, so the build fails.
  */
 
 /* global console, process */
@@ -30,7 +33,11 @@ const here = dirname(fileURLToPath(import.meta.url));
 const clientRoot = resolve(here, "..");
 const repoRoot = resolve(clientRoot, "..");
 
-const ALLOWED = new Set(["MIT", "BSD-3-Clause", "OFL-1.1", "SEE LICENSE IN LICENSE"]);
+const ALLOWED = new Set(["MIT", "BSD-3-Clause", "OFL-1.1", "SEE LICENSE IN LICENSE", "Apache-2.0"]);
+
+// `@lit-labs/ssr-dom-shim` ships no licence file; it comes from the same
+// repository and licence (BSD-3-Clause) as `lit`, which ships `LICENSE`.
+const LICENCE_TEXT_FALLBACK = { "@lit-labs/ssr-dom-shim": "lit" };
 
 function fail(message) {
   console.error(`write-third-party-notices: ${message}`);
@@ -128,9 +135,18 @@ for (const { name, dir, entry } of ordered) {
     fail(`${name} has licence ${licence}, outside the known list`);
   }
   const packageDir = join(repoRoot, dir);
-  const file = licenceFileFor(packageDir);
-  if (file === null) fail(`${name} has no licence file in ${dir}`);
-  const text = readFileSync(join(packageDir, file), "utf8");
+  let licenceDir = packageDir;
+  let fallbackNote = null;
+  let file = licenceFileFor(packageDir);
+  if (file === null) {
+    const mapped = LICENCE_TEXT_FALLBACK[name];
+    if (mapped === undefined) fail(`${name} has no licence file in ${dir}`);
+    licenceDir = join(repoRoot, "node_modules", mapped);
+    file = licenceFileFor(licenceDir);
+    if (file === null) fail(`${name} has no licence file in ${dir}`);
+    fallbackNote = `licence text from ${mapped} (same repository)`;
+  }
+  const text = readFileSync(join(licenceDir, file), "utf8");
   if (text.trim() === "") fail(`${name}'s licence text is empty`);
   if (name === "@meta-sam/parser" && !text.startsWith("SAM License")) {
     fail("@meta-sam/parser's LICENSE does not open with SAM License");
@@ -142,6 +158,9 @@ for (const { name, dir, entry } of ordered) {
   parts.push(`Source: https://www.npmjs.com/package/${name}`);
   if (name === "@fontsource/nunito") {
     parts.push("OFL-1.1 text: /licenses/OFL-1.1-Nunito.txt");
+  }
+  if (fallbackNote !== null) {
+    parts.push(fallbackNote);
   }
   parts.push("--------------------------------------------------------------------------------");
   parts.push(text.trimEnd());

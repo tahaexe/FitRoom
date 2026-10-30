@@ -100,6 +100,14 @@ import { OUTLINE_LAYER, applyVariant, loadModel } from "./models";
 import { PlanOverlay } from "./plan";
 import { FitOverlay } from "./fit-overlay";
 import { Inspector } from "./inspector";
+import {
+  ensureARViewer,
+  isARCapableBrowser,
+  mayOpenAR,
+  setARPiece,
+  showARLayer,
+  waitForARReady,
+} from "./ar";
 import { captureView } from "./render/capture";
 import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
@@ -334,6 +342,10 @@ class FitRoomApp {
   private planOverlay: PlanOverlay;
   private fitOverlay: FitOverlay;
   private inspector: Inspector;
+  /** "See it in AR" state lives outside the Inspector (its render rebuilds). */
+  private arViewer: import("./ar").ARViewerElement | null = null;
+  private arAvailable = false;
+  private arToken = 0;
   private recommendPanel: RecommendPanel | null = null;
   private assistantPanel: AssistantPanel | null = null;
   private renderViewer: RenderViewer | null = null;
@@ -694,6 +706,10 @@ class FitRoomApp {
       onRotate: (id, deg) => this.commitRotate(id, deg),
       onVariant: (id, variant) => this.commitVariant(id, variant),
       onDelete: (id) => this.deleteItem(id),
+      ar: {
+        isAvailable: () => this.arAvailable,
+        onOpen: () => this.openARNow(),
+      },
     });
     this.inspector.setBounds(roomBounds(ROOM));
 
@@ -2257,6 +2273,45 @@ class FitRoomApp {
     this.updateSelectionTools();
     this.updateMeasure();
     this.requestRender();
+    this.refreshAR(current?.productId ?? null);
+  }
+
+  /**
+   * "See it in AR" follows the selection outside the Inspector (its render
+   * rebuilds its root, so the flag lives here). Desktop browsers return
+   * before any import: no new script, no `.glb`, no button.
+   */
+  private refreshAR(productId: string | null): void {
+    const token = ++this.arToken;
+    this.arAvailable = false;
+    if (productId === null || !isARCapableBrowser()) return;
+    void (async () => {
+      if (!(await mayOpenAR())) return;
+      if (token !== this.arToken) return;
+      const viewer = await ensureARViewer();
+      if (token !== this.arToken || viewer === null) return;
+      this.arViewer = viewer;
+      const name = CATALOG_MAP.get(productId)?.name ?? productId;
+      setARPiece(viewer, productId, name);
+      const ready = await waitForARReady(viewer, () => token === this.arToken);
+      if (token !== this.arToken) return;
+      if (ready !== this.arAvailable) {
+        this.arAvailable = ready;
+        this.inspector.render();
+      }
+    })();
+  }
+
+  /**
+   * The Inspector's AR tap: Scene Viewer and Quick Look need the tap's user
+   * activation, so `activateAR()` runs synchronously first, before any wait.
+   */
+  private openARNow(): void {
+    const viewer = this.arViewer;
+    if (viewer === null) return;
+    const pending = viewer.activateAR();
+    showARLayer();
+    void Promise.resolve(pending).catch(() => undefined);
   }
 
   /**

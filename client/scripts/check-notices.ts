@@ -11,9 +11,10 @@
  *   `client/public/licenses/THIRD-PARTY-NOTICES.txt`.
  * - Fails when a package has no entry, an entry's version differs from
  *   `package-lock.json`, a licence is outside the known list (MIT,
- *   BSD-3-Clause, OFL-1.1, `SEE LICENSE IN LICENSE`) or a licence text is
- *   empty, and when an entry's text differs from its package's own licence
- *   file.
+ *   BSD-3-Clause, OFL-1.1, `SEE LICENSE IN LICENSE`, Apache-2.0) or a
+ *   licence text is empty, and when an entry's text differs from its
+ *   package's own licence file (`@lit-labs/ssr-dom-shim` ships none: its
+ *   text must equal `lit`'s `LICENSE` and name that fallback).
  * - Self-cases: a notices text missing a package and an entry whose licence
  *   is `GPL-3.0` must each fail validation.
  * - Asserts the Credits dialog links `/licenses/THIRD-PARTY-NOTICES.txt`,
@@ -47,7 +48,11 @@ function check(name: string, pass: boolean, detail?: string): void {
   }
 }
 
-const ALLOWED = new Set(["MIT", "BSD-3-Clause", "OFL-1.1", "SEE LICENSE IN LICENSE"]);
+const ALLOWED = new Set(["MIT", "BSD-3-Clause", "OFL-1.1", "SEE LICENSE IN LICENSE", "Apache-2.0"]);
+
+// `@lit-labs/ssr-dom-shim` ships no licence file: its entry takes the text
+// from `lit` (same repository), mirroring write-third-party-notices.mjs.
+const LICENCE_TEXT_FALLBACK: Record<string, string> = { "@lit-labs/ssr-dom-shim": "lit" };
 
 interface LockEntry {
   version?: unknown;
@@ -208,9 +213,9 @@ function validateNotices(noticesText: string, expected: BundledEntry[]): string[
 
 const expected = bundledFromLock();
 check(
-  "notices:bundled-set-is-nine-known-packages",
+  "notices:bundled-set-is-21-known-packages",
   expected.map((item) => `${item.name}@${item.version}`).join(", ") ===
-    "@fontsource/nunito@5.3.0, @meta-sam/parser@0.1.0, ajv@8.20.0, exifr@7.1.3, fast-deep-equal@3.1.3, fast-uri@3.1.9, json-schema-traverse@1.0.0, require-from-string@2.0.2, three@0.186.1",
+    "@fontsource/nunito@5.3.0, @google/model-viewer@4.4.0, @lit-labs/ssr-dom-shim@1.6.0, @lit/reactive-element@2.1.2, @meta-sam/parser@0.1.0, @monogrid/gainmap-js@3.7.2, @types/trusted-types@2.0.7, ajv@8.20.0, exifr@7.1.3, fast-deep-equal@3.1.3, fast-uri@3.1.9, immediate@3.0.6, is-promise@2.2.2, json-schema-traverse@1.0.0, lie@3.3.0, lit@3.3.3, lit-element@4.2.2, lit-html@3.3.3, promise-worker-transferable@1.0.4, require-from-string@2.0.2, three@0.186.1",
   expected.map((item) => `${item.name}@${item.version}`).join(", "),
 );
 check(
@@ -237,14 +242,25 @@ if (existsSync(noticesPath)) {
   const parsed = parseNotices(noticesText);
   for (const want of expected) {
     const got = parsed.find((entry) => entry.name === want.name);
-    const file = licenceFileFor(join(repoRoot, want.dir));
+    const fallback = LICENCE_TEXT_FALLBACK[want.name];
+    const sourceDir =
+      fallback === undefined ? join(repoRoot, want.dir) : join(repoRoot, "node_modules", fallback);
+    const file = licenceFileFor(sourceDir);
     const actual =
-      file === null ? null : normalise(readFileSync(join(repoRoot, want.dir, file), "utf8")).trim();
+      file === null ? null : normalise(readFileSync(join(sourceDir, file), "utf8")).trim();
     check(
       `notices:text-equals-file-${want.name}`,
       got !== undefined && actual !== null && normalise(got.text).trim() === actual,
       want.name,
     );
+    if (fallback !== undefined) {
+      check(
+        `notices:fallback-note-${want.name}`,
+        got !== undefined &&
+          got.raw.toLowerCase().includes(`licence text from ${fallback} (same repository)`),
+        want.name,
+      );
+    }
   }
   const nunito = parsed.find((entry) => entry.name === "@fontsource/nunito");
   check(
