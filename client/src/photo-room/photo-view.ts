@@ -23,7 +23,7 @@ import {
 import type { WallPhotoCamera } from "@fitroom/shared";
 import { exampleBadge, exampleWebpUrl } from "./example.js";
 import type { ExampleWallCamera } from "./example-cameras.js";
-import { PHOTO_VIEW_CLOSE, PHOTO_VIEW_LINE, photoViewOutside } from "../copy.js";
+import { PHOTO_VIEW_CLOSE, PHOTO_VIEW_LINE, PHOTO_VIEW_ROTATE, photoViewOutside } from "../copy.js";
 
 export const PHOTO_VIEW_LETTERS: WallLetter[] = ["A", "B", "C", "D"];
 
@@ -315,7 +315,10 @@ export class PhotoView {
     const outside = document.createElement("p");
     outside.className = "photo-view-outside";
     outside.setAttribute("hidden", "");
-    this.element.append(bar, line, stage, outside);
+    const rotate = document.createElement("p");
+    rotate.className = "photo-view-rotate";
+    rotate.textContent = PHOTO_VIEW_ROTATE;
+    this.element.append(bar, line, stage, rotate, outside);
     this.stage = stage;
     this.outside = outside;
     this.tabs = tabs;

@@ -75,6 +75,9 @@ export const PHOTO_VIEW_LINE =
   "Pieces drawn at true size, with the camera measured from this photo.";
 export const PHOTO_VIEW_CLOSE = "Close photo view";
 
+/** Portrait-phone hint under the photo: sideways is bigger. */
+export const PHOTO_VIEW_ROTATE = "Turn your phone sideways for a bigger view.";
+
 /** One line counting the pieces outside the current photo. */
 export function photoViewOutside(count: number): string {
   if (count === 1) return "1 piece is outside this photo";

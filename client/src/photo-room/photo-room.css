@@ -655,3 +655,25 @@
 .photo-view-outside[hidden] {
   display: none;
 }
+
+.photo-view-rotate {
+  display: none;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--muted);
+  text-align: center;
+}
+
+/* Portrait phones: the landscape photo sits at the top and leaves the lower
+   half empty, so centre the stage in the free height (the bar and the line
+   stay at the top) and show the sideways hint under it. */
+@media (max-width: 480px) and (orientation: portrait) {
+  .photo-view-stage {
+    margin-block: auto;
+  }
+
+  .photo-view-rotate {
+    display: block;
+  }
+}
