@@ -31,6 +31,7 @@
     "check:example-geometry": "tsx scripts/check-example-geometry.ts",
     "check:photo-camera": "tsx scripts/check-photo-camera.ts",
     "check:example-cameras": "npm run check:example-cameras -w @fitroom/client",
+    "check:ar": "npm run check:ar -w @fitroom/client",
     "check:photo-view": "npm run check:photo-view -w @fitroom/client",
     "check:surfaces": "tsx scripts/check-surfaces.ts",
     "check:light-maps": "tsx scripts/check-light-maps.ts",
@@ -59,6 +60,11 @@
     "demo:record": "npm run demo:record -w @fitroom/server --",
     "demo:import": "npm run demo:import -w @fitroom/server",
     "start": "npm run start -w @fitroom/server"
+  },
+  "overrides": {
+    "@google/model-viewer": {
+      "three": "0.186.1"
+    }
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",

@@ -9,4 +9,5 @@ server/data/recorded/
 server/logs/
 server/src/meta/bundled-data.ts
 client/public/licenses/THIRD-PARTY-NOTICES.txt
+client/public/assets/ar/
 wrangler.deploy.jsonc

@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5173 --strictPort",
-    "build": "node scripts/write-third-party-notices.mjs && vite build",
+    "build": "node scripts/write-third-party-notices.mjs && node scripts/pack-ar.mjs && vite build",
     "check:notices": "tsx scripts/check-notices.ts",
     "check:credits": "tsx scripts/check-credits.ts",
     "check:capture": "tsx scripts/check-capture.ts",
@@ -32,6 +32,7 @@
     "check:catalog-format": "tsx scripts/check-catalog-format.ts",
     "check:store": "tsx scripts/check-store.ts",
     "check:store-entry": "tsx scripts/check-store-entry.ts",
+    "check:ar": "tsx scripts/check-ar.ts",
     "check:footprints": "node scripts/check-model-footprints.mjs",
     "check:example-cameras": "tsx scripts/check-example-cameras.ts",
     "check:photo-view": "tsx scripts/check-photo-view.ts",
@@ -43,11 +44,15 @@
   "dependencies": {
     "@fitroom/shared": "*",
     "@fontsource/nunito": "^5.3.0",
+    "@google/model-viewer": "4.4.0",
     "@meta-sam/parser": "^0.1.0",
     "exifr": "^7.1.3",
     "three": "^0.186.1"
   },
   "devDependencies": {
+    "@gltf-transform/core": "4.5.1",
+    "@gltf-transform/extensions": "4.5.1",
+    "@gltf-transform/functions": "4.5.1",
     "@types/three": "^0.186.0",
     "typescript": "^7.0.2",
     "vite": "^8.3.5"
