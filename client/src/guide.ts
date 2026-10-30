@@ -310,6 +310,13 @@ export interface GuidePlaced {
 export interface GuideDock {
   /** Chrome reserved at the viewport bottom (bottom bar plus an open sheet). */
   bottomChrome: number;
+  /**
+   * Bottom edge of the room view's top row (fit badge, photo pill); the
+   * top dock sits `gap` below it.
+   */
+  topChrome?: number;
+  /** Boxes the docked bubble must not cover: in-scene problem pills and distance tags. */
+  avoid?: readonly GuideRect[];
 }
 
 export function placeBubble(
@@ -323,13 +330,29 @@ export function placeBubble(
   const vw = Math.max(1, viewport.w);
   const vh = Math.max(1, viewport.h);
   if (dock !== undefined) {
-    // Phones, moments 2-4: the bubble docks at the bottom of the free room
-    // area, 8 px above the bottom bar or the open sheet, full width less
-    // 8 px a side. The highlight ring stays on its target (see the caller).
+    // Phones, moments 2-4: dock 8 px above the bottom bar or the open sheet,
+    // full width less 8 px a side; when a problem pill or distance tag sits
+    // there, dock under the room view's top row, whichever covers less.
     const bh = Math.max(1, Math.min(bubble.h, vh - margin * 2));
     const bottom = Math.max(0, dock.bottomChrome);
-    const top = Math.max(margin, vh - bottom - margin - bh);
-    return { left: margin, top: Math.round(top), side: "below" };
+    const low = Math.max(margin, vh - bottom - margin - bh);
+    const avoid = dock.avoid ?? [];
+    const covered = (top: number): number => {
+      let area = 0;
+      for (const r of avoid) {
+        const w = Math.min(vw - margin, r.x + r.w) - Math.max(margin, r.x);
+        const h = Math.min(top + bh, r.y + r.h) - Math.max(top, r.y);
+        if (w > 0 && h > 0) area += w * h;
+      }
+      return area;
+    };
+    const lowCover = covered(low);
+    if (dock.topChrome === undefined || lowCover === 0) {
+      return { left: margin, top: Math.round(low), side: "below" };
+    }
+    const high = Math.max(margin, Math.min(dock.topChrome + gap, vh - margin - bh));
+    if (covered(high) < lowCover) return { left: margin, top: Math.round(high), side: "above" };
+    return { left: margin, top: Math.round(low), side: "below" };
   }
   const bw = Math.max(1, Math.min(bubble.w, vw - margin * 2));
   const bh = Math.max(1, Math.min(bubble.h, vh - margin * 2));
@@ -474,6 +497,12 @@ export class GuideView {
     this.place();
   }
 
+  /** Phones, moments 2-4: re-pick the dock after the in-scene labels moved. */
+  redock(): void {
+    if (!this.isPhone || this.shownMoment === null || this.shownMoment === 1) return;
+    this.reposition();
+  }
+
   hide(): void {
     this.shownMoment = null;
     this.target = null;
@@ -510,6 +539,13 @@ export class GuideView {
       bubble.append(text, row);
       document.body.appendChild(bubble);
       this.bubble = bubble;
+      document.addEventListener(
+        "scroll",
+        () => {
+          if (this.isPhone) this.reposition();
+        },
+        { capture: true, passive: true },
+      );
     }
     if (this.ring === null) {
       const ring = document.createElement("div");
@@ -548,6 +584,26 @@ export class GuideView {
     this.ring.style.top = `${String(Math.max(2, rect.top - pad))}px`;
     this.ring.style.width = `${String(Math.max(1, rect.width + pad * 2))}px`;
     this.ring.style.height = `${String(Math.max(1, rect.height + pad * 2))}px`;
+    // Phones, moment 1: the bubble joins the first-run dialog's flow right
+    // after the card that holds its button, so it covers no card; the ring
+    // stays on the button.
+    if (this.isPhone && this.shownMoment === 1) {
+      const card = this.target.closest(".setup-card");
+      if (card !== null) {
+        if (this.bubble.previousElementSibling !== card) card.after(this.bubble);
+        this.bubble.dataset["inline"] = "true";
+        this.bubble.style.left = "";
+        this.bubble.style.top = "";
+        this.bubble.style.width = "";
+        this.bubble.style.maxWidth = "";
+        this.bubble.dataset["side"] = "below";
+        return;
+      }
+    }
+    if (this.bubble.dataset["inline"] === "true") {
+      this.bubble.removeAttribute("data-inline");
+      document.body.appendChild(this.bubble);
+    }
     const viewport = this.freeViewport();
     const measured = bubbleMeasuredSize(
       this.bubble.offsetWidth,
@@ -556,11 +612,14 @@ export class GuideView {
     );
     // Phones, moments 2-4: dock the bubble at the bottom of the free room
     // area, 8 px above the bottom bar or the open sheet, full width less
-    // 8 px a side. The ring above already highlights the target, and
-    // moment 1 keeps its place by its button in the first-run dialog.
+    // 8 px a side; moment 1 sits in the dialog's flow (see above). The ring
+    // above already highlights the target.
     if (this.isPhone && this.shownMoment !== null && this.shownMoment !== 1) {
       const vw = Math.max(1, window.innerWidth);
       const vh = Math.max(1, window.innerHeight);
+      this.bubble.style.width = `${String(Math.max(1, vw - GUIDE_MARGIN_PX * 2))}px`;
+      this.bubble.style.maxWidth = "none";
+      const docked = bubbleMeasuredSize(this.bubble.offsetWidth, this.bubble.offsetHeight, vw);
       let bottomChrome = 56;
       try {
         if (document.body.getAttribute("data-sheet-open") === "true") {
@@ -570,18 +629,32 @@ export class GuideView {
       } catch {
         // DOM may be unavailable; the bottom bar still reserves 56 px.
       }
+      const avoid: GuideRect[] = [];
+      const labels = document.querySelectorAll<HTMLElement>(".fit-issue-label, .fit-dim-label");
+      for (const label of labels) {
+        if (label.style.display === "none") continue;
+        const box = label.getBoundingClientRect();
+        if (box.width > 0 && box.height > 0) {
+          avoid.push({ x: box.left, y: box.top, w: box.width, h: box.height });
+        }
+      }
+      let topChrome = document.getElementById("scene-container")?.getBoundingClientRect().top ?? 0;
+      for (const id of ["fit-badge", "photo-view-button"]) {
+        const el = document.getElementById(id);
+        if (el === null || el.hasAttribute("hidden")) continue;
+        const box = el.getBoundingClientRect();
+        if (box.height > 0) topChrome = Math.max(topChrome, box.bottom);
+      }
       const placed = placeBubble(
         { x: rect.left, y: rect.top, w: rect.width, h: rect.height },
-        { x: 0, y: 0, w: measured.w, h: measured.h },
+        { x: 0, y: 0, w: docked.w, h: docked.h },
         { x: 0, y: 0, w: vw, h: vh },
         GUIDE_MARGIN_PX,
         GUIDE_GAP_PX,
-        { bottomChrome },
+        { bottomChrome, topChrome, avoid },
       );
       this.bubble.style.left = `${String(placed.left)}px`;
       this.bubble.style.top = `${String(placed.top)}px`;
-      this.bubble.style.width = `${String(Math.max(1, vw - GUIDE_MARGIN_PX * 2))}px`;
-      this.bubble.style.maxWidth = "none";
       this.bubble.dataset["side"] = placed.side;
       return;
     }

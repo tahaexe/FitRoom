@@ -768,14 +768,105 @@ check(
     "utf8",
   );
   const placeAt = guideSrc.indexOf("private place()");
-  const placeBody = placeAt < 0 ? "" : guideSrc.slice(placeAt, placeAt + 3000);
+  const placeBody = placeAt < 0 ? "" : guideSrc.slice(placeAt, placeAt + 6000);
   check(
     "guide:phone-dock-keeps-ring-on-target",
     placeBody.includes("this.ring.style.left") &&
       placeBody.includes("bottomChrome") &&
       placeBody.indexOf("this.ring.style.left") < placeBody.indexOf("bottomChrome") &&
       placeBody.includes("shownMoment !== 1"),
-    "guide.ts ring stays on target, moment 1 undocked",
+    "moment 1 inline",
+  );
+  // A problem pill in the bottom dock band pushes the bubble under the room
+  // view's top row (10 px under the badge bottom edge at 108 px, top 118).
+  const dockBubble = { x: 0, y: 0, w: 374, h: 126 };
+  const dockedHigh = placeBubble(target, dockBubble, viewport, GUIDE_MARGIN_PX, 10, {
+    bottomChrome: 56,
+    topChrome: 108,
+    avoid: [{ x: 120, y: 700, w: 150, h: 48 }],
+  });
+  check(
+    "guide:placement-phone-dock-avoids-label",
+    dockedHigh.top === 118 && dockedHigh.side === "above",
+    `top ${String(dockedHigh.top)} side ${dockedHigh.side}`,
+  );
+  const dockedLow = placeBubble(target, dockBubble, viewport, GUIDE_MARGIN_PX, 10, {
+    bottomChrome: 56,
+    topChrome: 108,
+    avoid: [{ x: 120, y: 400, w: 150, h: 48 }],
+  });
+  check(
+    "guide:placement-phone-dock-stays-low-when-clear",
+    dockedLow.top === 654 && dockedLow.side === "below",
+    `top ${String(dockedLow.top)} vs 654, bottom edge 8 px above the bar`,
+  );
+  const dockedBoth = placeBubble(target, dockBubble, viewport, GUIDE_MARGIN_PX, 10, {
+    bottomChrome: 56,
+    topChrome: 108,
+    avoid: [
+      { x: 120, y: 700, w: 150, h: 48 },
+      { x: 20, y: 130, w: 350, h: 100 },
+    ],
+  });
+  check(
+    "guide:placement-phone-dock-picks-less-covered",
+    dockedBoth.top === 654,
+    `top ${String(dockedBoth.top)} vs 654 (that place covers less)`,
+  );
+  const dockedNoTop = placeBubble(target, dockBubble, viewport, GUIDE_MARGIN_PX, 10, {
+    bottomChrome: 56,
+    avoid: [{ x: 120, y: 700, w: 150, h: 48 }],
+  });
+  check(
+    "guide:placement-phone-dock-no-top-chrome",
+    dockedNoTop.top === 654,
+    `top ${String(dockedNoTop.top)} vs 654`,
+  );
+  check(
+    "guide:moment-1-inline",
+    placeBody.includes('closest(".setup-card")') &&
+      placeBody.includes(".after(this.bubble)") &&
+      placeBody.includes('dataset["inline"]'),
+    "place() joins the dialog flow after the card",
+  );
+  check(
+    "guide:phone-dock-passes-top-chrome-and-avoid",
+    placeBody.includes("topChrome") &&
+      placeBody.includes("avoid") &&
+      placeBody.includes(".fit-issue-label, .fit-dim-label"),
+    "the dock call passes topChrome and avoid from the in-scene labels",
+  );
+  check(
+    "guide:dialog-scroll-reseats",
+    guideSrc.includes('"scroll"') &&
+      guideSrc.includes("capture: true") &&
+      guideSrc.includes("this.reposition()"),
+    "a capture scroll listener re-seats the ring with its button",
+  );
+  const frameAt = mainSource.indexOf("private frame()");
+  const frameBody = frameAt < 0 ? "" : mainSource.slice(frameAt, frameAt + 6000);
+  check(
+    "guide:frame-redocks",
+    frameBody.includes("this.fitOverlay.update(") &&
+      frameBody.includes("this.guideView?.redock()") &&
+      frameBody.indexOf("this.guideView?.redock()") > frameBody.indexOf("this.fitOverlay.update("),
+    "frame() calls this.guideView?.redock() after this.fitOverlay.update(",
+  );
+  check(
+    "guide:frame-never-repositions",
+    !mainSource.includes("guideView?.reposition(") &&
+      !mainSource.includes("guideView.reposition("),
+    "main.ts re-picks the dock via redock(), never reposition()",
+  );
+  const styleSrc = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "style.css"),
+    "utf8",
+  );
+  check(
+    "guide:moment-1-inline-style",
+    styleSrc.includes('.guide-bubble[data-inline="true"]') &&
+      /\.guide-bubble\[data-inline="true"\]\s*\{[^}]*position:\s*relative/.test(styleSrc),
+    "style.css docks moment 1 in the dialog flow",
   );
 }
 

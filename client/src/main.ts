@@ -4311,6 +4311,8 @@ class FitRoomApp {
       this.container.clientWidth,
       this.container.clientHeight,
     );
+    // Phones, moments 2-4: re-pick the dock after the in-scene labels moved.
+    this.guideView?.redock();
     if (this.rig !== null && this.rig.contactNeedsRefresh.value) {
       this.rig.contactNeedsRefresh.value = false;
     }
