@@ -9,6 +9,7 @@
     "check:notices": "tsx scripts/check-notices.ts",
     "check:credits": "tsx scripts/check-credits.ts",
     "check:capture": "tsx scripts/check-capture.ts",
+    "check:room-look": "tsx scripts/check-room-look.ts",
     "check:photo-intake": "tsx scripts/check-photo-intake.ts",
     "check:example-room": "tsx scripts/check-example-room.ts",
     "check:example-demo": "tsx scripts/check-example-demo.ts",

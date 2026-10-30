@@ -35,6 +35,8 @@ function pbrSet(
   };
 }
 
+export const SURROUND_COLOR = 0xece8e3;
+
 /** Known on-disk ambientCG floor finishes (plus legacy sample ids). */
 export const FLOOR_TEXTURE_IDS = [
   "WoodFloor070",
@@ -85,13 +87,15 @@ export function makeFloorMaterial(
   const finish = floorTextureIdFor(floorId);
   const tileM = FLOOR_TILE_M[finish] ?? 1;
   const sets = pbrSet(finish, Math.max(1, roomWM / tileM), Math.max(1, roomDM / tileM), onLoad);
-  return new THREE.MeshStandardMaterial({
+  const material = new THREE.MeshStandardMaterial({
     map: sets.map,
     normalMap: sets.normalMap,
     roughnessMap: sets.roughnessMap,
     roughness: 1,
     metalness: 0,
   });
+  material.normalScale.set(1.6, 1.6);
+  return material;
 }
 
 /**
@@ -112,7 +116,7 @@ export function setupStage(
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.shadowMap.autoUpdate = false;
-  scene.background = new THREE.Color(0xf6f6f6);
+  scene.background = new THREE.Color(SURROUND_COLOR);
 
   const pmrem = new THREE.PMREMGenerator(renderer);
   new HDRLoader().load(
