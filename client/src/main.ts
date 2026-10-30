@@ -103,7 +103,13 @@ import { Inspector } from "./inspector";
 import { captureView } from "./render/capture";
 import { RenderViewer } from "./render/viewer";
 import { buildRoom, WALL_MATERIAL } from "./room";
-import { envYawForCameraSide, makeFloorMaterial, requestContactRefresh, setupStage, type StageRig } from "./stage";
+import {
+  envYawForCameraSide,
+  makeFloorMaterial,
+  requestContactRefresh,
+  setupStage,
+  type StageRig,
+} from "./stage";
 import { runOnePerTask } from "./boot-tasks";
 import { surfaceMapFiles } from "./surface-maps";
 import { OrbitResolutionController } from "./orbit-resolution";

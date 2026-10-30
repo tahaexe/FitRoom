@@ -16,7 +16,12 @@ import * as THREE from "three";
 import type { RoomLayout } from "@fitroom/shared";
 import { facingDirForRoom } from "@fitroom/shared";
 import { buildRoom } from "../src/room.js";
-import { applyFloorContrast, envYawForCameraSide, FLOOR_CONTRAST, SURROUND_COLOR } from "../src/stage.js";
+import {
+  applyFloorContrast,
+  envYawForCameraSide,
+  FLOOR_CONTRAST,
+  SURROUND_COLOR,
+} from "../src/stage.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const clientDir = resolve(here, "..");
@@ -76,7 +81,10 @@ function main(): void {
     `0x${SURROUND_COLOR.toString(16)}`,
   );
 
-  for (const [label, room] of [["living", living], ["example", example]] as const) {
+  for (const [label, room] of [
+    ["living", living],
+    ["example", example],
+  ] as const) {
     const yaw = envYawForCameraSide(facingDirForRoom(room));
     const dist = Math.abs(((yaw - Math.PI + Math.PI * 3) % (Math.PI * 2)) - Math.PI);
     check(`bright side faces the camera-side walls in ${label}`, dist < 1e-9, String(yaw));
@@ -95,7 +103,7 @@ function main(): void {
   check(
     "default wall renders through the finish-mean path",
     mainSrc.includes('wallDisplayLinear("#F3EFE8", textureId)'),
-    "main.ts must call wallDisplayLinear(\"#F3EFE8\", textureId)",
+    'main.ts must call wallDisplayLinear("#F3EFE8", textureId)',
   );
   check(
     "daylight exposure is calm",
@@ -113,7 +121,10 @@ function main(): void {
     "stage.ts must use ShadowMaterial({ opacity: 0.22 })",
   );
 
-  for (const [label, room] of [["living", living], ["example", example]] as const) {
+  for (const [label, room] of [
+    ["living", living],
+    ["example", example],
+  ] as const) {
     const withGlass = buildRoom(room, new THREE.MeshStandardMaterial({ color: 0xffffff }));
     const panes: THREE.Mesh[] = [];
     withGlass.group.traverse((obj) => {
