@@ -332,6 +332,30 @@ function main(): void {
       data.aSide === planWallSide(sample, "wall-1"),
       `${data.aSide} vs ${String(planWallSide(sample, "wall-1"))}`,
     );
+    // The Photograph step's mini plan reads the same way up: wall A on
+    // top, wall B on the left (like the Measure sketch and the Confirm
+    // plan, and the main Plan view).
+    {
+      const flowSrc = readFileSync(join(clientDir, "src", "photo-room", "flow.ts"), "utf8");
+      const svgAt = flowSrc.indexOf("export function miniPlanSvg");
+      const svgEnd = flowSrc.indexOf("\n}\n", svgAt + 1);
+      const svgBody =
+        svgAt < 0 ? "" : flowSrc.slice(svgAt, svgEnd < 0 ? svgAt + 4000 : svgEnd);
+      check(
+        "wall A is the top edge in the photograph mini plan",
+        svgBody.includes(
+          '{ letter: "A", x1: x0, y1: y0, x2: x0 + w, y2: y0, lx: x0 + w / 2, ly: y0 - 6 }',
+        ),
+        "A must run along y0 with its letter above",
+      );
+      check(
+        "wall B is the left edge in the photograph mini plan",
+        svgBody.includes(
+          '{ letter: "B", x1: x0, y1: y0 + h, x2: x0, y2: y0, lx: x0 - 10, ly: y0 + h / 2 }',
+        ),
+        "B must run along x0 with its letter to the left",
+      );
+    }
     check("the confirm plan draws four walls", data.edges.length === 4, String(data.edges.length));
     let lengthsOk = true;
     for (const edge of data.edges) {

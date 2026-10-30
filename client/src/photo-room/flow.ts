@@ -277,6 +277,9 @@ export function miniPlanSvg(current: WallLetter): SVGSVGElement {
   const y0 = 14;
   const w = 84;
   const h = 60;
+  // Wall A along the top, B down the left, C along the bottom and D
+  // down the right — like `tapeSketchLayout()`, `miniPlanData()` and the
+  // main Plan view.
   const edges: Array<{
     letter: WallLetter;
     x1: number;
@@ -286,10 +289,10 @@ export function miniPlanSvg(current: WallLetter): SVGSVGElement {
     lx: number;
     ly: number;
   }> = [
-    { letter: "A", x1: x0, y1: y0 + h, x2: x0 + w, y2: y0 + h, lx: x0 + w / 2, ly: y0 + h + 12 },
-    { letter: "B", x1: x0 + w, y1: y0 + h, x2: x0 + w, y2: y0, lx: x0 + w + 10, ly: y0 + h / 2 },
-    { letter: "C", x1: x0 + w, y1: y0, x2: x0, y2: y0, lx: x0 + w / 2, ly: y0 - 6 },
-    { letter: "D", x1: x0, y1: y0, x2: x0, y2: y0 + h, lx: x0 - 10, ly: y0 + h / 2 },
+    { letter: "A", x1: x0, y1: y0, x2: x0 + w, y2: y0, lx: x0 + w / 2, ly: y0 - 6 },
+    { letter: "B", x1: x0, y1: y0 + h, x2: x0, y2: y0, lx: x0 - 10, ly: y0 + h / 2 },
+    { letter: "C", x1: x0 + w, y1: y0 + h, x2: x0, y2: y0 + h, lx: x0 + w / 2, ly: y0 + h + 12 },
+    { letter: "D", x1: x0 + w, y1: y0, x2: x0 + w, y2: y0 + h, lx: x0 + w + 10, ly: y0 + h / 2 },
   ];
   for (const edge of edges) {
     const line = document.createElementNS(NS, "line");
