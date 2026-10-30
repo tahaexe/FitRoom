@@ -2954,6 +2954,11 @@ button.cart-row {
   .fit-dim-label {
     font-size: 15px;
     padding: 4px 12px;
+    white-space: normal;
+    width: max-content;
+    max-width: 92vw;
+    line-height: 1.25;
+    text-align: center;
   }
 
   #size-tag.size-tag {

@@ -41,6 +41,23 @@ function floorPoint(p: PlanPoint, y: number): THREE.Vector3 {
  * #0E9F7E for the brief "Fits" confirmation — never the coral action
  * colour.
  */
+/** Margin the in-scene labels keep from the room view's left and right edges (px). */
+export const LABEL_EDGE_PX = 8;
+
+/**
+ * Centre x that keeps a label `w` px wide inside the room view, `margin`
+ * from each edge; the view's centre when the label is wider than that.
+ */
+export function clampLabelX(
+  x: number,
+  w: number,
+  areaW: number,
+  margin: number = LABEL_EDGE_PX,
+): number {
+  if (w + margin * 2 >= areaW) return areaW / 2;
+  return Math.min(Math.max(x, margin + w / 2), areaW - margin - w / 2);
+}
+
 export class FitOverlay {
   private arcMeshes: THREE.Mesh[] = [];
   private clearanceMesh: THREE.Mesh | null = null;
@@ -485,6 +502,7 @@ export class FitOverlay {
     for (const { el, at, stack } of this.labels) place(el, at, stack);
     if (this.fitsAt !== null) place(this.fitsEl, this.fitsAt, 0);
     this.separate(visible, this.planLabelBoxes());
+    for (const p of visible) p.x = clampLabelX(p.x, p.el.offsetWidth, width);
     for (const p of visible) {
       p.el.style.left = `${p.x.toFixed(1)}px`;
       p.el.style.top = `${p.y.toFixed(1)}px`;

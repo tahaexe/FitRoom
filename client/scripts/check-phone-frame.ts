@@ -36,6 +36,7 @@ import {
   solvePhoneFrame,
 } from "../src/guide.js";
 import type { PhoneFrameProjection } from "../src/guide.js";
+import { clampLabelX } from "../src/fit-overlay.js";
 
 let failures = 0;
 
@@ -527,6 +528,86 @@ check(
     refreshBody.includes("this.requestRender()") &&
     refreshBody.indexOf("setAnalysis(") < refreshBody.indexOf("this.requestRender()"),
   "refreshIssues must call this.requestRender() after setAnalysis(",
+);
+
+// ---- In-scene labels stay inside the room view in at most two lines ----
+check(
+  "phone-frame:clamp-left",
+  clampLabelX(20, 300, 390) === 158,
+  `got ${String(clampLabelX(20, 300, 390))}`,
+);
+check(
+  "phone-frame:clamp-right",
+  clampLabelX(380, 300, 390) === 232,
+  `got ${String(clampLabelX(380, 300, 390))}`,
+);
+check(
+  "phone-frame:clamp-centre",
+  clampLabelX(195, 300, 390) === 195,
+  `got ${String(clampLabelX(195, 300, 390))}`,
+);
+check(
+  "phone-frame:clamp-wide",
+  clampLabelX(100, 380, 390) === 195,
+  `got ${String(clampLabelX(100, 380, 390))}`,
+);
+const fitOverlaySource = readFileSync(join(here, "..", "src", "fit-overlay.ts"), "utf8");
+check(
+  "phone-frame:clamp-in-update",
+  fitOverlaySource.includes("this.separate(") &&
+    fitOverlaySource.includes("clampLabelX(p.x") &&
+    fitOverlaySource.indexOf("clampLabelX(p.x") > fitOverlaySource.indexOf("this.separate("),
+  "update() must call clampLabelX( after this.separate(",
+);
+const phoneCssText = readFileSync(join(here, "..", "src", "style.css"), "utf8");
+const phoneStart = phoneCssText.indexOf("@media (max-width: 720px), (max-height: 500px)");
+const phoneEnd = phoneCssText.indexOf(
+  "@media (max-height: 500px) and (orientation: landscape) {",
+  phoneStart,
+);
+const phoneOnly = phoneStart < 0 ? "" : phoneCssText.slice(phoneStart, phoneEnd < 0 ? undefined : phoneEnd);
+const labelRule = /\.fit-issue-label,\s*\.fit-dim-label\s*\{([^}]*)\}/.exec(phoneOnly)?.[1] ?? "";
+for (const decl of [
+  "white-space: normal",
+  "width: max-content",
+  "max-width: 92vw",
+  "line-height: 1.25",
+  "text-align: center",
+]) {
+  check(`phone-frame:label-${decl}`, labelRule.includes(decl), labelRule === "" ? "rule missing" : decl);
+}
+function wrapLineCount(text: string): number {
+  const max = 0.92 * 390 - 27;
+  const words = text.split(" ");
+  let lines = 1;
+  let len = 0;
+  for (const w of words) {
+    const next = len === 0 ? w.length : len + 1 + w.length;
+    if (next * 7.2 <= max) {
+      len = next;
+    } else {
+      lines += 1;
+      len = w.length;
+    }
+  }
+  return lines;
+}
+const catalogJson = JSON.parse(
+  readFileSync(join(repoRoot, "shared", "catalog", "catalog.json"), "utf8"),
+) as Array<{ name: string }> | { items: Array<{ name: string }> };
+const catalogItems = Array.isArray(catalogJson) ? catalogJson : catalogJson.items;
+const longest = [...catalogItems].map((i) => i.name).sort((a, b) => b.length - a.length);
+const verdictA = `\u2715 ${longest[0]} overlaps the ${longest[1]} by 99 cm`;
+const verdictB = "\u2715 Seat can't be reached: 43 cm clear, needs 44 cm within 60 cm of the walkway";
+check(
+  "phone-frame:worst-verdict-wraps-in-two",
+  wrapLineCount(verdictA) <= 2,
+  `${String(wrapLineCount(verdictA))} lines: ${verdictA}`,
+);
+check(
+  "phone-frame:walkway-verdict-wraps-in-two",
+  wrapLineCount(verdictB) <= 2,
+  `${String(wrapLineCount(verdictB))} lines: ${verdictB}`,
 );
 
 if (failures > 0) process.exit(1);
