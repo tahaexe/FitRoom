@@ -597,6 +597,10 @@ class FitRoomApp {
     this.controls.maxPolarAngle = MAX_POLAR;
     this.controls.minDistance = 1.2;
     this.controls.maxDistance = 18;
+    // In-scene fit labels follow every phone camera, including the first frame
+    // below: the overlay exists before that frame, so its label updates never
+    // read `update` of an overlay that is still undefined (the boot crash).
+    this.fitOverlay = new FitOverlay(this.scene, container);
     // The first view frames like the first visit even on a reload: a
     // returning visit otherwise keeps the close default pose. Before layout
     // (0 × 0) the phone path keeps the camera and reframes on resize/layout.
@@ -673,7 +677,7 @@ class FitRoomApp {
     // check only re-stamps the footprints (or, while dragging, the moved
     // item's neighbourhood) before the two grid floods.
     this.fitEngine = new FitEngine(ROOM, catalogProducts(CATALOG_MAP));
-    this.fitOverlay = new FitOverlay(this.scene, container);
+    // Created before the constructor's first frame (see above).
 
     const inspectorHost = document.getElementById("inspector");
     const host = inspectorHost ?? document.createElement("div");
@@ -1057,6 +1061,11 @@ class FitRoomApp {
           );
           this.clampTarget();
           this.controls.update();
+          this.fitOverlay.update(
+            this.activeCamera(),
+            this.container.clientWidth,
+            this.container.clientHeight,
+          );
         }
       },
     ]);
@@ -3925,11 +3934,21 @@ class FitRoomApp {
       this.orbitCam.clearViewOffset();
       this.orbitCam.aspect = w / h;
       this.orbitCam.updateProjectionMatrix();
+      this.fitOverlay.update(
+        this.activeCamera(),
+        this.container.clientWidth,
+        this.container.clientHeight,
+      );
       return;
     }
     const v = phoneViewOffset(w, h, this.openSheetHeight());
     this.orbitCam.setViewOffset(v.fullW, v.fullH, v.x, v.y, v.w, v.h);
     this.orbitCam.updateProjectionMatrix();
+    this.fitOverlay.update(
+      this.activeCamera(),
+      this.container.clientWidth,
+      this.container.clientHeight,
+    );
     this.requestRender();
   }
 
@@ -4033,6 +4052,11 @@ class FitRoomApp {
     );
     this.controls.update();
     this.applyPhoneViewOffset();
+    this.fitOverlay.update(
+      this.activeCamera(),
+      this.container.clientWidth,
+      this.container.clientHeight,
+    );
   }
 
   /** Preset name for the render key: plan, eye-level, or dollhouse. */
@@ -4150,6 +4174,11 @@ class FitRoomApp {
       this.frameDollhouse(cxM, czM, wM, dM, w / h);
       this.clampTarget();
       this.controls.update();
+      this.fitOverlay.update(
+        this.activeCamera(),
+        this.container.clientWidth,
+        this.container.clientHeight,
+      );
     }
     this.planCam.left = -this.planCam.top * (w / h);
     this.planCam.right = this.planCam.top * (w / h);

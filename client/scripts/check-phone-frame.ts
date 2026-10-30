@@ -451,5 +451,71 @@ for (const sheet of [0, 338]) {
   );
 }
 
+// ---- In-scene labels follow every phone camera the path sets ----
+const offsetAt = mainSource.indexOf("private applyPhoneViewOffset(");
+const offsetEnd = mainSource.indexOf("\n  private ", offsetAt + 1);
+const offsetBody =
+  offsetAt < 0 ? "" : mainSource.slice(offsetAt, offsetEnd < 0 ? offsetAt + 6000 : offsetEnd);
+check(
+  "phone-frame:labels-after-offset",
+  offsetBody.includes("fitOverlay.update") &&
+    offsetBody.includes("activeCamera()") &&
+    offsetBody.includes("container.clientWidth") &&
+    offsetBody.includes("container.clientHeight"),
+  "applyPhoneViewOffset must place the labels with the current camera and laid-out size",
+);
+check(
+  "phone-frame:labels-after-phone-portrait",
+  frameBody.includes("fitOverlay.update") &&
+    frameBody.includes("activeCamera()") &&
+    frameBody.includes("container.clientWidth") &&
+    frameBody.includes("container.clientHeight"),
+  "framePhonePortrait must place the labels with the current camera and laid-out size",
+);
+const deferredNeedles = [
+  "this.frameDollhouse(",
+  "pendingPhoneFrame",
+  "fitOverlay.update",
+  "activeCamera()",
+  "container.clientWidth",
+  "container.clientHeight",
+];
+const deferredHits = deferredNeedles.every((needle) => mainSource.includes(needle));
+const deferredBlocks = mainSource.split("pendingPhoneFrame");
+const deferredLabelled =
+  deferredBlocks.length >= 4 &&
+  deferredBlocks.slice(1).some((block) => block.includes("fitOverlay.update"));
+check(
+  "phone-frame:labels-after-deferred-frame",
+  deferredHits && deferredLabelled,
+  "the deferred phone frame must place the labels with the current camera and laid-out size",
+);
+
+// ---- Labels can never run before the overlay exists ----
+// The constructor's first frame once ran before `this.fitOverlay` was
+// created, so every label update above read `update` of undefined and the
+// boot stopped on portrait phones. Either the overlay is created before that
+// first frame, or every update above skips a missing overlay (the first
+// render places the labels anyway).
+const ctorAt = mainSource.indexOf("constructor(container: HTMLElement)");
+const firstFrameAt = mainSource.indexOf("this.frameDollhouse(", ctorAt);
+const overlayAt = mainSource.indexOf("this.fitOverlay = new FitOverlay", ctorAt);
+const overlayBeforeFirstFrame =
+  ctorAt >= 0 && firstFrameAt >= 0 && overlayAt >= 0 && overlayAt < firstFrameAt;
+const guardedUpdate = (body: string): boolean =>
+  body.includes("this.fitOverlay?.update") || body.includes("if (this.fitOverlay");
+const deferredLabelBlocks = deferredBlocks
+  .slice(1)
+  .filter((block) => block.includes("fitOverlay.update"));
+check(
+  "phone-frame:labels-safe-before-overlay",
+  overlayBeforeFirstFrame ||
+    (guardedUpdate(offsetBody) &&
+      guardedUpdate(frameBody) &&
+      deferredLabelBlocks.length > 0 &&
+      deferredLabelBlocks.every(guardedUpdate)),
+  "phone-path label updates must skip a missing overlay, or the overlay must be created before the constructor's first frame",
+);
+
 if (failures > 0) process.exit(1);
 console.log("phone-frame: all checks passed");
