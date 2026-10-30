@@ -452,6 +452,92 @@ const phoneCss = (() => {
   const start = css.indexOf("@media (max-width: 720px), (max-height: 500px)");
   return start < 0 ? "" : css.slice(start);
 })();
+// The phone block alone (up to the landscape block), comments stripped.
+const phoneBlock = (() => {
+  const start = css.indexOf("@media (max-width: 720px), (max-height: 500px)");
+  if (start < 0) return "";
+  const end = css.indexOf("@media (max-height: 500px) and (orientation: landscape) {", start);
+  return css.slice(start, end < 0 ? undefined : end).replace(/\/\*[\s\S]*?\*\//g, "");
+})();
+
+/** The last value the phone block gives `property` in a rule that lists `selector`. */
+function phoneDecl(selector: string, property: string): string | null {
+  let value: string | null = null;
+  for (const rule of phoneBlock.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
+    const selectors = (rule[1] ?? "").split(",").map((s) => s.trim());
+    if (!selectors.includes(selector)) continue;
+    const decl = new RegExp(`(?:^|[;{\\s])${property}:\\s*([^;]+);`).exec(rule[2] ?? "");
+    if (decl?.[1] !== undefined) value = decl[1].trim();
+  }
+  return value;
+}
+for (const selector of [".setup-sub", ".setup-card-title", ".guide-text"]) {
+  check(
+    `phone ${selector} is 16px`,
+    phoneDecl(selector, "font-size") === "16px",
+    `font-size: ${phoneDecl(selector, "font-size") ?? "missing"}`,
+  );
+}
+for (const selector of [
+  ".setup-card-text",
+  ".size-label",
+  ".size-echo",
+  ".size-error",
+  ".size-hint",
+  ".size-build-reason",
+  ".size-slip-text",
+  ".guide-progress",
+  "#cart-panel p",
+  ".cart-name",
+  ".catalog-dims",
+  ".catalog-price",
+  ".inspector-row",
+  ".inspector-note",
+  ".door-tip",
+  ".delete-toast",
+  ".photo-draft-band",
+  ".photo-step",
+  ".photo-blurb",
+  ".photo-lens",
+  ".photo-note",
+  ".photo-example-note",
+  ".editor-hint",
+  ".recommend-empty",
+  ".recommend-reason",
+  ".assistant-empty",
+  ".assistant-summary",
+  ".assistant-user",
+  ".assistant-did",
+  ".render-empty",
+  ".catalog-empty",
+  ".furnish-hint",
+  ".furnish-live-note",
+  ".furnish-demo-note",
+  ".furnish-progress",
+  ".furnish-name",
+  ".furnish-price",
+]) {
+  check(
+    `phone ${selector} is 15px`,
+    phoneDecl(selector, "font-size") === "15px",
+    `font-size: ${phoneDecl(selector, "font-size") ?? "missing"}`,
+  );
+}
+for (const selector of [
+  ".cart-dims",
+  ".cart-price",
+  ".cart-variant",
+  ".setup-thumb-size",
+  ".photo-example-caption",
+  ".photo-drop-hint",
+  ".finishes-label",
+]) {
+  check(
+    `phone ${selector} is 14px`,
+    phoneDecl(selector, "font-size") === "14px",
+    `font-size: ${phoneDecl(selector, "font-size") ?? "missing"}`,
+  );
+}
 check(
   "every phone button answers 44 x 44 px",
   /button\s*\{[^}]*min-height:\s*44px[^}]*min-width:\s*44px/.test(phoneCss),

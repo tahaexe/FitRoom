@@ -67,6 +67,9 @@ const amber = token("--amber");
 const amberText = token("--amber-text");
 const panelBg = token("--panel-bg") ?? "#f2f1f0";
 const white = "#ffffff";
+const phoneAt = css.indexOf("@media (max-width: 720px), (max-height: 500px)");
+const phoneMutedMatch = /--muted:\s*(#[0-9a-fA-F]{6})/.exec(phoneAt < 0 ? "" : css.slice(phoneAt));
+const phoneMuted = phoneMutedMatch?.[1]?.toLowerCase() ?? null;
 
 check("coral token is readable", coral !== null, coral ?? "missing --coral");
 check("coral hover token is readable", coralHover !== null, coralHover ?? "missing");
@@ -77,6 +80,13 @@ check("amber icon token is readable", amber !== null, amber ?? "missing --amber"
 check("amber text token is readable", amberText !== null, amberText ?? "missing --amber-text");
 check("bright amber stays for icons and fills", amber === "#e59500", amber ?? "missing");
 check("light coral accent is kept", coralBright === "#f54e49", coralBright ?? "missing");
+check("phone muted token is readable", phoneMuted !== null, phoneMuted ?? "missing phone --muted");
+check("phone muted is #4b5059", phoneMuted === "#4b5059", phoneMuted ?? "missing phone --muted");
+check(
+  "phone muted is darker than desktop muted",
+  phoneMuted !== null && muted !== null && luminance(phoneMuted) < luminance(muted),
+  `${phoneMuted ?? "?"} vs ${muted ?? "?"}`,
+);
 
 interface Pair {
   name: string;
@@ -91,7 +101,8 @@ const pairs: Pair[] =
   coralPressed === null ||
   green === null ||
   muted === null ||
-  amberText === null
+  amberText === null ||
+  phoneMuted === null
     ? []
     : [
         {
@@ -166,11 +177,23 @@ const pairs: Pair[] =
           background: "#fdecea",
           usedBy: "phone active chip, tab and style tint",
         },
+        {
+          name: "phone muted on white",
+          text: phoneMuted,
+          background: white,
+          usedBy: "phone body and secondary text",
+        },
+        {
+          name: "phone muted on side-panel grey",
+          text: phoneMuted,
+          background: panelBg,
+          usedBy: "phone secondary text on the side-panel grey",
+        },
       ];
 
 check(
   "contrast pairs cover buttons, chips, badges, pills and header",
-  pairs.length === 12,
+  pairs.length === 14,
   `${String(pairs.length)} pairs`,
 );
 
@@ -180,6 +203,18 @@ for (const pair of pairs) {
     `${pair.name} is at least 4.5:1`,
     value >= 4.5,
     `${pair.text} on ${pair.background} = ${value.toFixed(2)}:1 (${pair.usedBy})`,
+  );
+}
+if (phoneMuted !== null) {
+  check(
+    "phone muted on white is at least 7:1",
+    ratio(phoneMuted, white) >= 7,
+    `${phoneMuted} on ${white} = ${ratio(phoneMuted, white).toFixed(2)}:1`,
+  );
+  check(
+    "phone muted on side-panel grey is at least 7:1",
+    ratio(phoneMuted, panelBg) >= 7,
+    `${phoneMuted} on ${panelBg} = ${ratio(phoneMuted, panelBg).toFixed(2)}:1`,
   );
 }
 

@@ -3000,6 +3000,68 @@ button.cart-row {
     color: var(--coral);
     border-color: var(--coral);
   }
+
+  /* Phones: body and secondary text a size up, the secondary grey darker
+   * (#4b5059: 8.1 : 1 on white, 7.2 : 1 on the panel grey). */
+  :root {
+    --muted: #4b5059;
+  }
+
+  .setup-sub,
+  .setup-card-title,
+  .guide-text {
+    font-size: 16px;
+  }
+
+  .setup-card-text,
+  .size-label,
+  .size-echo,
+  .size-error,
+  .size-hint,
+  .size-build-reason,
+  .size-slip-text,
+  .guide-progress,
+  #cart-panel p,
+  .cart-name,
+  .catalog-dims,
+  .catalog-price,
+  .inspector-row,
+  .inspector-note,
+  .door-tip,
+  .delete-toast,
+  .photo-draft-band,
+  .photo-step,
+  .photo-blurb,
+  .photo-lens,
+  .photo-note,
+  .photo-example-note,
+  .editor-hint,
+  .recommend-empty,
+  .recommend-reason,
+  .assistant-empty,
+  .assistant-summary,
+  .assistant-user,
+  .assistant-did,
+  .render-empty,
+  .catalog-empty,
+  .furnish-hint,
+  .furnish-live-note,
+  .furnish-demo-note,
+  .furnish-progress,
+  .furnish-name,
+  .furnish-price {
+    font-size: 15px;
+  }
+
+  .cart-dims,
+  .cart-price,
+  .cart-variant,
+  .setup-thumb-size,
+  .photo-example-caption,
+  .photo-drop-hint,
+  .finishes-label {
+    font-size: 14px;
+  }
 }
 
 /* Landscape phones (844 x 390): sheets peek at most a quarter of the
