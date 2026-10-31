@@ -535,12 +535,19 @@ export class AssistantPanel {
     // In the example room only its own recorded briefs replay — never the
     // sample room's briefs. The sample room keeps all of its chips.
     const briefs = this.isExampleRoom()
-      ? allBriefs.filter((text) => EXAMPLE_FURNISH_DEMO_BRIEFS.includes(text))
+      ? allBriefs.filter((text) => {
+          const parsed = parseBriefChip(text);
+          return (
+            parsed !== null &&
+            EXAMPLE_FURNISH_DEMO_BRIEFS.includes(buildBriefRequest(parsed.brief, parsed.note))
+          );
+        })
       : allBriefs;
     if (briefs.length === 0) {
       host.setAttribute("hidden", "");
       return;
     }
+    host.removeAttribute("hidden");
     host.innerHTML = "";
     for (const text of briefs) {
       const parsed = parseBriefChip(text);
