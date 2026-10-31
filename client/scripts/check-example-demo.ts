@@ -33,7 +33,10 @@ import {
   type RoomLayout,
   type SceneState,
 } from "@fitroom/shared";
-import { EXAMPLE_ASSISTANT_DEMO_CHIPS } from "../src/assistant/panel.js";
+import {
+  EXAMPLE_ASSISTANT_DEMO_CHIPS,
+  EXAMPLE_FURNISH_DEMO_BRIEFS,
+} from "../src/assistant/panel.js";
 import { gatewayKey } from "../../server/src/meta/keys.js";
 import { assistantKeyInput } from "../../server/src/routes/assistant.js";
 import { recommendKeyInput } from "../../server/src/routes/recommend.js";
@@ -124,6 +127,16 @@ function main(): void {
         brief: { ...brief },
       },
     },
+    ...EXAMPLE_FURNISH_DEMO_BRIEFS.map((request) => ({
+      name: `brief ${request.slice(0, 24)}`,
+      body: {
+        request,
+        messages: [{ role: "user", content: request }],
+        room: JSON.parse(JSON.stringify(room)) as RoomLayout,
+        scene: JSON.parse(JSON.stringify(scene)) as SceneState,
+        brief: { ...brief },
+      },
+    })),
   ];
   for (const entry of assistantBodies) {
     const key = gatewayKey("assistant", META_MODELS.spark, assistantKeyInput(entry.body));
