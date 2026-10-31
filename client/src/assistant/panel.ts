@@ -81,6 +81,15 @@ export const EXAMPLE_ASSISTANT_DEMO_CHIPS: string[] = [
   ASSISTANT_DEMO_CHIPS[5] as string,
 ];
 
+/**
+ * The example room's recorded Furnish briefs (same builder as the server
+ * demo store). In the example room only these replay — never the sample
+ * room's briefs.
+ */
+export const EXAMPLE_FURNISH_DEMO_BRIEFS: string[] = [
+  "Furnish this room for 2 people, Modern style, new pieces up to $1,500.",
+];
+
 export interface AssistantDeps {
   room: RoomLayout;
   catalog: CatalogItem[];
@@ -221,6 +230,9 @@ export class AssistantPanel {
 
   /** Demo-store request texts, once loaded (demo mode shows no unrecorded chip). */
   private recordedChips: string[] | null = null;
+
+  /** Room key the Furnish chips were last filled for (refill on room switch). */
+  private furnishChipsRoom: string | null = null;
 
   private async loadRecordedChips(): Promise<string[] | null> {
     if (this.recordedChips !== null) return this.recordedChips;
@@ -495,7 +507,12 @@ export class AssistantPanel {
     } else {
       chips?.removeAttribute("hidden");
       const host = chips instanceof HTMLElement ? chips : null;
-      if (host !== null && host.childElementCount === 0) void this.fillFurnishChips(host);
+      const roomKey = `${this.deps.room.id}|${this.deps.room.name}`;
+      if (host !== null && (host.childElementCount === 0 || this.furnishChipsRoom !== roomKey)) {
+        this.furnishChipsRoom = roomKey;
+        host.innerHTML = "";
+        void this.fillFurnishChips(host);
+      }
     }
     for (const field of view.querySelectorAll(".furnish-form button, .furnish-form input")) {
       if (!(field instanceof HTMLButtonElement) && !(field instanceof HTMLInputElement)) continue;
@@ -514,7 +531,12 @@ export class AssistantPanel {
 
   private async fillFurnishChips(host: HTMLElement): Promise<void> {
     const recorded = await this.loadRecordedChips();
-    const briefs = (recorded ?? []).filter((text) => text.startsWith(FURNISH_CHIP_PREFIX));
+    const allBriefs = (recorded ?? []).filter((text) => text.startsWith(FURNISH_CHIP_PREFIX));
+    // In the example room only its own recorded briefs replay — never the
+    // sample room's briefs. The sample room keeps all of its chips.
+    const briefs = this.isExampleRoom()
+      ? allBriefs.filter((text) => EXAMPLE_FURNISH_DEMO_BRIEFS.includes(text))
+      : allBriefs;
     if (briefs.length === 0) {
       host.setAttribute("hidden", "");
       return;
