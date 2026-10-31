@@ -36,7 +36,9 @@ import {
 import {
   EXAMPLE_ASSISTANT_DEMO_CHIPS,
   EXAMPLE_FURNISH_DEMO_BRIEFS,
+  parseBriefChip,
 } from "../src/assistant/panel.js";
+import { listDemoStore } from "../../server/src/meta/demo.js";
 import { gatewayKey } from "../../server/src/meta/keys.js";
 import { assistantKeyInput } from "../../server/src/routes/assistant.js";
 import { recommendKeyInput } from "../../server/src/routes/recommend.js";
@@ -141,6 +143,30 @@ function main(): void {
   for (const entry of assistantBodies) {
     const key = gatewayKey("assistant", META_MODELS.spark, assistantKeyInput(entry.body));
     check(`assistant demo exists: ${entry.name}`, existsSync(demoFile("assistant", key)), key);
+  }
+
+  // Furnish chips: every example brief must be matched by a served demo-chip
+  // text the way fillFurnishChips matches (parse then rebuild, never raw).
+  const servedRequests: string[] = [];
+  const seenServed = new Set<string>();
+  for (const file of listDemoStore(join(repoRoot, "server", "data"), "assistant")) {
+    const input = file.input as { request?: unknown; messages?: unknown } | null | undefined;
+    if (
+      typeof input?.request === "string" &&
+      Array.isArray(input.messages) &&
+      input.messages.length === 1 &&
+      !seenServed.has(input.request)
+    ) {
+      seenServed.add(input.request);
+      servedRequests.push(input.request);
+    }
+  }
+  for (const expected of EXAMPLE_FURNISH_DEMO_BRIEFS) {
+    const matched = servedRequests.some((text) => {
+      const parsed = parseBriefChip(text);
+      return parsed !== null && buildBriefRequest(parsed.brief, parsed.note) === expected;
+    });
+    check(`served furnish chip replays: ${expected.slice(0, 24)}`, matched, expected);
   }
 
   // Recommend: "What fits here?" on the free runs, built like the panel.
