@@ -2512,7 +2512,7 @@ class FitRoomApp {
     for (const item of document.querySelectorAll("#phone-menu [data-phone-action]")) {
       if (!(item instanceof HTMLElement)) continue;
       item.addEventListener("click", () => {
-        const action = item.dataset["phone-action"] ?? "";
+        const action = item.dataset["phoneAction"] ?? "";
         this.closePhoneMenus();
         this.phoneMenuAction(action);
       });
@@ -2520,7 +2520,7 @@ class FitRoomApp {
     for (const item of document.querySelectorAll("#phone-ai-menu [data-phone-action]")) {
       if (!(item instanceof HTMLElement)) continue;
       item.addEventListener("click", () => {
-        const action = item.dataset["phone-action"] ?? "";
+        const action = item.dataset["phoneAction"] ?? "";
         this.closePhoneMenus();
         if (action === "arrange") {
           this.showSidePanel("assistant");
