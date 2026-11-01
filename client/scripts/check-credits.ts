@@ -181,7 +181,7 @@ for (const item of catalog) {
 }
 
 const LICENCE_TEXT =
-  "Copyright © 2026 FitRoom. All rights reserved: the source is published to be read, not reused. Assets and libraries keep their own licences (see CREDITS.md).";
+  "Copyright © 2026 MUHAMMED TAHA AKTAŞ. All rights reserved: the source is published to be read, not reused. Assets and libraries keep their own licences (see CREDITS.md).";
 const licencePath = join(repoRoot, "LICENSE");
 check("credits:licence-exists", existsSync(licencePath), "LICENSE");
 if (existsSync(licencePath)) {
