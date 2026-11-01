@@ -1116,6 +1116,8 @@ class FakeSheetElement {
   public dataset: Record<string, string> = {};
   private attrs = new Set<string>();
   public tag: string;
+  public className = "";
+  public children: FakeSheetElement[] = [];
   constructor(tag = "div") {
     this.tag = tag;
   }
@@ -1129,15 +1131,30 @@ class FakeSheetElement {
   hasAttribute(name: string): boolean {
     return this.attrs.has(name);
   }
-  querySelector(): null {
+  querySelector(selector?: string): FakeSheetElement | null {
+    if (selector === ":scope > .sheet-handle") {
+      return (
+        this.children.find((child) => child.className.split(" ").includes("sheet-handle")) ?? null
+      );
+    }
     return null;
   }
-  prepend(): void {}
+  prepend(child?: FakeSheetElement): void {
+    if (child !== undefined) this.children.unshift(child);
+  }
   appendChild(): void {}
   addEventListener(): void {}
 }
 class FakeObserver {
-  observe(): void {}
+  static records: Array<{
+    callback: () => void;
+    target: unknown;
+    options: unknown;
+  }> = [];
+  constructor(private readonly callback: () => void) {}
+  observe(target: unknown, options?: unknown): void {
+    FakeObserver.records.push({ callback: this.callback, target, options });
+  }
   disconnect(): void {}
 }
 const phoneScope = globalThis as unknown as Record<string, unknown>;
@@ -1163,6 +1180,7 @@ function freshPhoneSheets(): {
     recommend: new FakeSheetElement("aside"),
     assistant: new FakeSheetElement("aside"),
     render: new FakeSheetElement("aside"),
+    cart: new FakeSheetElement("aside"),
   };
   const sheets = new PhoneSheets(els as unknown as Record<PhoneSheetName, HTMLElement | null>);
   return { sheets, els };
@@ -1250,6 +1268,35 @@ for (const entry of ["try-example", "use-photos", "from-photos"] as const) {
     sheets.isOpen("catalog"),
     "after Cancel the catalog sheet is back",
   );
+}
+{
+  // A panel rebuild wipes its sheet (innerHTML = "") and loses the handle:
+  // each sheet's child-list observer puts exactly one handle back.
+  FakeObserver.records.length = 0;
+  const { els } = freshPhoneSheets();
+  const names = ["catalog", "inspector", "recommend", "assistant", "render", "cart"] as const;
+  for (const name of names) {
+    const host = els[name] as FakeSheetElement;
+    const record = FakeObserver.records.find(
+      (entry) =>
+        entry.target === host &&
+        typeof entry.options === "object" &&
+        entry.options !== null &&
+        (entry.options as { childList?: boolean }).childList === true,
+    );
+    check(`phone:handle-observer-${name}`, record !== undefined, "a child-list observer");
+    if (record === undefined) continue;
+    host.children.length = 0;
+    record.callback();
+    const handles = host.children.filter((child) =>
+      child.className.split(" ").includes("sheet-handle"),
+    );
+    check(
+      `phone:handle-restored-${name}`,
+      handles.length === 1 && host.querySelector(":scope > .sheet-handle") !== null,
+      `got ${String(handles.length)} handles`,
+    );
+  }
 }
 phoneScope["window"] = savedWindow;
 phoneScope["document"] = savedDocument;

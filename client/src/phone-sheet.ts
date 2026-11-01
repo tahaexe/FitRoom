@@ -56,7 +56,10 @@ export class PhoneSheets {
   constructor(private readonly els: Record<PhoneSheetName, HTMLElement | null>) {
     for (const name of Object.keys(els) as PhoneSheetName[]) {
       const el = els[name];
-      if (el !== null) this.ensureHandle(el, name);
+      if (el !== null) {
+        this.ensureHandle(el, name);
+        new MutationObserver(() => this.ensureHandle(el, name)).observe(el, { childList: true });
+      }
     }
     // A panel's own × button hides it directly: drop the sheet state too.
     const sync = (): void => {
