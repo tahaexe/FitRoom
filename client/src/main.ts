@@ -81,6 +81,7 @@ import {
   Guide,
   GuideView,
   phoneFrameReady,
+  planHalfHeight,
   phoneViewOffset,
   queryGuideTarget,
   solvePhoneFrame,
@@ -595,7 +596,7 @@ class FitRoomApp {
     const dM = cmToMeters(bounds.maxZ - bounds.minZ);
     const cxM = cmToMeters((bounds.minX + bounds.maxX) / 2);
     const czM = cmToMeters((bounds.minZ + bounds.maxZ) / 2);
-    const half = Math.max(wM, dM) / 2 + 1;
+    const half = planHalfHeight(wM, dM, aspect);
     this.planCam = new THREE.OrthographicCamera(
       -half * aspect,
       half * aspect,
@@ -1846,7 +1847,7 @@ class FitRoomApp {
     }
     const aspect =
       Math.max(1, this.container.clientWidth) / Math.max(1, this.container.clientHeight);
-    const half = Math.max(wM, dM) / 2 + 1;
+    const half = planHalfHeight(wM, dM, aspect);
     this.planCam.top = half;
     this.planCam.bottom = -half;
     this.planCam.left = -half * aspect;
@@ -4252,6 +4253,14 @@ class FitRoomApp {
         this.container.clientHeight,
       );
     }
+    const planBounds = roomBounds(ROOM);
+    const planHalf = planHalfHeight(
+      cmToMeters(planBounds.maxX - planBounds.minX),
+      cmToMeters(planBounds.maxZ - planBounds.minZ),
+      w / h,
+    );
+    this.planCam.top = planHalf;
+    this.planCam.bottom = -planHalf;
     this.planCam.left = -this.planCam.top * (w / h);
     this.planCam.right = this.planCam.top * (w / h);
     this.planCam.updateProjectionMatrix();

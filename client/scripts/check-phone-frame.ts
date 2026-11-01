@@ -33,6 +33,7 @@ import {
   phoneFrameReady,
   phoneFreeArea,
   phoneViewOffset,
+  planHalfHeight,
   solvePhoneFrame,
 } from "../src/guide.js";
 import type { PhoneFrameProjection } from "../src/guide.js";
@@ -633,6 +634,39 @@ for (const id of [
     `phone-frame:sheet-above-bar-${id}`,
     sheetRule.includes("padding-bottom: calc(16px + var(--phone-bar-height)"),
     sheetRule === "" ? "sheets rule missing" : `${id} padding keeps content above #phone-bar`,
+  );
+}
+
+// ---- The phone Plan view fits the whole room ----
+{
+  const wM = 4.2;
+  const dM = 3.62;
+  const phoneAspect = 390 / 740;
+  const phoneHalf = planHalfHeight(wM, dM, phoneAspect);
+  const phoneWidth = 2 * phoneHalf * phoneAspect;
+  const phoneHeight = 2 * phoneHalf;
+  check(
+    "phone-frame:plan-fits-width",
+    phoneWidth + 1e-6 >= 6.2,
+    `visible width ${phoneWidth.toFixed(3)} m vs 6.2 m`,
+  );
+  check(
+    "phone-frame:plan-fits-height",
+    phoneHeight + 1e-6 >= 5.62,
+    `visible height ${phoneHeight.toFixed(3)} m vs 5.62 m`,
+  );
+  const desktopHalf = planHalfHeight(wM, dM, 1366 / 768);
+  check(
+    "phone-frame:plan-desktop-unchanged",
+    desktopHalf === Math.max(wM, dM) / 2 + 1,
+    `desktop half ${String(desktopHalf)}`,
+  );
+  check(
+    "phone-frame:plan-uses-helper",
+    mainSource.includes("planHalfHeight(") &&
+      mainSource.includes("const half = planHalfHeight(wM, dM, aspect);") &&
+      mainSource.includes("const planHalf = planHalfHeight("),
+    "the plan camera halves come from planHalfHeight",
   );
 }
 

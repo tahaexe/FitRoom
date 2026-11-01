@@ -865,3 +865,14 @@ export function solvePhoneFrame(
   }
   return dist;
 }
+
+/**
+ * Half height (m) for the plan camera so the whole room fits: the larger
+ * room side plus a 1 m margin vertically, and the room width plus a 1 m
+ * margin horizontally given the container aspect. Never smaller than the
+ * desktop framing (`max(wM, dM) / 2 + 1`).
+ */
+export function planHalfHeight(wM: number, dM: number, aspect: number): number {
+  const safeAspect = Math.max(0.01, aspect);
+  return Math.max(Math.max(wM, dM) / 2 + 1, (wM / 2 + 1) / safeAspect);
+}
