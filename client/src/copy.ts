@@ -39,6 +39,10 @@ export const SHAPE_IN_EDITOR = "Doors, windows and exact walls: adjust them in t
 export const USE_SAMPLE_ROOM = "Use the sample room";
 export const TURN_ON_LIVE = "Turn on Live AI";
 
+/** Cost question asked once per visit before Live AI is switched on. */
+export const LIVE_COST_QUESTION = "Live AI calls Meta's models and may cost money. Turn it on?";
+export const STAY_IN_DEMO = "Stay in Demo";
+
 /** Phone menu Live AI switch: first item, label follows the mode. */
 export const LIVE_MENU_TO_LIVE = "Answers: Demo · switch to Live AI";
 export const LIVE_MENU_TO_DEMO = "Answers: Live AI · switch to Demo";

@@ -173,8 +173,10 @@ check(
 );
 check(
   "phone-menu:live-press-flips-isLive",
-  main.includes('action === "live-toggle"') && main.includes("setLive(!isLive())"),
-  "live-toggle branch must call setLive(!isLive())",
+  main.includes('action === "live-toggle"') &&
+    main.includes("requestLive()") &&
+    main.includes("setLive(false)"),
+  "live-toggle must turn on through requestLive (asks once) and off with setLive(false)",
 );
 check(
   "phone-menu:live-change-event",

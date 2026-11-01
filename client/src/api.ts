@@ -9,9 +9,28 @@
  */
 
 import { isGatewayResponse, type GatewayResponse, type GatewaySource } from "@fitroom/shared";
-import { AI_UNREACHABLE, CAPPED_MESSAGE } from "./copy";
+import {
+  AI_UNREACHABLE,
+  CAPPED_MESSAGE,
+  LIVE_COST_QUESTION,
+  STAY_IN_DEMO,
+  TURN_ON_LIVE,
+} from "./copy";
 
 const LIVE_STORAGE_KEY = "fitroom.live-ai";
+
+/** Asked once per visit: the cost question shows only on the first switch-on. */
+let liveAskedThisVisit = false;
+
+/** Test hook: forget the visit's answer so the first-ask case can run again. */
+export function __resetLiveAskForTest(): void {
+  liveAskedThisVisit = false;
+}
+
+/** True when turning on must ask first (first switch-on of the visit, still in Demo). */
+export function liveAskNeeded(): boolean {
+  return !liveAskedThisVisit && !isLive();
+}
 
 export type ApiResult =
   | { status: "ok"; source: GatewaySource; route: string; model: string; data: unknown }
@@ -39,6 +58,61 @@ export function setLive(live: boolean): void {
   }
   updateLiveSwitch();
   window.dispatchEvent(new CustomEvent(LIVE_CHANGE_EVENT, { detail: { live } }));
+}
+
+/**
+ * The one way to turn Live AI on: asks the cost question once per visit.
+ * Turning off never asks. Stay in Demo (the default; Esc stays) leaves
+ * `isLive()` false.
+ */
+export function requestLive(): Promise<boolean> {
+  if (isLive()) return Promise.resolve(true);
+  if (liveAskedThisVisit) {
+    setLive(true);
+    return Promise.resolve(true);
+  }
+  return new Promise((resolve) => {
+    const backdrop = document.createElement("div");
+    backdrop.className = "live-confirm-backdrop";
+    const dialog = document.createElement("div");
+    dialog.className = "live-confirm";
+    dialog.setAttribute("role", "dialog");
+    dialog.setAttribute("aria-modal", "true");
+    dialog.setAttribute("aria-label", LIVE_COST_QUESTION);
+    const question = document.createElement("p");
+    question.className = "live-confirm-question";
+    question.textContent = LIVE_COST_QUESTION;
+    const row = document.createElement("div");
+    row.className = "live-confirm-row";
+    const stay = document.createElement("button");
+    stay.type = "button";
+    stay.className = "live-confirm-stay";
+    stay.textContent = STAY_IN_DEMO;
+    stay.setAttribute("autofocus", "");
+    const go = document.createElement("button");
+    go.type = "button";
+    go.className = "live-confirm-go";
+    go.textContent = TURN_ON_LIVE;
+    row.append(stay, go);
+    dialog.append(question, row);
+    backdrop.appendChild(dialog);
+    document.body.appendChild(backdrop);
+    const done = (on: boolean): void => {
+      liveAskedThisVisit = true;
+      backdrop.remove();
+      if (on) setLive(true);
+      resolve(on);
+    };
+    stay.addEventListener("click", () => done(false));
+    go.addEventListener("click", () => done(true));
+    backdrop.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        done(false);
+      }
+    });
+    stay.focus();
+  });
 }
 
 function toResult(payload: GatewayResponse): ApiResult {
@@ -197,12 +271,14 @@ export function initLiveSwitch(): void {
   const root = document.getElementById("live-switch");
   if (root === null) return;
   root.addEventListener("click", () => {
-    setLive(!isLive());
+    if (isLive()) setLive(false);
+    else void requestLive();
   });
   root.addEventListener("keydown", (event) => {
     if (event.key === " " || event.key === "Enter") {
       event.preventDefault();
-      setLive(!isLive());
+      if (isLive()) setLive(false);
+      else void requestLive();
     }
   });
   updateLiveSwitch();

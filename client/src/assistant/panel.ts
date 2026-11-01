@@ -48,7 +48,7 @@ import {
   turnErrors,
   vetoLinesForRecord,
 } from "@fitroom/shared";
-import { LIVE_CHANGE_EVENT, isLive, postAssistant, setLive, type ApiResult } from "../api";
+import { LIVE_CHANGE_EVENT, isLive, postAssistant, requestLive, type ApiResult } from "../api";
 import { isExampleRoom } from "../photo-room/example";
 import {
   AI_UNREACHABLE,
@@ -517,8 +517,7 @@ export class AssistantPanel {
     liveButton.className = "assistant-quiet furnish-live-button";
     liveButton.textContent = TURN_ON_LIVE;
     liveButton.addEventListener("click", () => {
-      setLive(true);
-      this.syncMode();
+      void requestLive().then(() => this.syncMode());
     });
     // The Demo note stays with the Furnish button (one foot), so a phone
     // shows them together instead of the note sitting off screen.
@@ -703,8 +702,7 @@ export class AssistantPanel {
     live.className = "assistant-quiet";
     live.textContent = TURN_ON_LIVE;
     live.addEventListener("click", () => {
-      setLive(true);
-      this.syncMode();
+      void requestLive().then(() => this.syncMode());
     });
     row.appendChild(live);
     card.append(note, row);
@@ -1001,8 +999,7 @@ export class AssistantPanel {
       live.className = "assistant-quiet";
       live.textContent = TURN_ON_LIVE;
       live.addEventListener("click", () => {
-        setLive(true);
-        this.syncMode();
+        void requestLive().then(() => this.syncMode());
       });
       row.appendChild(live);
     }
@@ -1062,8 +1059,7 @@ export class AssistantPanel {
       live.className = "assistant-quiet";
       live.textContent = TURN_ON_LIVE;
       live.addEventListener("click", () => {
-        setLive(true);
-        this.syncMode();
+        void requestLive().then(() => this.syncMode());
       });
       row.appendChild(live);
     }

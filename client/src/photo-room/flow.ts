@@ -31,7 +31,7 @@ import {
   type WallLetter,
   wallLetterLabel,
 } from "@fitroom/shared";
-import { isLive, postLabel, setLive } from "../api";
+import { isLive, postLabel, requestLive } from "../api";
 import {
   EXAMPLE_LABEL_SIZE,
   EXAMPLE_SEG_SIZE,
@@ -597,18 +597,6 @@ export class PhotoFlow {
       privacy.textContent =
         "Your photos are sent to Meta's AI models for analysis and may be used to improve them.";
       host.appendChild(privacy);
-      if (!isLive()) {
-        const demo = document.createElement("p");
-        demo.className = "photo-sheet-note";
-        demo.textContent = PHOTO_DEMO_MISS;
-        host.appendChild(demo);
-        const live = document.createElement("button");
-        live.type = "button";
-        live.className = "photo-primary";
-        live.textContent = TURN_ON_LIVE;
-        live.addEventListener("click", () => setLive(true));
-        host.appendChild(live);
-      }
       if (this.wallIndex === 0 && !this.anyIntake() && !this.exampleLoading) {
         const exampleHint = document.createElement("p");
         exampleHint.className = "photo-sheet-note";
@@ -616,13 +604,29 @@ export class PhotoFlow {
           "Or try four generated photos of a 420 × 360 cm room, analysed free from the demo store.";
         const example = document.createElement("button");
         example.type = "button";
-        example.className = "photo-example";
+        example.className = "photo-primary";
         example.textContent = this.exampleLoading
           ? "Loading the example photos…"
           : "Try with example photos";
         example.disabled = this.exampleLoading;
         example.addEventListener("click", () => void this.tryExample());
         host.append(exampleHint, example);
+      }
+      if (!isLive()) {
+        const demo = document.createElement("p");
+        demo.className = "photo-sheet-note";
+        demo.textContent = PHOTO_DEMO_MISS;
+        host.appendChild(demo);
+        const live = document.createElement("button");
+        live.type = "button";
+        live.className = "photo-example";
+        live.textContent = TURN_ON_LIVE;
+        live.addEventListener("click", () => {
+          void requestLive().then((ok) => {
+            if (ok) this.render();
+          });
+        });
+        host.appendChild(live);
       }
       host.appendChild(this.picker(letter));
       if (state.error !== null) {
@@ -898,8 +902,9 @@ export class PhotoFlow {
       live.className = "photo-primary";
       live.textContent = TURN_ON_LIVE;
       live.addEventListener("click", () => {
-        setLive(true);
-        void this.analyse(letter, this.tapFor(letter));
+        void requestLive().then((ok) => {
+          if (ok) void this.analyse(letter, this.tapFor(letter));
+        });
       });
       sheet.append(message, live);
       return sheet;

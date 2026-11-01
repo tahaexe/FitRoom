@@ -43,6 +43,8 @@ import {
   DEMO_STORE_LINE,
   FLOW_STEPS,
   LEAVE,
+  LIVE_COST_QUESTION,
+  STAY_IN_DEMO,
   PHOTO_VIEW_BUTTON,
   PHOTO_VIEW_CLOSE,
   PHOTO_VIEW_LINE,
@@ -592,6 +594,56 @@ check(
     "phone photo item renders from the module",
     src("phone-sheet.ts").includes("PHOTO_VIEW_BUTTON"),
     "phone-sheet.ts",
+  );
+}
+
+// ---- One cost question before Live AI: asked once per visit ----
+check(
+  "live cost question names Meta and money",
+  LIVE_COST_QUESTION === "Live AI calls Meta's models and may cost money. Turn it on?",
+  LIVE_COST_QUESTION,
+);
+check("live stay is Stay in Demo", STAY_IN_DEMO === "Stay in Demo", STAY_IN_DEMO);
+{
+  const apiSrc = src("api.ts");
+  check("api asks once per visit", apiSrc.includes("liveAskedThisVisit"), "api.ts");
+  check(
+    "first switch-on asks, second does not",
+    apiSrc.includes("if (liveAskedThisVisit) {") && apiSrc.includes("liveAskNeeded"),
+    "api.ts",
+  );
+  check(
+    "api dialog defaults to Stay",
+    apiSrc.includes('stay.setAttribute("autofocus", "")'),
+    "api.ts",
+  );
+  check("api Esc stays in Demo", apiSrc.includes('event.key === "Escape"'), "api.ts");
+  check("api Stay leaves isLive false", apiSrc.includes("if (on) setLive(true);"), "api.ts");
+  check("api exports the one way on", apiSrc.includes("export function requestLive"), "api.ts");
+  for (const file of [
+    "assistant/panel.ts",
+    "recommend/panel.ts",
+    "render/viewer.ts",
+    "photo-room/flow.ts",
+    "main.ts",
+  ]) {
+    check(`${file} turns on through requestLive`, src(file).includes("requestLive"), file);
+  }
+  check("api switch-off never asks", apiSrc.includes("if (isLive()) setLive(false);"), "api.ts");
+  check(
+    "no direct setLive(true) switch-on remains",
+    apiSrc.split("setLive(true)").length - 1 === 2 &&
+      !src("assistant/panel.ts").includes("setLive(true)") &&
+      !src("recommend/panel.ts").includes("setLive(true)") &&
+      !src("render/viewer.ts").includes("setLive(true)") &&
+      !src("photo-room/flow.ts").includes("setLive(true)") &&
+      !src("main.ts").includes("setLive(true)"),
+    "requestLive is the one way on",
+  );
+  check(
+    "photo example photos are primary in Demo",
+    src("photo-room/flow.ts").includes('example.className = "photo-primary"'),
+    "flow.ts",
   );
 }
 

@@ -36,7 +36,7 @@ import {
   wallDisplayName,
   type CandidateQuery,
 } from "@fitroom/shared";
-import { LIVE_CHANGE_EVENT, isLive, postRecommend, setLive, type ApiResult } from "../api";
+import { LIVE_CHANGE_EVENT, isLive, postRecommend, requestLive, type ApiResult } from "../api";
 import {
   AI_UNREACHABLE,
   NOT_READY_MESSAGE,
@@ -731,7 +731,7 @@ export class RecommendPanel {
       live.type = "button";
       live.className = "recommend-go";
       live.textContent = TURN_ON_LIVE;
-      live.addEventListener("click", () => setLive(true));
+      live.addEventListener("click", () => void requestLive());
       row.appendChild(live);
     }
     out.appendChild(row);

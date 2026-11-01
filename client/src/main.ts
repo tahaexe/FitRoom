@@ -41,7 +41,7 @@ import shallowBoxedScene from "../../shared/samples/fit-tests/shallow-boxed.json
 import rotatedOverlapScene from "../../shared/samples/fit-tests/rotated-overlap.json";
 import rotatedOutsideScene from "../../shared/samples/fit-tests/rotated-outside.json";
 import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.json";
-import { LIVE_CHANGE_EVENT, initLiveSwitch, isLive, setLive } from "./api";
+import { LIVE_CHANGE_EVENT, initLiveSwitch, isLive, requestLive, setLive } from "./api";
 import { EMPTY_HINT_TEXT, needsDoorTip } from "./hints";
 import {
   ADD_TO_CART,
@@ -2700,8 +2700,12 @@ class FitRoomApp {
 
   private phoneMenuAction(action: string): void {
     if (action === "live-toggle") {
-      setLive(!isLive());
-      this.syncPhoneLiveItem();
+      if (isLive()) {
+        setLive(false);
+        this.syncPhoneLiveItem();
+      } else {
+        void requestLive().then(() => this.syncPhoneLiveItem());
+      }
     } else if (action === "room-sample") {
       this.sheets?.close();
       this.closePhoneMenus();

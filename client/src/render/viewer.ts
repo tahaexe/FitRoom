@@ -7,7 +7,7 @@
 
 import { buildRenderPrompt } from "@fitroom/shared";
 import type { CatalogItem, RenderWallView, RoomLayout, SceneState } from "@fitroom/shared";
-import { LIVE_CHANGE_EVENT, isLive, postRender, setLive } from "../api";
+import { LIVE_CHANGE_EVENT, isLive, postRender, requestLive } from "../api";
 import { captureView } from "./capture";
 import {
   AI_UNREACHABLE,
@@ -257,7 +257,7 @@ export class RenderViewer {
       live.type = "button";
       live.className = "render-quiet";
       live.textContent = TURN_ON_LIVE;
-      live.addEventListener("click", () => setLive(true));
+      live.addEventListener("click", () => void requestLive());
       row.appendChild(live);
     }
     wrap.appendChild(row);
