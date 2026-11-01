@@ -1,6 +1,6 @@
 {
   "asset": {
-    "generator": "FitRoom Studio generate-fitroom-models.mjs",
+    "generator": "FitRoom generate-fitroom-models.mjs",
     "version": "2.0"
   },
   "scene": 0,

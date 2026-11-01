@@ -463,8 +463,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - Files:
   - assets/textures/ambientcg/WoodFloor051/WoodFloor051_1K-JPG_AmbientOcclusion.jpg
   - assets/textures/ambientcg/WoodFloor051/WoodFloor051_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/WoodFloor051/WoodFloor051_1K-JPG_Color.webp
   - assets/textures/ambientcg/WoodFloor051/WoodFloor051_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/WoodFloor051/WoodFloor051_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/WoodFloor051/WoodFloor051_1K-JPG_Roughness.webp
 
 ### WoodFloor064
 
@@ -473,8 +475,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - License: CC0-1.0
 - Files:
   - assets/textures/ambientcg/WoodFloor064/WoodFloor064_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/WoodFloor064/WoodFloor064_1K-JPG_Color.webp
   - assets/textures/ambientcg/WoodFloor064/WoodFloor064_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/WoodFloor064/WoodFloor064_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/WoodFloor064/WoodFloor064_1K-JPG_Roughness.webp
 
 ### WoodFloor070
 
@@ -483,8 +487,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - License: CC0-1.0
 - Files:
   - assets/textures/ambientcg/WoodFloor070/WoodFloor070_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/WoodFloor070/WoodFloor070_1K-JPG_Color.webp
   - assets/textures/ambientcg/WoodFloor070/WoodFloor070_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/WoodFloor070/WoodFloor070_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/WoodFloor070/WoodFloor070_1K-JPG_Roughness.webp
 
 ### WoodFloor071
 
@@ -493,8 +499,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - License: CC0-1.0
 - Files:
   - assets/textures/ambientcg/WoodFloor071/WoodFloor071_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/WoodFloor071/WoodFloor071_1K-JPG_Color.webp
   - assets/textures/ambientcg/WoodFloor071/WoodFloor071_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/WoodFloor071/WoodFloor071_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/WoodFloor071/WoodFloor071_1K-JPG_Roughness.webp
 
 ### WoodFloor039
 
@@ -503,8 +511,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - License: CC0-1.0
 - Files:
   - assets/textures/ambientcg/WoodFloor039/WoodFloor039_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/WoodFloor039/WoodFloor039_1K-JPG_Color.webp
   - assets/textures/ambientcg/WoodFloor039/WoodFloor039_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/WoodFloor039/WoodFloor039_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/WoodFloor039/WoodFloor039_1K-JPG_Roughness.webp
 
 ### Tiles139
 
@@ -513,8 +523,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - License: CC0-1.0
 - Files:
   - assets/textures/ambientcg/Tiles139/Tiles139_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/Tiles139/Tiles139_1K-JPG_Color.webp
   - assets/textures/ambientcg/Tiles139/Tiles139_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/Tiles139/Tiles139_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/Tiles139/Tiles139_1K-JPG_Roughness.webp
 
 ### Tiles107
 
@@ -524,8 +536,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - Files:
   - assets/textures/ambientcg/Tiles107/Tiles107_1K-JPG_AmbientOcclusion.jpg
   - assets/textures/ambientcg/Tiles107/Tiles107_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/Tiles107/Tiles107_1K-JPG_Color.webp
   - assets/textures/ambientcg/Tiles107/Tiles107_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/Tiles107/Tiles107_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/Tiles107/Tiles107_1K-JPG_Roughness.webp
 
 ### Carpet016
 
@@ -535,8 +549,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - Files:
   - assets/textures/ambientcg/Carpet016/Carpet016_1K-JPG_AmbientOcclusion.jpg
   - assets/textures/ambientcg/Carpet016/Carpet016_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/Carpet016/Carpet016_1K-JPG_Color.webp
   - assets/textures/ambientcg/Carpet016/Carpet016_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/Carpet016/Carpet016_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/Carpet016/Carpet016_1K-JPG_Roughness.webp
 
 ### Carpet012
 
@@ -546,8 +562,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - Files:
   - assets/textures/ambientcg/Carpet012/Carpet012_1K-JPG_AmbientOcclusion.jpg
   - assets/textures/ambientcg/Carpet012/Carpet012_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/Carpet012/Carpet012_1K-JPG_Color.webp
   - assets/textures/ambientcg/Carpet012/Carpet012_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/Carpet012/Carpet012_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/Carpet012/Carpet012_1K-JPG_Roughness.webp
 
 ### Carpet015
 
@@ -557,8 +575,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - Files:
   - assets/textures/ambientcg/Carpet015/Carpet015_1K-JPG_AmbientOcclusion.jpg
   - assets/textures/ambientcg/Carpet015/Carpet015_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/Carpet015/Carpet015_1K-JPG_Color.webp
   - assets/textures/ambientcg/Carpet015/Carpet015_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/Carpet015/Carpet015_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/Carpet015/Carpet015_1K-JPG_Roughness.webp
 
 ### PaintedPlaster017
 
@@ -567,8 +587,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - License: CC0-1.0
 - Files:
   - assets/textures/ambientcg/PaintedPlaster017/PaintedPlaster017_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/PaintedPlaster017/PaintedPlaster017_1K-JPG_Color.webp
   - assets/textures/ambientcg/PaintedPlaster017/PaintedPlaster017_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/PaintedPlaster017/PaintedPlaster017_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/PaintedPlaster017/PaintedPlaster017_1K-JPG_Roughness.webp
 
 ### Wallpaper002A
 
@@ -577,8 +599,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - License: CC0-1.0
 - Files:
   - assets/textures/ambientcg/Wallpaper002A/Wallpaper002A_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/Wallpaper002A/Wallpaper002A_1K-JPG_Color.webp
   - assets/textures/ambientcg/Wallpaper002A/Wallpaper002A_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/Wallpaper002A/Wallpaper002A_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/Wallpaper002A/Wallpaper002A_1K-JPG_Roughness.webp
 
 ### Concrete034
 
@@ -587,8 +611,10 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - License: CC0-1.0
 - Files:
   - assets/textures/ambientcg/Concrete034/Concrete034_1K-JPG_Color.jpg
+  - assets/textures/ambientcg/Concrete034/Concrete034_1K-JPG_Color.webp
   - assets/textures/ambientcg/Concrete034/Concrete034_1K-JPG_NormalGL.jpg
   - assets/textures/ambientcg/Concrete034/Concrete034_1K-JPG_Roughness.jpg
+  - assets/textures/ambientcg/Concrete034/Concrete034_1K-JPG_Roughness.webp
 
 ### Fabric075
 
@@ -651,11 +677,12 @@ All assets in this section are CC0-1.0 (public domain). Credits are a courtesy.
 - License: CC0-1.0
 - Files:
   - assets/hdri/polyhaven/lebombo_1k.hdr
+  - assets/hdri/polyhaven/lebombo_512.hdr
 
 Test photos (CC0-1.0, Wikimedia Commons).
 
 The eight test photos behind the fixtures in `shared/fixtures/` and
-`server/data/sam-streams/`. All are CC0-1.0.
+`server/data/sam-streams/`. The eight photos are CC0-1.0.
 
 ### living-room-unsplash-ceborski
 
@@ -664,6 +691,7 @@ The eight test photos behind the fixtures in `shared/fixtures/` and
 - License: CC0-1.0
 - Files:
   - shared/fixtures/photo-room-smoke/living-room-unsplash-ceborski-*.txt
+  - shared/fixtures/photo-room-live/living-room-unsplash-ceborski-*.txt
 
 ### living-room-carlos-zgz
 
@@ -672,6 +700,7 @@ The eight test photos behind the fixtures in `shared/fixtures/` and
 - License: CC0-1.0
 - Files:
   - shared/fixtures/photo-room-smoke/living-room-carlos-zgz-*.txt
+  - shared/fixtures/photo-room-live/living-room-carlos-zgz-*.txt
 
 ### apartment-granada-artchapiz
 
@@ -688,6 +717,7 @@ The eight test photos behind the fixtures in `shared/fixtures/` and
 - License: CC0-1.0
 - Files:
   - shared/fixtures/photo-room-smoke/hostel-twin-room-wardrobe-*.txt
+  - shared/fixtures/photo-room-live/hostel-twin-room-wardrobe-*.txt
 
 ### apartment-hotel-nice
 
@@ -713,6 +743,7 @@ The eight test photos behind the fixtures in `shared/fixtures/` and
 - License: CC0-1.0
 - Files:
   - shared/fixtures/photo-room-smoke/living-room-zaher-rio-*.txt
+  - shared/fixtures/photo-room-live/living-room-zaher-rio-*.txt
 
 ### market-house-reading-room
 
@@ -721,14 +752,15 @@ The eight test photos behind the fixtures in `shared/fixtures/` and
 - License: CC0-1.0
 - Files:
   - shared/fixtures/photo-room-smoke/market-house-reading-room-*.txt
+  - shared/fixtures/photo-room-live/market-house-reading-room-*.txt
 
 ## FitRoom originals, built in code (all rights reserved, not CC0-1.0)
 
-These pieces were built in code by FitRoom Studio and are all rights reserved, not CC0-1.0.
+These pieces were built in code by FitRoom and are all rights reserved, not CC0-1.0.
 
-### rug_160x230 (FitRoom Studio original, built in code)
+### rug_160x230 (FitRoom original, built in code)
 
-- Credit: Oslo Flatweave Rug 160x230: FitRoom Studio original, built in code (all rights reserved)
+- Credit: Oslo Flatweave Rug 160x230: FitRoom original, built in code (all rights reserved)
 - Source: generated by `client/scripts/generate-fitroom-models.mjs` from Carpet012, ambientCG (CC0)
 - License: All rights reserved
 - Files:
@@ -736,9 +768,9 @@ These pieces were built in code by FitRoom Studio and are all rights reserved, n
   - assets/models/fitroom/rug_160x230/rug_160x230.bin
   - assets/models/fitroom/rug_160x230/thumb.png
 
-### rug_200x300 (FitRoom Studio original, built in code)
+### rug_200x300 (FitRoom original, built in code)
 
-- Credit: Oslo Flatweave Rug 200x300: FitRoom Studio original, built in code (all rights reserved)
+- Credit: Oslo Flatweave Rug 200x300: FitRoom original, built in code (all rights reserved)
 - Source: generated by `client/scripts/generate-fitroom-models.mjs` from Carpet015, ambientCG (CC0)
 - License: All rights reserved
 - Files:
@@ -746,9 +778,9 @@ These pieces were built in code by FitRoom Studio and are all rights reserved, n
   - assets/models/fitroom/rug_200x300/rug_200x300.bin
   - assets/models/fitroom/rug_200x300/thumb.png
 
-### rug_240x340 (FitRoom Studio original, built in code)
+### rug_240x340 (FitRoom original, built in code)
 
-- Credit: Oslo Flatweave Rug 240x340: FitRoom Studio original, built in code (all rights reserved)
+- Credit: Oslo Flatweave Rug 240x340: FitRoom original, built in code (all rights reserved)
 - Source: generated by `client/scripts/generate-fitroom-models.mjs` from Carpet016, ambientCG (CC0)
 - License: All rights reserved
 - Files:
@@ -756,9 +788,9 @@ These pieces were built in code by FitRoom Studio and are all rights reserved, n
   - assets/models/fitroom/rug_240x340/rug_240x340.bin
   - assets/models/fitroom/rug_240x340/thumb.png
 
-### fitroom_floor_lamp (FitRoom Studio original, built in code)
+### fitroom_floor_lamp (FitRoom original, built in code)
 
-- Credit: Aria Floor Lamp: FitRoom Studio original, built in code (all rights reserved)
+- Credit: Aria Floor Lamp: FitRoom original, built in code (all rights reserved)
 - Source: generated by `client/scripts/generate-fitroom-models.mjs` from Fabric040, ambientCG (CC0)
 - License: All rights reserved
 - Files:
@@ -766,9 +798,9 @@ These pieces were built in code by FitRoom Studio and are all rights reserved, n
   - assets/models/fitroom/fitroom_floor_lamp/fitroom_floor_lamp.bin
   - assets/models/fitroom/fitroom_floor_lamp/thumb.png
 
-### fitroom_wardrobe (FitRoom Studio original, built in code)
+### fitroom_wardrobe (FitRoom original, built in code)
 
-- Credit: Oslo Two-Door Wardrobe: FitRoom Studio original, built in code (all rights reserved)
+- Credit: Oslo Two-Door Wardrobe: FitRoom original, built in code (all rights reserved)
 - Source: built in code (plain oak colour, no texture)
 - License: All rights reserved
 - Files:
@@ -776,9 +808,9 @@ These pieces were built in code by FitRoom Studio and are all rights reserved, n
   - assets/models/fitroom/fitroom_wardrobe/fitroom_wardrobe.bin
   - assets/models/fitroom/fitroom_wardrobe/thumb.png
 
-### fitroom_platform_bed (FitRoom Studio original, built in code)
+### fitroom_platform_bed (FitRoom original, built in code)
 
-- Credit: Oslo Platform Bed: FitRoom Studio original, built in code (all rights reserved)
+- Credit: Oslo Platform Bed: FitRoom original, built in code (all rights reserved)
 - Source: generated by `client/scripts/generate-fitroom-models.mjs` from Fabric061, ambientCG (CC0)
 - License: All rights reserved
 - Files:
@@ -786,9 +818,9 @@ These pieces were built in code by FitRoom Studio and are all rights reserved, n
   - assets/models/fitroom/fitroom_platform_bed/fitroom_platform_bed.bin
   - assets/models/fitroom/fitroom_platform_bed/thumb.png
 
-### fitroom_sofa_3seat (FitRoom Studio original, built in code)
+### fitroom_sofa_3seat (FitRoom original, built in code)
 
-- Credit: Oslo Three-Seat Sofa: FitRoom Studio original, built in code (all rights reserved)
+- Credit: Oslo Three-Seat Sofa: FitRoom original, built in code (all rights reserved)
 - Source: generated by `client/scripts/generate-fitroom-models.mjs` from Fabric075, ambientCG (CC0)
 - License: All rights reserved
 - Files:
@@ -796,9 +828,57 @@ These pieces were built in code by FitRoom Studio and are all rights reserved, n
   - assets/models/fitroom/fitroom_sofa_3seat/fitroom_sofa_3seat.bin
   - assets/models/fitroom/fitroom_sofa_3seat/thumb.png
 
+### favicon (FitRoom original)
+
+- Credit: favicon: FitRoom original, built in code (all rights reserved)
+- Source: built in code (FitRoom original)
+- License: All rights reserved
+- Files:
+  - client/public/favicon.svg
+
+### living-420x360 truth renders (FitRoom original)
+
+- Credit: living-420x360 truth renders: FitRoom original, built in code (all rights reserved)
+- Source: built in code (FitRoom original)
+- License: All rights reserved
+- Files:
+  - shared/fixtures/photo-room/living-420x360-*
+  - server/data/sam-streams/living-420x360-n-wall.sse
+
+## Generated images (FitRoom original, made with Muse Image)
+
+These images were generated with Muse Image `muse-image-1.0` for FitRoom and are all rights reserved.
+
+### example-room (FitRoom original, generated with Muse Image)
+
+- Credit: example-room: FitRoom original, generated with Muse Image (all rights reserved)
+- Source: generated with Muse Image `muse-image-1.0` (FitRoom original)
+- License: All rights reserved (FitRoom original, generated with Muse Image `muse-image-1.0`)
+- Files:
+  - assets/example-room/*.webp
+  - assets/example-room/*-seg.jpg
+  - assets/example-room/*-label.jpg
+
+### sample-room (FitRoom original, generated with Muse Image)
+
+- Credit: sample-room: FitRoom original, generated with Muse Image (all rights reserved)
+- Source: generated with Muse Image `muse-image-1.0` (FitRoom original)
+- License: All rights reserved (FitRoom original, generated with Muse Image `muse-image-1.0`)
+- Files:
+  - assets/sample-room.webp
+  - assets/sample-room-640.webp
+
+### demo renders (FitRoom original, generated with Muse Image)
+
+- Credit: demo renders: FitRoom original, generated with Muse Image (all rights reserved)
+- Source: generated with Muse Image `muse-image-1.0` (FitRoom original)
+- License: All rights reserved (FitRoom original, generated with Muse Image `muse-image-1.0`)
+- Files:
+  - server/data/demo/render/*.json
+
 ## Code dependencies (their own licences)
 
-Each package below is bundled with the build under its own licence. The full list for the browser bundle, with the complete licence texts, ships with the app at `/licenses/THIRD-PARTY-NOTICES.txt`.
+Each package below is bundled with the build under its own licence. The full list for the browser bundle, with the complete licence texts, ships with the app at `/licenses/THIRD-PARTY-NOTICES.txt` (MIT, BSD-3-Clause, Apache-2.0, OFL-1.1, SAM License).
 
 ### Code: @meta-sam/parser
 
@@ -850,3 +930,9 @@ Each package below is bundled with the build under its own licence. The full lis
 - Package: `ajv` (schema validation via `@fitroom/shared`, bundled in both builds)
 - Source: npm (`https://www.npmjs.com/package/ajv`)
 - License: MIT
+
+### Code: @google/model-viewer
+
+- Package: `@google/model-viewer` (the AR view, imported by `client/src/ar.ts`)
+- Source: npm (`https://www.npmjs.com/package/@google/model-viewer`)
+- License: Apache-2.0

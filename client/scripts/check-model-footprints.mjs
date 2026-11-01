@@ -9,7 +9,7 @@
  * accessor min/max transformed by the glTF node hierarchy, which is exactly
  * what three's Box3.setFromObject measures at runtime.
  *
- * FitRoom Studio originals (built in code) hold a tighter bar: their full
+ * FitRoom originals (built in code) hold a tighter bar: their full
  * bounding box must equal the catalog W × D × H within ±0.5 cm, and their
  * catalog thumbnails must be real renders — existing RGBA PNGs, 256 px on
  * the long side, with transparent corners.

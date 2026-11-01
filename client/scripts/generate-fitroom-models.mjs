@@ -1,5 +1,5 @@
 /**
- * Generate FitRoom Studio's own code-built models: three flat rugs and four
+ * Generate FitRoom's own code-built models: three flat rugs and four
  * simple furniture pieces at real sizes, using only the CC0 textures already
  * in `client/public/assets/textures/ambientcg/`.
  *
@@ -444,7 +444,7 @@ function assemble(id, parts, materials) {
   const nodes = meshes.map((mesh, i) => ({ mesh: i, name: `${id}-node-${i}` }));
   return {
     json: {
-      asset: { generator: "FitRoom Studio generate-fitroom-models.mjs", version: "2.0" },
+      asset: { generator: "FitRoom generate-fitroom-models.mjs", version: "2.0" },
       scene: 0,
       scenes: [{ name: "Scene", nodes: nodes.map((_, i) => i) }],
       nodes,

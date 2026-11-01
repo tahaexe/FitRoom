@@ -90,17 +90,17 @@ export const MODEL_NOTES: Record<string, string> = {
   modern_wooden_cabinet: "Front +Z already; centred, grounded.",
   wooden_display_shelves_01: "Open face faced sideways; +90deg fix applied.",
   potted_plant_02: "Radial decor; centred, grounded.",
-  rug_160x230: "FitRoom Studio original, built in code: flat 160x230cm rug in Carpet012.",
-  rug_200x300: "FitRoom Studio original, built in code: flat 200x300cm rug in Carpet015.",
-  rug_240x340: "FitRoom Studio original, built in code: flat 240x340cm rug in Carpet016.",
+  rug_160x230: "FitRoom original, built in code: flat 160x230cm rug in Carpet012.",
+  rug_200x300: "FitRoom original, built in code: flat 200x300cm rug in Carpet015.",
+  rug_240x340: "FitRoom original, built in code: flat 240x340cm rug in Carpet016.",
   fitroom_floor_lamp:
-    "FitRoom Studio original, built in code: rolled-edge disc base, pole and Fabric040 shade with a rolled hem.",
+    "FitRoom original, built in code: rolled-edge disc base, pole and Fabric040 shade with a rolled hem.",
   fitroom_wardrobe:
-    "FitRoom Studio original, built in code: rounded two-door wardrobe in solid furniture oak with a dark reveal and bar handles, front +Z.",
+    "FitRoom original, built in code: rounded two-door wardrobe in solid furniture oak with a dark reveal and bar handles, front +Z.",
   fitroom_platform_bed:
-    "FitRoom Studio original, built in code: rounded platform bed with a solid-oak frame and headboard at -Z (foot at +Z) and Fabric061 linen.",
+    "FitRoom original, built in code: rounded platform bed with a solid-oak frame and headboard at -Z (foot at +Z) and Fabric061 linen.",
   fitroom_sofa_3seat:
-    "FitRoom Studio original, built in code: rounded three-seat sofa fully upholstered in Fabric075 on dark-metal feet, seat facing +Z with the backrest at -Z.",
+    "FitRoom original, built in code: rounded three-seat sofa fully upholstered in Fabric075 on dark-metal feet, seat facing +Z with the backrest at -Z.",
 };
 
 const loader = new GLTFLoader();
