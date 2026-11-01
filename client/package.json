@@ -26,6 +26,7 @@
     "check:empty-fit": "tsx scripts/check-empty-fit.ts",
     "check:plan-shrink": "tsx scripts/check-plan-shrink.ts",
     "check:scene-sync": "tsx scripts/check-scene-sync.ts",
+    "check:same-room-layout": "tsx scripts/check-same-room-layout.ts",
     "check:contrast": "tsx scripts/check-contrast.ts",
     "check:toolbar": "tsx scripts/check-toolbar.ts",
     "check:cart": "tsx scripts/check-cart.ts",

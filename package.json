@@ -51,6 +51,7 @@
     "check:orbit-resolution": "npm run check:orbit-resolution -w @fitroom/client",
     "check:pointer-ownership": "npm run check:pointer-ownership -w @fitroom/client",
     "check:scene-sync": "npm run check:scene-sync -w @fitroom/client",
+    "check:same-room-layout": "npm run check:same-room-layout -w @fitroom/client",
     "check:contrast": "npm run check:contrast -w @fitroom/client",
     "check:toolbar": "npm run check:toolbar -w @fitroom/client",
     "check:capped": "npm run check:capped -w @fitroom/client",

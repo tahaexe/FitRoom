@@ -123,6 +123,18 @@ export function saveRoomLayout(room: RoomLayout): void {
   }
 }
 
+/**
+ * True when two rooms share the same shell: walls and openings in
+ * centimetres. Finishes, style and confidence do not matter to the fit
+ * engine, so a recorded demo turn replays whatever they are.
+ */
+export function sameRoomLayout(a: RoomLayout, b: RoomLayout): boolean {
+  return (
+    JSON.stringify(a.walls) === JSON.stringify(b.walls) &&
+    JSON.stringify(a.openings) === JSON.stringify(b.openings)
+  );
+}
+
 /** Drop a persisted built-room layout so the sample room opens again. */
 export function clearRoomLayout(roomId: string): void {
   try {

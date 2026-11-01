@@ -170,6 +170,7 @@ import {
   movePiecesInside,
   nearestFreeSpot,
   roomBounds,
+  sameRoomLayout,
   saveRoomLayout,
   SceneStore,
   shouldResumePhotoConfirm,
@@ -1298,8 +1299,12 @@ class FitRoomApp {
     const clone = JSON.parse(JSON.stringify(validScene)) as SceneState;
     this.select(null);
     this.store.commit((draft) => {
+      // The walls and openings go back first, in the same undo step as the
+      // pieces, so a plan-editor change cannot linger under a replay.
+      applyRoomLayout(ROOM, JSON.parse(JSON.stringify(SAMPLE_ROOM)) as RoomLayout);
       draft.items = clone.items;
     });
+    this.rebuildRoom();
     this.syncRoomId();
     // "Use the sample room" returns to Orbit and the first view, like the
     // first visit, so Visualise replays the recorded view.
@@ -1307,9 +1312,10 @@ class FitRoomApp {
     this.resetView();
   }
 
-  /** True when live in the sample room with the sample layout. */
+  /** True when live in the sample room with the sample shell and pieces. */
   private isSampleScene(): boolean {
     if (ROOM.id !== SAMPLE_ROOM.id) return false;
+    if (!sameRoomLayout(ROOM, SAMPLE_ROOM)) return false;
     const sample = (validScene as unknown as SceneState).items.map((item) => ({
       productId: item.productId,
       position: item.position,
