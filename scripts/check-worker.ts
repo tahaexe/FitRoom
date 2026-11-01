@@ -1058,6 +1058,68 @@ async function main(): Promise<void> {
           afterIds.every((id) => typeof id === "string" && HEX64.test(id)),
         JSON.stringify(afterIds),
       );
+      // A stale row plus one demo request without the live header: the
+      // prune at the start of every gateway request removes the stale row,
+      // and the demo answer is the one it was before.
+      const demoStaleId = "cd".repeat(32);
+      const demoStaleAt = Date.now() - 2 * 86_400_000;
+      check(
+        "demo stale rate row inserted",
+        await d1Exec(
+          stateDir,
+          "INSERT INTO counters (kind, id, value, updated_at) VALUES " +
+            `('rate', ${sqlQuote(demoStaleId)}, '[]', ${String(demoStaleAt)})`,
+        ),
+      );
+      const demoNames = readdirSync(join(repoRoot, "server", "data", "demo", "render"))
+        .filter((n) => n.endsWith(".json"))
+        .sort();
+      const demoFirst: unknown =
+        demoNames.length === 0
+          ? null
+          : (JSON.parse(
+              readFileSync(
+                join(repoRoot, "server", "data", "demo", "render", demoNames[0] ?? ""),
+                "utf8",
+              ),
+            ) as unknown);
+      const demoInput: unknown = isRecord(demoFirst) ? demoFirst["input"] : null;
+      const demoAnswer: unknown = isRecord(demoFirst) ? demoFirst["response"] : null;
+      check("demo answer file holds its input", demoInput !== null, demoNames[0] ?? "none");
+      const port5 = await freePort();
+      worker = await startWorker(port5, stateDir, {
+        META_MOCK: "1",
+        META_API_KEY: sentinel,
+        META_RATE_PER_MIN: "1000",
+      });
+      const base5 = `http://127.0.0.1:${String(port5)}`;
+      check(
+        "demo prune worker starts",
+        await waitForHealth(base5),
+        `no /api/health on ${String(port5)}`,
+      );
+      {
+        const demoJar = new Jar(base5);
+        const res = await demoJar.post("render", demoInput);
+        check(
+          "demo request without the live header still answers from the store",
+          res.status === 200 &&
+            isRecord(res.json) &&
+            res.json["status"] === "ok" &&
+            res.json["source"] === "demo" &&
+            JSON.stringify(res.json["data"]) === JSON.stringify(demoAnswer),
+          JSON.stringify(res.json)?.slice(0, 200),
+        );
+      }
+      await stopWorker(worker);
+      worker = null;
+      const afterDemo = await d1Rows(stateDir, "SELECT id FROM counters WHERE kind = 'rate'");
+      const afterDemoIds = afterDemo.rows.map((row) => row["id"]);
+      check(
+        "demo request prunes the stale row",
+        afterDemo.ok && !afterDemoIds.includes(demoStaleId),
+        JSON.stringify(afterDemoIds),
+      );
     }
 
     // 10. X-Forwarded-For is never trusted: two sessions with a distinct

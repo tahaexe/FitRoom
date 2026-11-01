@@ -33,6 +33,12 @@ import type { GatewayStore } from "./store.js";
 
 export const SESSION_COOKIE = "fitroom_sid";
 
+/**
+ * Last stale-rate-row prune, per running instance. The prune runs at most
+ * once a minute; every gateway request in between skips it.
+ */
+let lastRatePruneMs = 0;
+
 export interface ParsedBody {
   /** The route's typed input (the live flag already stripped). */
   input: unknown;
@@ -151,6 +157,18 @@ export async function serveGatewayRequest(
 ): Promise<Response> {
   const { config, store } = deps;
   const clientIp = deps.clientIp ?? nodeClientIp;
+  // Prune rate rows older than a day on every gateway request, before the
+  // demo store, at most once a minute per running instance. A failing
+  // prune never fails the request.
+  const pruneNow = Date.now();
+  if (pruneNow - lastRatePruneMs >= 60_000) {
+    lastRatePruneMs = pruneNow;
+    try {
+      await store.pruneStaleRateRows(pruneNow);
+    } catch {
+      console.warn("gateway rate prune failed");
+    }
+  }
   let body: unknown;
   try {
     body = await c.req.json();

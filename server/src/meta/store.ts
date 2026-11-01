@@ -85,6 +85,8 @@ export interface GatewayStore {
     nowMs: number,
     weight?: number,
   ): Promise<boolean>;
+  /** Delete rate rows older than a day (bounded); never fails a request. */
+  pruneStaleRateRows(nowMs: number): Promise<void>;
   /** Session + global-budget check before a generation. */
   checkGenerationCap(
     sessionId: string,
@@ -187,8 +189,11 @@ export function createNodeStore(options: NodeStoreOptions): GatewayStore {
         nowMs,
         weight,
       );
-      pruneRateHits(caps, nowMs);
       return allowed;
+    },
+    pruneStaleRateRows(nowMs): Promise<void> {
+      pruneRateHits(caps, nowMs);
+      return Promise.resolve();
     },
     checkGenerationCap(
       sessionId,
@@ -469,12 +474,17 @@ export function createD1Store(db: D1DatabaseLike, bundled: BundledGatewayData): 
       if (spent + weight > limitPerMinute + 1e-9) return false;
       hits.push({ at: nowMs, weight });
       await writeCounter(db, "rate", id, JSON.stringify(hits), nowMs);
-      // Cheap, bounded prune of rate rows older than one day.
+      return true;
+    },
+    async pruneStaleRateRows(nowMs): Promise<void> {
+      // Cheap, bounded prune of rate rows older than one day. The rowid
+      // sub-select needs no SQLite build option.
       await db
-        .prepare("DELETE FROM counters WHERE kind = 'rate' AND updated_at < ? LIMIT 50")
+        .prepare(
+          "DELETE FROM counters WHERE rowid IN (SELECT rowid FROM counters WHERE kind = 'rate' AND updated_at < ? LIMIT 50)",
+        )
         .bind(nowMs - 86_400_000)
         .run();
-      return true;
     },
     async checkGenerationCap(
       sessionId,
