@@ -102,6 +102,7 @@ export function cartFitError(count: number): string {
 export const CART_SHARE_TITLE = "Share this layout";
 export const CART_COPY_LINK = "Copy link";
 export const CART_LINK_COPIED = "Link copied";
+export const CART_LINK_MANUAL = "Select the link and press Ctrl+C to copy it.";
 export const CART_SHARE_LABEL = "Shareable link";
 export const SHARE_DIALOG_TEXT =
   "Open the shared layout? It replaces your current room; the sample room stays in the room menu.";

@@ -54,6 +54,7 @@ import {
   CART_EMPTY,
   CART_FIT_OK,
   CART_LINK_COPIED,
+  CART_LINK_MANUAL,
   CART_PANEL_TITLE,
   CART_SHARE_LABEL,
   CART_SHARE_TITLE,
@@ -3399,21 +3400,23 @@ class FitRoomApp {
     copy.textContent = CART_COPY_LINK;
     copy.addEventListener("click", () => {
       const done = (): void => {
+        copied.textContent = CART_LINK_COPIED;
+        copied.removeAttribute("hidden");
+      };
+      const manual = (): void => {
+        shareField.select();
+        copied.textContent = CART_LINK_MANUAL;
         copied.removeAttribute("hidden");
       };
       try {
         const value = shareField.value;
         if (typeof navigator !== "undefined" && navigator.clipboard !== undefined) {
-          void navigator.clipboard.writeText(value).then(done, () => {
-            shareField.select();
-            done();
-          });
+          void navigator.clipboard.writeText(value).then(done, manual);
         } else {
-          shareField.select();
-          done();
+          manual();
         }
       } catch {
-        done();
+        manual();
       }
     });
     const copied = document.createElement("p");
