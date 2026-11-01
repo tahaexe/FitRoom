@@ -2563,10 +2563,10 @@ class FitRoomApp {
     for (const id of ["phone-menu", "phone-ai-menu"]) {
       const menu = document.getElementById(id);
       if (menu !== null && !menu.hasAttribute("hidden")) {
-        menu.setAttribute("hidden", "");
         closed = true;
       }
     }
+    if (closed) this.closePhoneMenus();
     if (this.sheets?.close() === true) {
       closed = true;
       if (this.sidePanel === "cart") {

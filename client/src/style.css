@@ -2782,6 +2782,10 @@ button.cart-row {
     right: auto;
   }
 
+  body:has(.phone-menu:not([hidden])) .guide-bubble {
+    visibility: hidden;
+  }
+
   /* The room fills the screen between the two bars. */
   #scene-container {
     top: calc(var(--top-bar-phone) + env(safe-area-inset-top));

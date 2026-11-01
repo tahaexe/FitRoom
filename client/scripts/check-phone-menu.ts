@@ -93,5 +93,28 @@ for (const menuId of ["phone-menu", "phone-ai-menu"]) {
   );
 }
 
+// An open phone menu hides the guide bubble on phones, so every AI menu
+// item can be tapped while the guide shows.
+const style = readFileSync(join(clientRoot, "src", "style.css"), "utf8");
+const phoneMediaAt = style.indexOf("@media (max-width: 720px)");
+const bubbleRuleAt = style.indexOf("body:has(.phone-menu:not([hidden])) .guide-bubble");
+check(
+  "phone-menu:guide-bubble-hidden-while-menu-open",
+  phoneMediaAt >= 0 &&
+    bubbleRuleAt > phoneMediaAt &&
+    style.slice(bubbleRuleAt, bubbleRuleAt + 200).includes("visibility: hidden"),
+  "the phone media query does not hide .guide-bubble while a .phone-menu is open",
+);
+
+// Escape closes the phone chrome through closePhoneMenus, so aria-expanded
+// on #phone-ai and #tool-phone-menu resets to "false".
+const chromeAt = main.indexOf("closePhoneChrome");
+const chromeBody = chromeAt < 0 ? "" : main.slice(chromeAt, chromeAt + 800);
+check(
+  "phone-menu:close-chrome-closes-menus",
+  chromeBody.includes("closePhoneMenus()"),
+  "closePhoneChrome does not call closePhoneMenus()",
+);
+
 if (failures > 0) process.exit(1);
 console.log("phone-menu ok");
