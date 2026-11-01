@@ -282,6 +282,26 @@ check(
 );
 checkRoundTrip("typed", typedRoom, typedScene);
 
+// ---- a variant-free piece ("") shares like any other piece ----
+const variantFreeScene: SceneState = {
+  ...sampleScene,
+  items: [
+    ...sampleScene.items,
+    {
+      instanceId: "sofa_02-2",
+      productId: "sofa_02",
+      position: { x: 210, z: 180 },
+      rotationY: 0,
+      variant: "",
+    },
+  ],
+};
+check("variant-free scene validates", validateSceneState(variantFreeScene).ok);
+check(
+  "variant-free scene encodes and decodes",
+  decodeLayout(encodeLayout(sampleRoom, variantFreeScene), catalogMap) !== null,
+);
+
 // ---- rejections: unknown fields and out-of-range numbers ----
 if (sampleFragment !== null) {
   const base = payloadOf(sampleFragment);

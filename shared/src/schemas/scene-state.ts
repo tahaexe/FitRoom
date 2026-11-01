@@ -31,7 +31,7 @@ export const sceneStateSchema = {
           additionalProperties: false,
         },
         rotationY: { type: "number" },
-        variant: { type: "string", minLength: 1 },
+        variant: { type: "string" },
       },
       required: ["instanceId", "productId", "position", "rotationY", "variant"],
       additionalProperties: false,

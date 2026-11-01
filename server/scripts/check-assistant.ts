@@ -518,6 +518,33 @@ async function main(): Promise<void> {
       "The brief needs keepExisting true or false.",
   );
 
+  // ---- variant-free pieces: catalog items without variants write "" ----
+  const variantFreePiece = {
+    instanceId: "sofa_02-2",
+    productId: "sofa_02",
+    position: { x: 210, z: 180 },
+    rotationY: 0,
+    variant: "",
+  };
+  const variantFreeScene: SceneState = {
+    ...scene,
+    items: [...scene.items, variantFreePiece],
+  };
+  check(
+    "variant-free piece passes",
+    assistantRequestError({ ...validBody, scene: variantFreeScene }) === null,
+  );
+  check(
+    "default variant passes",
+    assistantRequestError({
+      ...validBody,
+      scene: {
+        ...scene,
+        items: [...scene.items, { ...variantFreePiece, variant: "default" }],
+      },
+    }) === null,
+  );
+
   // ---- style groups by catalog tag (case-insensitive) ----
   check(
     "style: modern matches mid-century modern",
@@ -738,6 +765,26 @@ async function main(): Promise<void> {
       process.exitCode = 1;
       return;
     }
+
+    // A scene holding a variant-free piece is valid, so an unrecorded round
+    // with it misses the demo store (HTTP 200 demo-miss), never a 400.
+    const variantFreeProbe = {
+      request: "Arrange the room holding the variant-free sofa",
+      messages: [
+        { role: "user" as const, content: "Arrange the room holding the variant-free sofa" },
+      ],
+      room,
+      scene: variantFreeScene,
+    };
+    const variantFreeFetched = await fetchRound(variantFreeProbe);
+    check(
+      "variant-free scene demo-misses, never 400",
+      variantFreeFetched !== null &&
+        variantFreeFetched.status === 200 &&
+        isRecord(variantFreeFetched.payload) &&
+        variantFreeFetched.payload["status"] === "demo-miss",
+      variantFreeFetched === null ? "no answer" : `status=${String(variantFreeFetched.status)}`,
+    );
 
     const firsts = rebuilt;
     const reached = new Set<string>();

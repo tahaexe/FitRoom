@@ -1160,7 +1160,7 @@ class FitRoomApp {
       productId: item.id,
       position: { x: Math.round(spot.x), z: Math.round(spot.z) },
       rotationY: spot.rotationY,
-      variant: item.variants[0]?.name ?? "",
+      variant: item.variants[0]?.name ?? "default",
     };
     this.store.commit((draft) => {
       draft.items.push(instance);
@@ -1187,7 +1187,7 @@ class FitRoomApp {
       productId,
       position: { x: Math.round(x), z: Math.round(z) },
       rotationY,
-      variant: entry.variants[0]?.name ?? "",
+      variant: entry.variants[0]?.name ?? "default",
     };
     // Seat accessories (coffee-table, ottoman, side-table) are sited
     // ignoring same-category pieces: placing one replaces a conflicting
@@ -1225,7 +1225,7 @@ class FitRoomApp {
       productId,
       position: { x: Math.round(x), z: Math.round(z) },
       rotationY,
-      variant: entry.variants[0]?.name ?? "",
+      variant: entry.variants[0]?.name ?? "default",
     };
     this.store.commit((draft) => {
       draft.items = draft.items.filter((i) => i.instanceId !== oldInstanceId);
