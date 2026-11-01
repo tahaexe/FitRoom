@@ -26,6 +26,7 @@ export class Inspector {
       onRotate: (id: string, deg: number) => void;
       onVariant: (id: string, variant: string) => void;
       onDelete: (id: string) => void;
+      onClose: () => void;
       ar?: {
         isAvailable: () => boolean;
         onOpen: () => void;
@@ -54,9 +55,17 @@ export class Inspector {
     this.root.innerHTML = "";
     if (this.expanded) this.root.setAttribute("data-expanded", "true");
     else this.root.removeAttribute("data-expanded");
+    const head = document.createElement("div");
+    head.className = "inspector-head";
     const title = document.createElement("h2");
     title.textContent = "Inspector";
-    this.root.appendChild(title);
+    const close = document.createElement("button");
+    close.type = "button";
+    close.className = "inspector-close";
+    close.textContent = "Close";
+    close.addEventListener("click", () => this.opts.onClose());
+    head.append(title, close);
+    this.root.appendChild(head);
     const item = this.selected;
     if (item === null) {
       const p = document.createElement("p");

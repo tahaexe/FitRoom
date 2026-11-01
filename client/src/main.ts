@@ -718,6 +718,10 @@ class FitRoomApp {
       onRotate: (id, deg) => this.commitRotate(id, deg),
       onVariant: (id, variant) => this.commitVariant(id, variant),
       onDelete: (id) => this.deleteItem(id),
+      onClose: () => {
+        this.select(null);
+        this.showSidePanel("none");
+      },
       ar: {
         isAvailable: () => this.arAvailable,
         onOpen: () => this.openARNow(),

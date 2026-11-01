@@ -364,9 +364,9 @@ button {
 .chips {
   display: flex;
   flex-shrink: 0;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
   gap: 8px;
-  overflow-x: auto;
+  overflow-x: visible;
   padding-bottom: 4px;
   scrollbar-width: thin;
 }
@@ -501,8 +501,30 @@ button {
 #inspector h2 {
   font-size: 18px;
   font-weight: 700;
-  margin: 0 0 8px;
+  margin: 0;
   color: var(--ink);
+}
+
+.inspector-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin: 0 0 8px;
+}
+
+.inspector-close {
+  min-width: 44px;
+  min-height: 44px;
+  background: #ffffff;
+  color: var(--ink);
+  border: 1px solid var(--border-color);
+  border-radius: 999px;
+  padding: 8px 16px;
+  font-family: inherit;
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
 }
 
 #inspector h3 {
@@ -2993,6 +3015,12 @@ body[data-flow-open="true"] #tool-phone-menu {
     font-weight: 600;
     font-size: 14px;
     cursor: pointer;
+  }
+
+  /* Phones keep the one scrolling chip row. */
+  .chips {
+    flex-wrap: nowrap;
+    overflow-x: auto;
   }
 
   /* The side-panel offset never applies on a phone: sheets cover the
