@@ -291,6 +291,13 @@ function main(): void {
       assistantSource.includes("ASSISTANT_DEMO_CHIPS[0]") &&
       assistantSource.includes("ASSISTANT_DEMO_CHIPS[5]"),
   );
+  const syncMode = region(assistantSource, "syncMode(): void", "private recordedChips");
+  check(
+    "arrange chips refill for the room on screen",
+    syncMode.includes("arrangeChipsRoom") &&
+      syncMode.includes("existing === null || this.arrangeChipsRoom !== roomKey"),
+    syncMode.slice(0, 120),
+  );
   const sendDemo = region(assistantSource, "private async sendDemo", "private addSampleConfirm");
   check(
     "arrange replays in place in the example room",

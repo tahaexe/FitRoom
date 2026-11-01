@@ -221,15 +221,26 @@ export class AssistantPanel {
     const existing = arrangeView?.querySelector(":scope > .assistant-chips") ?? null;
     if (isLive()) {
       existing?.remove();
-    } else if (existing === null && arrangeView !== undefined) {
-      const chips = this.buildChips();
-      arrangeView.prepend(chips);
+    } else if (arrangeView !== undefined) {
+      // The row belongs to one room: refill it whenever the Arrange tab
+      // shows and it was filled for another room (or not yet), so the
+      // example room never keeps the sample room's chips.
+      const roomKey = `${this.deps.room.id}|${this.deps.room.name}`;
+      if (existing === null || this.arrangeChipsRoom !== roomKey) {
+        this.arrangeChipsRoom = roomKey;
+        existing?.remove();
+        const chips = this.buildChips();
+        arrangeView.prepend(chips);
+      }
     }
     this.syncFurnishMode();
   }
 
   /** Demo-store request texts, once loaded (demo mode shows no unrecorded chip). */
   private recordedChips: string[] | null = null;
+
+  /** Room key the Arrange chips were last filled for (refill on room switch). */
+  private arrangeChipsRoom: string | null = null;
 
   /** Room key the Furnish chips were last filled for (refill on room switch). */
   private furnishChipsRoom: string | null = null;
