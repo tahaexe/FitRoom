@@ -1654,6 +1654,7 @@ class FitRoomApp {
       },
     });
     this.photoFlow = flow;
+    this.syncFlowChrome();
     document.body.appendChild(flow.element);
     this.refreshMenu();
     this.updateTopBar();

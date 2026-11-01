@@ -184,5 +184,19 @@ check(
   "api.ts setLive dispatches fitroom:live-change",
 );
 
+// The photo steps hide the room menu, the more button and the phone bar
+// through data-flow-open, so openPhotoFlow sets the flag after the flow exists.
+const openPhotoAt = main.indexOf("private openPhotoFlow");
+const openPhotoEnd = main.indexOf("private closePhotoFlow", openPhotoAt);
+const openPhotoBody =
+  openPhotoAt < 0 || openPhotoEnd < 0 ? "" : main.slice(openPhotoAt, openPhotoEnd);
+const photoAssignAt = openPhotoBody.indexOf("this.photoFlow = flow");
+const photoSyncAt = openPhotoBody.indexOf("this.syncFlowChrome()", photoAssignAt + 1);
+check(
+  "phone-menu:photo-flow-sets-flag",
+  photoAssignAt >= 0 && photoSyncAt > photoAssignAt,
+  "openPhotoFlow does not call syncFlowChrome() after setting this.photoFlow",
+);
+
 if (failures > 0) process.exit(1);
 console.log("phone-menu ok");
