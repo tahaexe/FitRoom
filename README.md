@@ -24,6 +24,7 @@ For your own room on a computer, open the room menu at the top left and choose *
 - Arrange (Muse Spark with tool calls): layout requests in plain words. A turn is applied only when the fit engine finds no error. A request the room can't take is refused with the sizes, for example "The Heritage Grand Sofa is 273 cm wide but the Door wall between the door and the corner is only 30 cm, so it can't fit there." The list of tool calls gives each refused call its own line.
 - Furnish (Muse Spark with tool calls): seats, a style and a budget. Muse Spark furnishes the room from the catalog, the code refuses any piece that would pass the budget, and the result card computes the seats and the prices. "Keep the pieces already here" completes a room instead of starting over.
 - Visualise (Muse Image): a photoreal picture of the layout, with a before/after slider and a download.
+- See it in AR: one selected piece at its real size, on phones that can open AR.
 - From photos (SAM 3.1 and Muse Spark): one photo per wall and two walls taped corner to corner give a draft plan to confirm. Each wall length is marked measured or estimated, with its margin in centimetres.
 - Build a room: type the room's width and length in centimetres or feet and inches, then add its doors and windows in the plan editor.
 - Undo and redo, and autosave in the browser. **Add to cart** opens a cart panel under the line "Demo store · invented products and prices". It lists each piece with its size and price, the total and "✓ Everything fits", or how many pieces don't fit yet with those pieces marked. **Download list** saves it as JSON, and the shareable link (**Copy link**) rebuilds the room and its pieces from the address alone.
@@ -329,7 +330,7 @@ The downloaded 3D models, the textures and the HDRI are all CC0 (public domain);
 - HDRI: [Lebombo](https://polyhaven.com/a/lebombo) by Greg Zaal, Poly Haven.
 - Test data: SAM 3.1 answers recorded from eight CC0 room photos on Wikimedia Commons by Jarosław Ceborski, Carlos ZGZ, Artchapiz, Profpcde, Paikan06, Lo, Wilfredor and Andy Li. The photos are not in this repository.
 - `@meta-sam/parser` by Meta, under the SAM License; a copy ships in `client/public/licenses/SAM-LICENSE.txt`.
-- Libraries: three.js, Hono, Ajv and exifr (MIT), dotenv (BSD-2-Clause), Vite and TypeScript for the build. Typeface: Nunito, SIL Open Font License 1.1, via Fontsource. The licence texts of the nine npm packages in the browser bundle ship with the app at `/licenses/THIRD-PARTY-NOTICES.txt`, written by the build, and Nunito's at `/licenses/OFL-1.1-Nunito.txt`; the Credits dialog links both. The server's packages are listed in [CREDITS.md](CREDITS.md).
+- Libraries: three.js, Hono, Ajv and exifr (MIT), @google/model-viewer (Apache-2.0), dotenv (BSD-2-Clause), Vite and TypeScript for the build. Typeface: Nunito, SIL Open Font License 1.1, via Fontsource. The licence texts of the 21 npm packages in the browser bundle ship with the app at `/licenses/THIRD-PARTY-NOTICES.txt`, written by the build, and Nunito's at `/licenses/OFL-1.1-Nunito.txt`; the Credits dialog links both. The server's packages are listed in [CREDITS.md](CREDITS.md).
 
 ## License
 
