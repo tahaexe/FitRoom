@@ -167,6 +167,7 @@ import {
   loadRoomLayout,
   makeInstanceId,
   markPhotoBuiltRoom,
+  movePiecesInside,
   nearestFreeSpot,
   roomBounds,
   saveRoomLayout,
@@ -810,6 +811,27 @@ class FitRoomApp {
     this.editorStore = new EditorStore(ROOM);
     this.editorStore.onCommitted((room) => {
       applyRoomLayout(ROOM, room);
+      // A committed plan edit can leave pieces outside the room or through
+      // a wall: move those pieces to the nearest free spot inside as one
+      // scene-store commit, so one Undo puts them back. Nothing moves when
+      // a room loads, switches or resets (this fires for plan commits only),
+      // and nothing commits when every piece is already inside.
+      const planEngine = new FitEngine(ROOM, catalogProducts(CATALOG_MAP));
+      const planMoves = movePiecesInside(ROOM, CATALOG_MAP, this.store.state, (items) =>
+        planEngine.check({ ...this.store.state, items }),
+      );
+      if (planMoves.length > 0) {
+        const planById = new Map(planMoves.map((move) => [move.instanceId, move]));
+        this.store.commit((draft) => {
+          for (const item of draft.items) {
+            const move = planById.get(item.instanceId);
+            if (move !== undefined) {
+              item.position = { ...move.position };
+              item.rotationY = move.rotationY;
+            }
+          }
+        });
+      }
       // Every committed plan edit saves a built room beside the scene
       // autosave, so the built room survives a reload.
       if (ROOM.id === "manual-room" || ROOM.id === "photos-room") saveRoomLayout(ROOM);

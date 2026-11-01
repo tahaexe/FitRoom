@@ -663,6 +663,75 @@ export function nearestFreeSpot(
   return bestHolder.current?.spot ?? { x: origin.x + 0.5, z: origin.z, rotationY: 0 };
 }
 
+/** One piece's new spot after a plan change (position in plan cm). */
+export interface PieceMove {
+  instanceId: string;
+  position: PlanPoint;
+  rotationY: number;
+}
+
+/**
+ * New spots for every piece a plan change left outside the room.
+ *
+ * A piece moves only when it sits outside the room (`isInsideRoom` false)
+ * or carries an "outside" fit issue. Each move searches from where the
+ * piece stood with `nearestFreeSpot`, with that piece left out of the
+ * obstacles and the pieces already moved in their new spots; pieces that
+ * are inside keep their place.
+ */
+export function movePiecesInside(
+  room: RoomLayout,
+  catalog: Map<string, CatalogItem>,
+  state: SceneState,
+  fitCheck?: (items: SceneItem[]) => FitIssue[],
+): PieceMove[] {
+  const working = new Map<string, SceneItem>(
+    state.items.map((item) => [item.instanceId, { ...item, position: { ...item.position } }]),
+  );
+  const moves: PieceMove[] = [];
+  const hasOutsideIssue = (id: string, items: SceneItem[]): boolean => {
+    if (fitCheck === undefined) return false;
+    return fitCheck(items).some((issue) => issue.type === "outside" && issue.itemIds.includes(id));
+  };
+  for (const original of state.items) {
+    const current = working.get(original.instanceId);
+    if (current === undefined) continue;
+    const snapshot = [...working.values()];
+    const outside =
+      !isInsideRoom(current, catalog, room) || hasOutsideIssue(current.instanceId, snapshot);
+    if (!outside) continue;
+    const others = snapshot.filter((entry) => entry.instanceId !== current.instanceId);
+    const othersState: SceneState = { ...state, items: others };
+    const spot = nearestFreeSpot(
+      current.productId,
+      catalog,
+      room,
+      othersState,
+      { x: original.position.x, z: original.position.z },
+      fitCheck,
+    );
+    const next: PieceMove = {
+      instanceId: current.instanceId,
+      position: { x: Math.round(spot.x), z: Math.round(spot.z) },
+      rotationY: spot.rotationY,
+    };
+    if (
+      next.position.x === current.position.x &&
+      next.position.z === current.position.z &&
+      next.rotationY === current.rotationY
+    ) {
+      continue;
+    }
+    working.set(current.instanceId, {
+      ...current,
+      position: { ...next.position },
+      rotationY: next.rotationY,
+    });
+    moves.push(next);
+  }
+  return moves;
+}
+
 /** Footprint corners inflated by `gapCm` on every side (plan cm). */
 function inflatedCorners(
   item: SceneItem,

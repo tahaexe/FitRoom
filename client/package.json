@@ -24,6 +24,7 @@
     "check:labels": "tsx scripts/check-labels.ts",
     "check:confirm-walls": "tsx scripts/check-confirm-walls.ts",
     "check:empty-fit": "tsx scripts/check-empty-fit.ts",
+    "check:plan-shrink": "tsx scripts/check-plan-shrink.ts",
     "check:scene-sync": "tsx scripts/check-scene-sync.ts",
     "check:contrast": "tsx scripts/check-contrast.ts",
     "check:toolbar": "tsx scripts/check-toolbar.ts",
