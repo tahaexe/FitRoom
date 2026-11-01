@@ -2582,7 +2582,23 @@ class FitRoomApp {
   }
 
   private phoneMenuAction(action: string): void {
-    if (action === "plan") {
+    if (action === "room-sample") {
+      this.sheets?.close();
+      this.closePhoneMenus();
+      this.pickRoom("sample");
+    } else if (action === "room-reset-demo") {
+      this.sheets?.close();
+      this.closePhoneMenus();
+      this.pickRoom("reset-demo");
+    } else if (action === "room-manual") {
+      this.sheets?.close();
+      this.closePhoneMenus();
+      this.pickRoom("manual");
+    } else if (action === "room-photos") {
+      this.sheets?.close();
+      this.closePhoneMenus();
+      this.pickRoom("photos");
+    } else if (action === "plan") {
       this.sheets?.close();
       this.setMode(this.mode === "plan" ? "orbit" : "plan");
     } else if (action === "clearance") {

@@ -131,5 +131,22 @@ check(
   "closePhoneChrome does not call closePhoneMenus()",
 );
 
+// The four room items switch rooms through pickRoom.
+for (const [action, id] of [
+  ["room-sample", "sample"],
+  ["room-reset-demo", "reset-demo"],
+  ["room-manual", "manual"],
+  ["room-photos", "photos"],
+] as const) {
+  const needle = `action === "${action}"`;
+  const at = main.indexOf(needle);
+  const body = at < 0 ? "" : main.slice(at, at + 400);
+  check(
+    `phone-menu:${action}-picks-${id}`,
+    body.includes(`this.pickRoom("${id}")`),
+    `${action} does not call pickRoom("${id}")`,
+  );
+}
+
 if (failures > 0) process.exit(1);
 console.log("phone-menu ok");
