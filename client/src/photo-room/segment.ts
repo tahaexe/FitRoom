@@ -23,11 +23,13 @@ import {
 } from "@fitroom/shared";
 import { postSegment } from "../api";
 import { segmentInstances } from "../capture/sam";
+import { NOT_READY_MESSAGE } from "../copy";
 import {
   FALLBACK_DECODE_CONCEPT,
   FLOOR_FALLBACK_CONCEPT,
   FLOOR_SECOND_TRY_CONCEPT,
   NO_FLOOR_MESSAGE,
+  NO_SOLUTION_MESSAGE,
   NO_WALL_MESSAGE,
   isEmptyAnswerText,
   needsFloorSecondTry,
@@ -121,7 +123,11 @@ async function requestFloorFallback(
     if (result.status === "capped") return { capped: true };
     if (result.status !== "ok") {
       throw new Error(
-        result.status === "error" ? result.message : "The AI service is unreachable.",
+        result.status === "error"
+          ? result.message
+          : result.status === "not-ready"
+            ? NOT_READY_MESSAGE
+            : "The AI service is unreachable.",
       );
     }
     const text = textOf(result.data);
@@ -212,7 +218,11 @@ export async function analyseWallPhoto(
     if (result.status === "capped") return { capped: true };
     if (result.status !== "ok") {
       throw new Error(
-        result.status === "error" ? result.message : "The AI service is unreachable.",
+        result.status === "error"
+          ? result.message
+          : result.status === "not-ready"
+            ? NOT_READY_MESSAGE
+            : "The AI service is unreachable.",
       );
     }
     const text = textOf(result.data);
@@ -268,7 +278,7 @@ export async function analyseWallPhoto(
     ...(doorTap !== null && doorTap.wall === wall ? { doorTap } : {}),
   });
   const solution = draft.photos[0];
-  if (solution === undefined) throw new Error("The room scanner found no wall in that photo.");
+  if (solution === undefined) throw new Error(NO_SOLUTION_MESSAGE);
   // The masks are at hand now: tint from the photo pixels, no extra call.
   // Pixels never block the check: a missed read keeps null colours.
   let wallTint: string | null = null;

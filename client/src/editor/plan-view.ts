@@ -42,6 +42,8 @@ const FRAME_MARGIN = 0.08;
 const PILL_OFFSET_CM = 28;
 const WALL_STROKE_CM = 7;
 const HIT_STROKE_CM = 26;
+/** Door/window grab line: answers 44 px like the corner dots. */
+const OPENING_HIT_STROKE_CM = 44;
 
 interface Vec {
   x: number;
@@ -398,7 +400,7 @@ export class EditorPlanView {
     hit.setAttribute("x2", fmt(p1.x));
     hit.setAttribute("y2", fmt(-p1.z));
     hit.setAttribute("class", "editor-hit");
-    hit.setAttribute("stroke-width", String(HIT_STROKE_CM));
+    hit.setAttribute("stroke-width", String(OPENING_HIT_STROKE_CM));
     hit.dataset["openingId"] = opening.id;
     nodes.push(hit);
 

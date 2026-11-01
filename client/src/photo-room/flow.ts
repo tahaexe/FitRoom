@@ -50,6 +50,7 @@ import {
   CAPPED_MESSAGE,
   FLOW_STEPS,
   LEAVE,
+  NOT_READY_MESSAGE,
   PHOTO_ANALYSING,
   PHOTO_DEMO_MISS,
   PHOTO_PICK,
@@ -868,6 +869,29 @@ export class PhotoFlow {
       const message = document.createElement("p");
       message.className = "photo-sheet-bad";
       message.textContent = state.error;
+      // The server not ready yet names its two ways out: the sample room
+      // or Live AI.
+      if (state.error === NOT_READY_MESSAGE) {
+        const sample = document.createElement("button");
+        sample.type = "button";
+        sample.className = "photo-primary";
+        sample.textContent = USE_SAMPLE_ROOM;
+        sample.addEventListener("click", () => {
+          if (this.callbacks.onUseSample !== undefined) this.callbacks.onUseSample();
+          else this.callbacks.onClose();
+        });
+        const live = document.createElement("button");
+        live.type = "button";
+        live.className = "photo-quiet";
+        live.textContent = TURN_ON_LIVE;
+        live.addEventListener("click", () => {
+          void requestLive().then((ok) => {
+            if (ok) void this.analyse(letter, this.tapFor(letter));
+          });
+        });
+        sheet.append(message, sample, live);
+        return sheet;
+      }
       // An empty wall/floor answer says what to retake: no "Try again"
       // (it would send the same request for the same answer). Time-outs,
       // network errors and caps keep it.

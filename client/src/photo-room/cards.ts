@@ -24,6 +24,9 @@ export const NO_WALL_MESSAGE =
 export const NO_FLOOR_MESSAGE =
   "We couldn't find the floor. Get the floor in front of the wall in view and well lit, then retake.";
 
+/** Solved nothing from a readable photo: retake, don't retry. */
+export const NO_SOLUTION_MESSAGE = "The room scanner found no wall in that photo.";
+
 /** Concept the server segments for the one-shot floor fallback. */
 export const FLOOR_FALLBACK_CONCEPT = "carpet";
 
@@ -64,7 +67,11 @@ export function isEmptyAnswerText(text: string | null): boolean {
  * refused credit never reaches this card: it shows the resting line).
  */
 export function errorRecovery(message: string): "retry" | "retake" {
-  return message === NO_WALL_MESSAGE || message === NO_FLOOR_MESSAGE ? "retake" : "retry";
+  return message === NO_WALL_MESSAGE ||
+    message === NO_FLOOR_MESSAGE ||
+    message === NO_SOLUTION_MESSAGE
+    ? "retake"
+    : "retry";
 }
 
 /** Corner row copy when the solver sees two walls in one frame. */

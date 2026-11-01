@@ -91,6 +91,7 @@ export class FirstOpen {
   private planRect!: SVGRectElement;
   private planW!: SVGTextElement;
   private planL!: SVGTextElement;
+  private moreDetails!: HTMLDetailsElement;
   private unitCmBtn!: HTMLButtonElement;
   private unitFtBtn!: HTMLButtonElement;
 
@@ -311,6 +312,7 @@ export class FirstOpen {
 
     const more = document.createElement("details");
     more.className = "size-more";
+    this.moreDetails = more;
     const summary = document.createElement("summary");
     summary.textContent = "More";
     more.appendChild(summary);
@@ -361,7 +363,7 @@ export class FirstOpen {
     const shape = el("button", "setup-link", SHAPE_IN_EDITOR);
     shape.type = "button";
     shape.addEventListener("click", () => {
-      this.callbacks.onShapeInEditor(this.currentSize());
+      this.callbacks.onShapeInEditor(this.currentSizeLenient());
     });
     form.appendChild(shape);
 
@@ -379,6 +381,26 @@ export class FirstOpen {
 
   private parsed(input: HTMLInputElement): number | null {
     return parseLengthToCm(input.value);
+  }
+
+  /**
+   * Plan-editor link size: every valid value is kept and only a missing
+   * or invalid field falls back to the sample room's size, so nothing
+   * typed is dropped.
+   */
+  private currentSizeLenient(): RoomSize {
+    const w = this.parsed(this.widthInput);
+    const l = this.parsed(this.lengthInput);
+    const cRaw = this.ceilingInput.value.trim() === "" ? "250" : this.ceilingInput.value;
+    const c = parseLengthToCm(cRaw);
+    const wOk = w !== null && validateSide("width", w, this.unit) === null;
+    const lOk = l !== null && validateSide("length", l, this.unit) === null;
+    const cOk = c !== null && validateCeiling(c, this.unit) === null;
+    return {
+      widthCm: wOk && w !== null ? w : 420,
+      lengthCm: lOk && l !== null ? l : 360,
+      ceilingCm: cOk && c !== null ? c : 250,
+    };
   }
 
   private currentSize(): RoomSize | null {
@@ -440,10 +462,12 @@ export class FirstOpen {
       this.slipRow.setAttribute("hidden", "");
       this.slipRow.innerHTML = "";
     }
-    // "Build my room" stays disabled until both sides are valid, saying why.
+    // "Build my room" stays disabled until both sides and the ceiling
+    // are valid, saying why. An empty ceiling means the 250 cm default.
     const wOk = w !== null && validateSide("width", w, this.unit) === null;
     const lOk = l !== null && validateSide("length", l, this.unit) === null;
-    const ready = wOk && lOk;
+    const cOk = cRaw.trim() === "" ? true : c !== null && validateCeiling(c, this.unit) === null;
+    const ready = wOk && lOk && cOk;
     this.buildBtn.toggleAttribute("disabled", !ready);
     if (ready) {
       this.buildReason.textContent = "";
@@ -552,6 +576,9 @@ export class FirstOpen {
         failed = true;
       }
     }
+    // A bad ceiling hides inside the closed More box: open it so the
+    // error is seen.
+    if (this.ceilingError.textContent !== "") this.moreDetails.open = true;
     if (failed || w === null || l === null || c === null) return;
     this.callbacks.onBuildRoom({ widthCm: w, lengthCm: l, ceilingCm: c });
   }

@@ -291,7 +291,17 @@
   font-size: 13px;
   font-weight: 600;
   fill: var(--ink);
+}
+
+.editor-piece-label {
   pointer-events: none;
+}
+
+/* Door/window tags answer the tap themselves (44 px like the corner
+   dots): without this the tap falls through to the floor polygon. */
+.editor-opening-label {
+  pointer-events: auto;
+  cursor: pointer;
 }
 
 .editor-opening-label.selected {
