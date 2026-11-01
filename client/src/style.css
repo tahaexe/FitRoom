@@ -2611,6 +2611,12 @@ button.cart-row {
   }
 }
 
+/* While the photo flow or the confirm view is open the room menus wait. */
+body[data-flow-open="true"] .room-menu,
+body[data-flow-open="true"] #tool-phone-menu {
+  display: none;
+}
+
 /* ---- phone chrome: hidden on desktop, the only bars on a phone ---- */
 
 #tool-phone-menu,
