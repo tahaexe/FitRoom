@@ -607,6 +607,7 @@
 
   .editor-grid {
     grid-template-columns: minmax(0, 1fr);
+    flex: none;
   }
 
   .editor-plan {

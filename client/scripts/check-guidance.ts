@@ -1457,6 +1457,18 @@ check(
   phoneMain.includes('document.getElementById("door-tip")?.setAttribute("hidden", "")'),
   "painting a bubble hides both hints first",
 );
+// The phone editor scrolls as one view: the narrow query lets the grid
+// take its content height so .editor-scroll scrolls the whole stack.
+{
+  const narrowAt = editorCss.indexOf("@media (max-width: 900px)");
+  const narrowBody = narrowAt < 0 ? "" : editorCss.slice(narrowAt, narrowAt + 2000);
+  check(
+    "guidance:editor-grid-flex-none",
+    /\.editor-grid\s*\{[^}]*flex:\s*none/.test(narrowBody),
+    "the narrow media query sets .editor-grid flex: none",
+  );
+}
+
 check(
   "guidance:done-skipped-restore",
   phoneMain.includes("this.guide.skip();") &&

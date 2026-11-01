@@ -257,6 +257,7 @@ export class EditorPlanView {
   private captured = false;
   private suppressClick = false;
   private unsubscribe: (() => void) | null = null;
+  private readonly resizeObserver: ResizeObserver;
 
   constructor(
     parent: HTMLElement,
@@ -282,12 +283,15 @@ export class EditorPlanView {
     this.svg.addEventListener("click", (event) => this.onBackgroundClick(event));
     this.unsubscribe = this.store.subscribe(() => this.render());
     window.addEventListener("resize", this.onResize);
+    this.resizeObserver = new ResizeObserver(() => this.render());
+    this.resizeObserver.observe(this.element);
     this.render();
   }
 
   destroy(): void {
     this.unsubscribe?.();
     window.removeEventListener("resize", this.onResize);
+    this.resizeObserver.disconnect();
     this.element.remove();
   }
 
