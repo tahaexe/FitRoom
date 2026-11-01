@@ -687,6 +687,12 @@ check(
   );
 }
 
+check(
+  "a committed change hides the toast so Undo undoes its own step",
+  /this\.store\.subscribe\(\(\) => \{\s*this\.hideDeleteToast\(\);/.test(main),
+  "main.ts store.subscribe hides the delete toast",
+);
+
 if (failures > 0) {
   console.log(`check:toolbar: ${String(failures)} check(s) failed`);
   process.exitCode = 1;

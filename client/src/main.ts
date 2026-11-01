@@ -797,6 +797,7 @@ class FitRoomApp {
     }
     this.controls.addEventListener("change", () => this.requestRender());
     this.store.subscribe(() => {
+      this.hideDeleteToast();
       void this.syncInstances();
       this.refreshIssues();
       this.recommendPanel?.refresh();
