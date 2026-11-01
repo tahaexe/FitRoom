@@ -22,6 +22,7 @@
     "check:phone-menu": "tsx scripts/check-phone-menu.ts",
     "check:states": "tsx scripts/check-states.ts",
     "check:labels": "tsx scripts/check-labels.ts",
+    "check:leave": "tsx scripts/check-leave.ts",
     "check:confirm-walls": "tsx scripts/check-confirm-walls.ts",
     "check:empty-fit": "tsx scripts/check-empty-fit.ts",
     "check:plan-shrink": "tsx scripts/check-plan-shrink.ts",

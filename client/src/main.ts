@@ -59,8 +59,12 @@ import {
   CART_SHARE_LABEL,
   CART_SHARE_TITLE,
   DEMO_STORE_LINE,
+  DISCARD_AND_LEAVE,
   EMPTY_ROOM_ACTION,
   FIT_ALL_CLEAR,
+  KEEP_EDITING,
+  LEAVE_CONFIRM_MESSAGE,
+  LEAVE_CONFIRM_PHOTOS,
   PHOTO_VIEW_BUTTON,
   SHARE_DIALOG_TEXT,
   SHARE_INVALID,
@@ -855,7 +859,7 @@ class FitRoomApp {
     });
     this.editor = new RoomEditor(this.editorStore, {
       onBuild: () => this.finishBuild(),
-      onCancel: () => this.cancelEditor(),
+      onCancel: () => this.requestCancelEditor(),
     });
     document.body.appendChild(this.editor.element);
     document.getElementById("fit-badge")?.addEventListener("click", () => {
@@ -1793,6 +1797,65 @@ class FitRoomApp {
     this.syncPhoneBar();
     this.maybeShowDoorTip();
     this.updateGuide();
+  }
+
+  /** The plan changed since the editor opened, or a photo draft is open. */
+  private editorHasChanges(): boolean {
+    if (this.photoDraft !== null) return true;
+    if (this.editorBase === null) return false;
+    const current = this.editorStore?.room ?? null;
+    if (current === null) return false;
+    return JSON.stringify(current) !== JSON.stringify(this.editorBase);
+  }
+
+  /**
+   * Leave and Esc ask first when work would be lost ("Keep editing" is the
+   * focused default and Esc keeps editing); unchanged leaves at once. The
+   * confirm view's Leave routes here through `onCancel`, like the editor's.
+   */
+  private requestCancelEditor(): void {
+    if (!this.editing) return;
+    if (!this.editorHasChanges()) {
+      this.cancelEditor();
+      return;
+    }
+    if (document.getElementById("leave-confirm-dialog") !== null) return;
+    const previousFocus =
+      document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const dialog = document.createElement("dialog");
+    dialog.id = "leave-confirm-dialog";
+    dialog.setAttribute("aria-label", LEAVE_CONFIRM_MESSAGE);
+    const text = document.createElement("p");
+    text.textContent =
+      this.photoDraft !== null
+        ? `${LEAVE_CONFIRM_MESSAGE}${LEAVE_CONFIRM_PHOTOS}`
+        : LEAVE_CONFIRM_MESSAGE;
+    const row = document.createElement("div");
+    row.className = "share-dialog-row";
+    const keep = document.createElement("button");
+    keep.type = "button";
+    keep.className = "btn-primary";
+    keep.textContent = KEEP_EDITING;
+    keep.addEventListener("click", () => {
+      dialog.close();
+      previousFocus?.focus();
+    });
+    const discard = document.createElement("button");
+    discard.type = "button";
+    discard.className = "btn-secondary";
+    discard.textContent = DISCARD_AND_LEAVE;
+    discard.addEventListener("click", () => {
+      dialog.close();
+      this.cancelEditor();
+    });
+    row.append(keep, discard);
+    dialog.append(text, row);
+    // Esc closes the dialog (keeps editing); dropping it on close keeps a
+    // later Leave asking again.
+    dialog.addEventListener("close", () => dialog.remove());
+    document.body.appendChild(dialog);
+    dialog.showModal();
+    keep.focus();
   }
 
   /** Cancel leaves the room with no change: restore the pre-edit layout. */
@@ -3853,7 +3916,7 @@ class FitRoomApp {
           return;
         }
         if (this.editing) {
-          this.cancelEditor();
+          this.requestCancelEditor();
           return;
         }
         if (this.renderViewer !== null) {

@@ -16,6 +16,12 @@ export const FLOW_STEPS = ["Photograph", "Measure", "Confirm"] as const;
 /** The flow's exit, everywhere. */
 export const LEAVE = "Leave";
 
+/** Leaving the plan editor or confirm view with unsaved work asks first. */
+export const LEAVE_CONFIRM_MESSAGE = "Leave and lose your changes?";
+export const LEAVE_CONFIRM_PHOTOS = " Your photos will be deleted.";
+export const KEEP_EDITING = "Keep editing";
+export const DISCARD_AND_LEAVE = "Discard and leave";
+
 /** Header cart pill. Disabled while the photo flow or confirm view is open. */
 export const ADD_TO_CART = "Add to cart";
 export const CART_DISABLED_REASON = "Finish the photo flow first, then add to cart.";
