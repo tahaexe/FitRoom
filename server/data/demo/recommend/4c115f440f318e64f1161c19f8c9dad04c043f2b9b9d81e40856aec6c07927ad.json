@@ -4,21 +4,10 @@
   "input": {
     "room": {
       "name": "Example room (generated photos)",
-      "size_cm": [
-        420,
-        362
-      ],
+      "size_cm": [420, 362],
       "style": {
-        "tags": [
-          "minimalist",
-          "scandinavian",
-          "bright"
-        ],
-        "colors": [
-          "#f2eee6",
-          "#d9c19a",
-          "#8a6742"
-        ]
+        "tags": ["minimalist", "scandinavian", "bright"],
+        "colors": ["#f2eee6", "#d9c19a", "#8a6742"]
       }
     },
     "placed": [],
@@ -77,618 +66,323 @@
       {
         "productId": "mid_century_lounge_chair",
         "name": "Orbit Swivel Lounge Chair",
-        "size_cm": [
-          100.9,
-          119,
-          116.9
-        ],
+        "size_cm": [100.9, 119, 116.9],
         "price_usd": 820,
-        "styleTags": [
-          "mid-century modern"
-        ],
-        "colors": [
-          "brown leather",
-          "walnut",
-          "black base"
-        ],
+        "styleTags": ["mid-century modern"],
+        "colors": ["brown leather", "walnut", "black base"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 9.1,
-          "centre_cm": [
-            63.5,
-            297
-          ],
+          "centre_cm": [63.5, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "modern_arm_chair_01",
         "name": "Nord Leather Armchair",
-        "size_cm": [
-          82,
-          98.7,
-          102.3
-        ],
+        "size_cm": [82, 98.7, 102.3],
         "price_usd": 590,
-        "styleTags": [
-          "modern",
-          "Scandinavian"
-        ],
-        "colors": [
-          "black leather",
-          "oak"
-        ],
+        "styleTags": ["modern", "Scandinavian"],
+        "colors": ["black leather", "oak"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 28,
-          "centre_cm": [
-            53.4,
-            297
-          ],
+          "centre_cm": [53.4, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "SheenChair",
         "name": "Bloom Velvet Lounge Chair",
-        "size_cm": [
-          82.7,
-          57,
-          68.6
-        ],
+        "size_cm": [82.7, 57, 68.6],
         "price_usd": 450,
-        "styleTags": [
-          "modern",
-          "playful"
-        ],
-        "colors": [
-          "velvet",
-          "wood legs"
-        ],
+        "styleTags": ["modern", "playful"],
+        "colors": ["velvet", "wood legs"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 27.3,
-          "centre_cm": [
-            32.5,
-            297
-          ],
+          "centre_cm": [32.5, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "GreenChair_01",
         "name": "Victoria Accent Chair",
-        "size_cm": [
-          67.3,
-          66.4,
-          105.9
-        ],
+        "size_cm": [67.3, 66.4, 105.9],
         "price_usd": 380,
-        "styleTags": [
-          "classic"
-        ],
-        "colors": [
-          "green fabric",
-          "dark carved wood"
-        ],
+        "styleTags": ["classic"],
+        "colors": ["green fabric", "dark carved wood"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 42.7,
-          "centre_cm": [
-            37.2,
-            297
-          ],
+          "centre_cm": [37.2, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "ArmChair_01",
         "name": "Provence Armchair",
-        "size_cm": [
-          84.8,
-          76.6,
-          106.5
-        ],
+        "size_cm": [84.8, 76.6, 106.5],
         "price_usd": 490,
-        "styleTags": [
-          "French provincial",
-          "classic"
-        ],
-        "colors": [
-          "stone fabric (default)",
-          "carved dark wood"
-        ],
+        "styleTags": ["French provincial", "classic"],
+        "colors": ["stone fabric (default)", "carved dark wood"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 25.2,
-          "centre_cm": [
-            42.3,
-            297
-          ],
+          "centre_cm": [42.3, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "Ottoman_01",
         "name": "Chester Ottoman",
-        "size_cm": [
-          88.5,
-          62.1,
-          62.4
-        ],
+        "size_cm": [88.5, 62.1, 62.4],
         "price_usd": 290,
-        "styleTags": [
-          "classic"
-        ],
-        "colors": [
-          "black leather"
-        ],
+        "styleTags": ["classic"],
+        "colors": ["black leather"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 21.5,
-          "centre_cm": [
-            35.1,
-            297
-          ],
+          "centre_cm": [35.1, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "side_table_01",
         "name": "Pine Side Table",
-        "size_cm": [
-          55,
-          45,
-          55.1
-        ],
+        "size_cm": [55, 45, 55.1],
         "price_usd": 120,
-        "styleTags": [
-          "simple",
-          "Scandinavian"
-        ],
-        "colors": [
-          "light wood"
-        ],
+        "styleTags": ["simple", "Scandinavian"],
+        "colors": ["light wood"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 55,
-          "centre_cm": [
-            26.5,
-            297
-          ],
+          "centre_cm": [26.5, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "wooden_display_shelves_01",
         "name": "Cube Shelf 3×3",
-        "size_cm": [
-          107.8,
-          37.2,
-          155.6
-        ],
+        "size_cm": [107.8, 37.2, 155.6],
         "price_usd": 210,
-        "styleTags": [
-          "Scandinavian"
-        ],
-        "colors": [
-          "light wood",
-          "grey fabric boxes"
-        ],
+        "styleTags": ["Scandinavian"],
+        "colors": ["light wood", "grey fabric boxes"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 2.2,
-          "centre_cm": [
-            22.6,
-            297
-          ],
+          "centre_cm": [22.6, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "potted_plant_02",
         "name": "Alocasia in Terracotta",
-        "size_cm": [
-          70.1,
-          65.7,
-          84.1
-        ],
+        "size_cm": [70.1, 65.7, 84.1],
         "price_usd": 65,
-        "styleTags": [
-          "any"
-        ],
-        "colors": [
-          "green leaves",
-          "terracotta"
-        ],
+        "styleTags": ["any"],
+        "colors": ["green leaves", "terracotta"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 39.9,
-          "centre_cm": [
-            36.9,
-            297
-          ],
+          "centre_cm": [36.9, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "Rockingchair_01",
         "name": "Classic Rocking Chair",
-        "size_cm": [
-          56.9,
-          67,
-          79.9
-        ],
+        "size_cm": [56.9, 67, 79.9],
         "price_usd": 420,
-        "styleTags": [
-          "classic",
-          "country"
-        ],
-        "colors": [
-          "medium wood",
-          "woven seat"
-        ],
+        "styleTags": ["classic", "country"],
+        "colors": ["medium wood", "woven seat"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 53.1,
-          "centre_cm": [
-            37.5,
-            297
-          ],
+          "centre_cm": [37.5, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "round_wooden_table_01",
         "name": "Round Oak Dining Table",
-        "size_cm": [
-          104.4,
-          104.4,
-          75
-        ],
+        "size_cm": [104.4, 104.4, 75],
         "price_usd": 640,
-        "styleTags": [
-          "rustic",
-          "farmhouse"
-        ],
-        "colors": [
-          "solid oak"
-        ],
+        "styleTags": ["rustic", "farmhouse"],
+        "colors": ["solid oak"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 5.6,
-          "centre_cm": [
-            56.2,
-            297
-          ],
+          "centre_cm": [56.2, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "painted_wooden_chair_01",
         "name": "Country Painted Dining Chair",
-        "size_cm": [
-          43.2,
-          54,
-          95.6
-        ],
+        "size_cm": [43.2, 54, 95.6],
         "price_usd": 160,
-        "styleTags": [
-          "country",
-          "rustic"
-        ],
-        "colors": [
-          "painted wood"
-        ],
+        "styleTags": ["country", "rustic"],
+        "colors": ["painted wood"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 66.8,
-          "centre_cm": [
-            31,
-            297
-          ],
+          "centre_cm": [31, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "painted_wooden_chair_02",
         "name": "High-Back Painted Dining Chair",
-        "size_cm": [
-          50.5,
-          52.3,
-          99.8
-        ],
+        "size_cm": [50.5, 52.3, 99.8],
         "price_usd": 190,
-        "styleTags": [
-          "country",
-          "classic"
-        ],
-        "colors": [
-          "painted wood",
-          "woven rush seat"
-        ],
+        "styleTags": ["country", "classic"],
+        "colors": ["painted wood", "woven rush seat"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 59.5,
-          "centre_cm": [
-            30.2,
-            297
-          ],
+          "centre_cm": [30.2, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "industrial_coffee_table",
         "name": "Industrial Loft Side Table",
-        "size_cm": [
-          77.8,
-          75.8,
-          63.8
-        ],
+        "size_cm": [77.8, 75.8, 63.8],
         "price_usd": 240,
-        "styleTags": [
-          "industrial",
-          "loft"
-        ],
-        "colors": [
-          "reclaimed wood",
-          "black steel"
-        ],
+        "styleTags": ["industrial", "loft"],
+        "colors": ["reclaimed wood", "black steel"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 32.2,
-          "centre_cm": [
-            41.9,
-            297
-          ],
+          "centre_cm": [41.9, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "Shelf_01",
         "name": "Compact Oak Bookcase",
-        "size_cm": [
-          100.3,
-          25.7,
-          208
-        ],
+        "size_cm": [100.3, 25.7, 208],
         "price_usd": 320,
-        "styleTags": [
-          "Scandinavian",
-          "simple"
-        ],
-        "colors": [
-          "light oak"
-        ],
+        "styleTags": ["Scandinavian", "simple"],
+        "colors": ["light oak"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 9.7,
-          "centre_cm": [
-            16.9,
-            297
-          ],
+          "centre_cm": [16.9, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "steel_frame_shelves_01",
         "name": "Steel Frame Double Bookcase",
-        "size_cm": [
-          109.7,
-          50.2,
-          214.1
-        ],
+        "size_cm": [109.7, 50.2, 214.1],
         "price_usd": 380,
-        "styleTags": [
-          "industrial",
-          "modern"
-        ],
-        "colors": [
-          "black steel",
-          "wood shelves"
-        ],
+        "styleTags": ["industrial", "modern"],
+        "colors": ["black steel", "wood shelves"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 0.3,
-          "centre_cm": [
-            29.1,
-            297
-          ],
+          "centre_cm": [29.1, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "steel_frame_shelves_02",
         "name": "Steel Frame Single Bookcase",
-        "size_cm": [
-          59.3,
-          50.2,
-          214.2
-        ],
+        "size_cm": [59.3, 50.2, 214.2],
         "price_usd": 290,
-        "styleTags": [
-          "industrial",
-          "modern"
-        ],
-        "colors": [
-          "black steel",
-          "wood shelves"
-        ],
+        "styleTags": ["industrial", "modern"],
+        "colors": ["black steel", "wood shelves"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 50.7,
-          "centre_cm": [
-            29.1,
-            297
-          ],
+          "centre_cm": [29.1, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "fitroom_floor_lamp",
         "name": "Aria Floor Lamp",
-        "size_cm": [
-          40,
-          40,
-          160
-        ],
+        "size_cm": [40, 40, 160],
         "price_usd": 189,
-        "styleTags": [
-          "modern",
-          "minimalist"
-        ],
-        "colors": [
-          "black metal",
-          "oatmeal fabric shade"
-        ],
+        "styleTags": ["modern", "minimalist"],
+        "colors": ["black metal", "oatmeal fabric shade"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 70,
-          "centre_cm": [
-            24,
-            297
-          ],
+          "centre_cm": [24, 297],
           "rotationY": 90
         }
       },
       {
         "productId": "fitroom_wardrobe",
         "name": "Oslo Two-Door Wardrobe",
-        "size_cm": [
-          100,
-          60,
-          200
-        ],
+        "size_cm": [100, 60, 200],
         "price_usd": 899,
-        "styleTags": [
-          "modern",
-          "Scandinavian"
-        ],
-        "colors": [
-          "oak",
-          "black handles"
-        ],
+        "styleTags": ["modern", "Scandinavian"],
+        "colors": ["oak", "black handles"],
         "spot": {
           "kind": "run",
           "wall": "Left wall",
-          "run_cm": [
-            10,
-            120
-          ],
+          "run_cm": [10, 120],
           "runLength_cm": 110,
           "spare_cm": 10,
-          "centre_cm": [
-            34,
-            297
-          ],
+          "centre_cm": [34, 297],
           "rotationY": 90
         }
       }

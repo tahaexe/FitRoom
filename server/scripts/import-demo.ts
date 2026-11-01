@@ -114,7 +114,11 @@ function replayBriefTurn(
  * 8 rounds, until the model answers in text. Collects every reached file so
  * the import below takes only reached rounds, never older leftovers.
  */
-function replayArrangeTurn(recordedDir: string, catalog: CatalogItem[], first: AssistantRequest): string[] {
+function replayArrangeTurn(
+  recordedDir: string,
+  catalog: CatalogItem[],
+  first: AssistantRequest,
+): string[] {
   const room = first.room as RoomLayout;
   const ctx = createAssistantContext(room, catalog, undefined);
   const draft = JSON.parse(JSON.stringify(first.scene)) as SceneState;
@@ -232,7 +236,14 @@ async function main(): Promise<void> {
   // Expected keys for the single-shot routes, rebuilt from today's demo
   // lists: a recorded file whose key is not listed is an older leftover.
   const expectedByRoute = new Map<string, Set<string>>();
-  const expectEntries: Array<{ route: string; def: { parseBody: (b: unknown) => unknown; keyInput: (i: unknown) => unknown | Promise<unknown> }; model: string }> = [
+  const expectEntries: Array<{
+    route: string;
+    def: {
+      parseBody: (b: unknown) => unknown;
+      keyInput: (i: unknown) => unknown | Promise<unknown>;
+    };
+    model: string;
+  }> = [
     { route: "recommend", def: recommendDef, model: recommendDef.model },
     { route: "render", def: renderDef, model: renderDef.model },
     { route: "label", def: labelDef, model: labelDef.model },

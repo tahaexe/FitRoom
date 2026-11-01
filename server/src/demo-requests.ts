@@ -21,14 +21,8 @@
  * scene fixture exists.
  */
 
-import {
-  buildAssistantDemoRequests,
-  buildExampleAssistantDemoRequests,
-} from "./assistant-demo.js";
-import {
-  buildExampleRecommendDemoRequests,
-  buildRecommendDemoRequests,
-} from "./recommend-demo.js";
+import { buildAssistantDemoRequests, buildExampleAssistantDemoRequests } from "./assistant-demo.js";
+import { buildExampleRecommendDemoRequests, buildRecommendDemoRequests } from "./recommend-demo.js";
 import { buildRenderDemoRequests } from "./render-demo.js";
 import { buildRoomLabelDemoRequests } from "./room-label-demo.js";
 
