@@ -1205,6 +1205,9 @@ class FitRoomApp {
     this.store.commit((draft) => {
       draft.items.push(instance);
     });
+    // On a phone the catalog is a bottom sheet: close it first so the add
+    // lands on the Inspector sheet, with Delete in view.
+    if (isPhoneViewport()) this.sheets?.close();
     this.select(instance.instanceId);
     // The fit engine already picked the nearest spot with no problems when
     // one exists; when the best spot still has a problem, show the list on

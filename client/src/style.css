@@ -2642,16 +2642,32 @@ button.cart-row {
 /* ---- phone: one column, sticky main action, 44px targets ---- */
 
 @media (max-width: 720px) {
+  /* The four start options fit a 390 x 844 or 360 x 800 screen with no
+   * scrolling: tighter chrome, smaller sample thumb, compact cards. */
   .first-open {
-    padding: 72px 8px 8px;
+    padding: 12px 8px 8px;
   }
 
   .setup-panel {
-    padding: 16px;
+    padding: 12px;
+  }
+
+  .setup-sub {
+    margin: 4px 0 8px;
   }
 
   .setup-grid {
     grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+
+  .setup-card {
+    padding: 12px;
+    gap: 6px;
+  }
+
+  .setup-thumb {
+    height: 104px;
   }
 
   .size-row {
@@ -2717,6 +2733,11 @@ body[data-flow-open="true"] #tool-phone-menu {
 /* Sheet handles only exist on a phone; the inspector quick rotate
  * buttons show at every size, beside the Rotation field. */
 .sheet-handle {
+  display: none;
+}
+
+/* Every sheet's Close button stays hidden until a phone shows it. */
+.sheet-close {
   display: none;
 }
 
@@ -2942,6 +2963,27 @@ body[data-flow-open="true"] #tool-phone-menu {
     height: 4px;
     border-radius: 999px;
     background: var(--border-color);
+  }
+
+  /* The catalog sheet's Close button: a 44 px target beside the handle. */
+  #catalog > .sheet-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 4px;
+    right: 8px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px 12px;
+    background: #ffffff;
+    color: var(--ink);
+    border: 1px solid var(--border-color);
+    border-radius: 999px;
+    font-family: inherit;
+    font-weight: 600;
+    font-size: 14px;
+    cursor: pointer;
   }
 
   /* The side-panel offset never applies on a phone: sheets cover the

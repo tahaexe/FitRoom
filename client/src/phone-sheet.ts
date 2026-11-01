@@ -134,7 +134,26 @@ export class PhoneSheets {
   }
 
   private ensureHandle(el: HTMLElement, name: PhoneSheetName): void {
-    if (el.querySelector(":scope > .sheet-handle") !== null) return;
+    if (el.querySelector(":scope > .sheet-handle") === null) {
+      const handle = this.buildHandle(el, name);
+      el.prepend(handle);
+    }
+    // The catalog sheet has a Close button beside the drag handle, so a
+    // first-time shopper can dismiss it with one tap.
+    if (name === "catalog" && el.querySelector(":scope > .sheet-close") === null) {
+      const close = document.createElement("button");
+      close.type = "button";
+      close.className = "sheet-close";
+      close.textContent = "Close";
+      close.setAttribute("aria-label", "Close the catalog");
+      close.addEventListener("click", () => this.close());
+      const handle = el.querySelector(":scope > .sheet-handle");
+      if (handle !== null) handle.after(close);
+      else el.prepend(close);
+    }
+  }
+
+  private buildHandle(el: HTMLElement, name: PhoneSheetName): HTMLElement {
     const handle = document.createElement("div");
     handle.className = "sheet-handle";
     handle.setAttribute("role", "separator");
@@ -166,6 +185,6 @@ export class PhoneSheets {
       if (dy > 80) this.close();
       else if (dy < -80) this.open(name, "full");
     });
-    el.prepend(handle);
+    return handle;
   }
 }
