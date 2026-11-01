@@ -347,6 +347,11 @@ button {
   border-color: var(--coral);
 }
 
+.chips button[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .catalog-list {
   display: flex;
   flex-direction: column;
@@ -1864,6 +1869,11 @@ button.cart-row {
   color: #ffffff;
 }
 
+.assistant-tab[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .assistant-view[hidden] {
   display: none;
 }
@@ -1964,6 +1974,17 @@ button.cart-row {
   background: var(--coral);
   border-color: var(--coral);
   color: #ffffff;
+}
+
+.furnish-style[disabled] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.furnish-foot {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .furnish-budget-row {

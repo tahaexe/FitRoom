@@ -265,6 +265,55 @@ function main(): void {
     renderKey,
   );
 
+  // ---- Furnish form in Demo: usable controls, recorded replays, no upstream ----
+  const panelSource = readFileSync(join(clientDir, "src", "assistant", "panel.ts"), "utf8");
+  const styleSource = readFileSync(join(clientDir, "src", "style.css"), "utf8");
+  check(
+    "furnish demo controls usable",
+    panelSource.includes('field.classList.contains("furnish-step")') &&
+      panelSource.includes('field.classList.contains("furnish-style")') &&
+      panelSource.includes('field.id === "furnish-budget"') &&
+      panelSource.includes('field.classList.contains("furnish-go")') &&
+      panelSource.includes('field.removeAttribute("disabled")'),
+    "seats, style chips, budget and Furnish stay enabled in Demo",
+  );
+  check(
+    "furnish demo recorded replays",
+    panelSource.includes("private async furnishDemoSubmit") &&
+      panelSource.includes("buildBriefRequest(parsed.brief, parsed.note) === request") &&
+      panelSource.includes("await this.sendFurnishDemo(text, parsed.brief, parsed.note)"),
+    "a brief equal to a recorded one replays as its chip does",
+  );
+  check(
+    "furnish demo unrecorded needs live",
+    panelSource.includes(
+      "This brief needs Live AI. Pick a ready brief above, or turn on Live AI.",
+    ) && panelSource.includes("private addFurnishLiveNeeded"),
+    "another brief shows the Live AI answer in place",
+  );
+  const liveNeededAt = panelSource.indexOf("private addFurnishLiveNeeded");
+  const liveNeededBody =
+    liveNeededAt < 0 ? "" : panelSource.slice(liveNeededAt, liveNeededAt + 1200);
+  check(
+    "furnish demo no upstream",
+    liveNeededBody !== "" &&
+      !liveNeededBody.includes("postAssistant") &&
+      !liveNeededBody.includes("furnishTurn") &&
+      !liveNeededBody.includes("fetch("),
+    "the Live AI answer makes no model call",
+  );
+  check(
+    "furnish demo note next to button",
+    panelSource.includes("furnish-foot") &&
+      panelSource.includes("foot.append(go, liveNote, demoNote, liveButton)"),
+    "Other briefs use Live AI stays with the Furnish button",
+  );
+  check(
+    "furnish style disabled looks disabled",
+    styleSource.includes(".furnish-style[disabled]") && styleSource.includes("cursor: not-allowed"),
+    ".furnish-style[disabled] is lighter with cursor: not-allowed",
+  );
+
   console.log(
     failures === 0
       ? "check:example-demo: all checks passed"

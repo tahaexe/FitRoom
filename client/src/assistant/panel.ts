@@ -460,17 +460,12 @@ export class AssistantPanel {
     go.className = "assistant-go furnish-go";
     go.textContent = "Furnish";
     go.addEventListener("click", () => void this.furnishSubmit());
-    form.appendChild(go);
-
     const liveNote = document.createElement("p");
     liveNote.className = "furnish-live-note";
     liveNote.textContent = "Uses Live AI · about 30 s";
-    form.appendChild(liveNote);
-
     const demoNote = document.createElement("p");
     demoNote.className = "furnish-demo-note";
     demoNote.textContent = "Other briefs use Live AI";
-    form.appendChild(demoNote);
     const liveButton = document.createElement("button");
     liveButton.type = "button";
     liveButton.className = "assistant-quiet furnish-live-button";
@@ -479,7 +474,12 @@ export class AssistantPanel {
       setLive(true);
       this.syncMode();
     });
-    form.appendChild(liveButton);
+    // The Demo note stays with the Furnish button (one foot), so a phone
+    // shows them together instead of the note sitting off screen.
+    const foot = document.createElement("div");
+    foot.className = "furnish-foot";
+    foot.append(go, liveNote, demoNote, liveButton);
+    form.appendChild(foot);
 
     view.appendChild(form);
 
@@ -521,7 +521,29 @@ export class AssistantPanel {
         field.toggleAttribute("hidden", live);
         continue;
       }
+      // In Demo the seats, the style chips and the budget stay usable, and
+      // the Furnish button stays enabled; the recorded brief replays, any
+      // other brief answers in place with no model call.
+      if (
+        !live &&
+        (field.classList.contains("furnish-step") ||
+          field.classList.contains("furnish-style") ||
+          field.id === "furnish-budget" ||
+          field.classList.contains("furnish-go"))
+      ) {
+        field.removeAttribute("disabled");
+        continue;
+      }
       field.toggleAttribute("disabled", !live);
+    }
+    // The stepper bounds still apply in Demo (1-8 seats).
+    if (!live) {
+      const minus = view.querySelector(".furnish-step[aria-label='Fewer seats']");
+      const plus = view.querySelector(".furnish-step[aria-label='More seats']");
+      if (minus instanceof HTMLButtonElement)
+        minus.toggleAttribute("disabled", this.furnishSeats <= 1);
+      if (plus instanceof HTMLButtonElement)
+        plus.toggleAttribute("disabled", this.furnishSeats >= 8);
     }
     view.querySelector(".furnish-live-note")?.toggleAttribute("hidden", !live);
     view.querySelector(".furnish-demo-note")?.toggleAttribute("hidden", live);
@@ -582,7 +604,66 @@ export class AssistantPanel {
       budget: Math.min(20000, Math.max(300, Math.round(this.furnishBudget))),
       keepExisting: hasPieces && this.furnishKeep,
     };
-    void this.furnishTurn(brief, buildBriefRequest(brief, this.furnishNote));
+    const request = buildBriefRequest(brief, this.furnishNote);
+    if (!isLive()) {
+      void this.furnishDemoSubmit(request);
+      return;
+    }
+    void this.furnishTurn(brief, request);
+  }
+
+  /**
+   * Demo Furnish: a recorded brief replays as its chip does; any other
+   * brief answers in place with no model call.
+   */
+  private async furnishDemoSubmit(request: string): Promise<void> {
+    if (this.sending) return;
+    const recorded = await this.loadRecordedChips();
+    const allBriefs = (recorded ?? []).filter((text) => text.startsWith(FURNISH_CHIP_PREFIX));
+    const texts = this.isExampleRoom()
+      ? allBriefs.filter((text) => {
+          const parsed = parseBriefChip(text);
+          return (
+            parsed !== null &&
+            EXAMPLE_FURNISH_DEMO_BRIEFS.includes(buildBriefRequest(parsed.brief, parsed.note))
+          );
+        })
+      : allBriefs;
+    for (const text of texts) {
+      const parsed = parseBriefChip(text);
+      if (parsed !== null && buildBriefRequest(parsed.brief, parsed.note) === request) {
+        await this.sendFurnishDemo(text, parsed.brief, parsed.note);
+        return;
+      }
+    }
+    this.addFurnishUserLine(request);
+    this.addFurnishLiveNeeded();
+  }
+
+  /** Demo answer for an unrecorded brief: no model call, just the way out. */
+  private addFurnishLiveNeeded(): void {
+    const log = this.furnishLogEl();
+    if (log === null) return;
+    this.clearFurnishProgress();
+    const card = document.createElement("div");
+    card.className = "assistant-card";
+    const note = document.createElement("p");
+    note.className = "assistant-answer";
+    note.textContent = "This brief needs Live AI. Pick a ready brief above, or turn on Live AI.";
+    const row = document.createElement("div");
+    row.className = "assistant-row";
+    const live = document.createElement("button");
+    live.type = "button";
+    live.className = "assistant-quiet";
+    live.textContent = TURN_ON_LIVE;
+    live.addEventListener("click", () => {
+      setLive(true);
+      this.syncMode();
+    });
+    row.appendChild(live);
+    card.append(note, row);
+    log.appendChild(card);
+    log.scrollTop = log.scrollHeight;
   }
 
   /**
@@ -997,8 +1078,8 @@ export class AssistantPanel {
     }
     const input = this.root.querySelector(".assistant-row input");
     if (input instanceof HTMLInputElement) input.toggleAttribute("disabled", on);
-    // Re-enabling must not wake demo-mode controls: the Furnish button
-    // stays disabled with the other fields until Live AI is on.
+    // Re-enabling must not wake demo-only controls: the seats, style,
+    // budget and Furnish button stay enabled, the rest until Live AI is on.
     if (!on) this.syncMode();
   }
 
