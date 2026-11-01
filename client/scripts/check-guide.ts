@@ -907,5 +907,32 @@ check(
   );
 }
 
+// ---- The size form hides the first bubble; the cards bring it back ----
+{
+  const firstOpenSource = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "first-open.ts"),
+    "utf8",
+  );
+  const cardsAt = firstOpenSource.indexOf("showCards(): void");
+  const cardsBody = cardsAt < 0 ? "" : firstOpenSource.slice(cardsAt, cardsAt + 400);
+  check(
+    "guide:size-form-hides-bubble-cards",
+    cardsBody.includes("onViewChange"),
+    "showCards must notify through onViewChange",
+  );
+  const sizeAt = firstOpenSource.indexOf("showSize(): void");
+  const sizeBody = sizeAt < 0 ? "" : firstOpenSource.slice(sizeAt, sizeAt + 600);
+  check(
+    "guide:size-form-hides-bubble-size",
+    sizeBody.includes("onViewChange"),
+    "showSize must notify through onViewChange",
+  );
+  check(
+    "guide:size-form-hides-bubble-wired",
+    mainSource.includes("onViewChange") && mainSource.includes("this.renderGuide()"),
+    "main.ts must wire onViewChange to renderGuide",
+  );
+}
+
 if (failures > 0) process.exit(1);
 console.log("guide: all checks passed");

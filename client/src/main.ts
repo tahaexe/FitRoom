@@ -890,6 +890,7 @@ class FitRoomApp {
       },
       onBuildRoom: (size) => this.buildRoomAtSize(size),
       onShapeInEditor: (size) => this.shapeInEditor(size),
+      onViewChange: () => this.renderGuide(),
     });
     document.body.appendChild(this.firstOpen.element);
     this.guideView = new GuideView({

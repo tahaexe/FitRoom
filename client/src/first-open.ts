@@ -34,6 +34,7 @@ export interface FirstOpenCallbacks {
   onExploreSample: () => void;
   onBuildRoom: (size: RoomSize) => void;
   onShapeInEditor: (size: RoomSize | null) => void;
+  onViewChange?: () => void;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -111,6 +112,7 @@ export class FirstOpen {
     this.element.removeAttribute("hidden");
     this.cardsView.removeAttribute("hidden");
     this.sizeView.setAttribute("hidden", "");
+    this.callbacks.onViewChange?.();
   }
 
   showSize(): void {
@@ -119,6 +121,7 @@ export class FirstOpen {
     this.sizeView.removeAttribute("hidden");
     this.refreshEchoes();
     window.setTimeout(() => this.widthInput.focus(), 0);
+    this.callbacks.onViewChange?.();
   }
 
   hide(): void {
