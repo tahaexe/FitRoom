@@ -127,7 +127,6 @@ export class RecommendPanel {
   private runs: FreeRun[] = [];
   private loading = false;
   private selected: SceneItem | null = null;
-  private readonly placedIds = new Set<string>();
 
   constructor(host: HTMLElement, deps: RecommendDeps) {
     this.deps = deps;
@@ -650,7 +649,8 @@ export class RecommendPanel {
     const go = document.createElement("button");
     go.type = "button";
     go.className = "recommend-go";
-    if (this.placedIds.has(item.candidate.productId)) {
+    const placed = this.deps.getScene().items.some((i) => i.productId === item.candidate.productId);
+    if (placed) {
       go.textContent = "Placed";
       go.toggleAttribute("disabled", true);
     } else {
@@ -669,7 +669,6 @@ export class RecommendPanel {
         } else {
           this.deps.placeItem(item.candidate.productId, x, z, item.candidate.spot.rotationY);
         }
-        this.placedIds.add(item.candidate.productId);
         go.textContent = "Placed";
         go.toggleAttribute("disabled", true);
       });
