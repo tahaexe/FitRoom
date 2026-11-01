@@ -48,7 +48,7 @@ import {
   turnErrors,
   vetoLinesForRecord,
 } from "@fitroom/shared";
-import { isLive, postAssistant, setLive, type ApiResult } from "../api";
+import { LIVE_CHANGE_EVENT, isLive, postAssistant, setLive, type ApiResult } from "../api";
 import { isExampleRoom } from "../photo-room/example";
 import {
   AI_UNREACHABLE,
@@ -125,6 +125,7 @@ export class AssistantPanel {
     this.root = host;
     this.root.classList.add("assistant-panel");
     this.render();
+    window.addEventListener(LIVE_CHANGE_EVENT, () => this.syncMode());
   }
 
   private tab: "arrange" | "furnish" = "arrange";
@@ -262,6 +263,12 @@ export class AssistantPanel {
       }
     }
     this.syncFurnishMode();
+    const live = isLive();
+    for (const b of this.root.querySelectorAll("button.assistant-quiet")) {
+      if (!(b instanceof HTMLButtonElement)) continue;
+      if (b.textContent !== TURN_ON_LIVE) continue;
+      b.toggleAttribute("hidden", live);
+    }
   }
 
   /** Demo-store request texts, once loaded (demo mode shows no unrecorded chip). */

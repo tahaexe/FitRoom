@@ -41,7 +41,7 @@ import shallowBoxedScene from "../../shared/samples/fit-tests/shallow-boxed.json
 import rotatedOverlapScene from "../../shared/samples/fit-tests/rotated-overlap.json";
 import rotatedOutsideScene from "../../shared/samples/fit-tests/rotated-outside.json";
 import rotatedInsideScene from "../../shared/samples/fit-tests/rotated-inside.json";
-import { initLiveSwitch, isLive } from "./api";
+import { LIVE_CHANGE_EVENT, initLiveSwitch, isLive, setLive } from "./api";
 import { EMPTY_HINT_TEXT, needsDoorTip } from "./hints";
 import {
   ADD_TO_CART,
@@ -65,6 +65,8 @@ import {
   KEEP_EDITING,
   LEAVE_CONFIRM_MESSAGE,
   LEAVE_CONFIRM_PHOTOS,
+  LIVE_MENU_TO_DEMO,
+  LIVE_MENU_TO_LIVE,
   PHOTO_VIEW_BUTTON,
   SHARE_DIALOG_TEXT,
   SHARE_INVALID,
@@ -2623,6 +2625,8 @@ class FitRoomApp {
         this.phoneMenuAction(action);
       });
     }
+    window.addEventListener(LIVE_CHANGE_EVENT, () => this.syncPhoneLiveItem());
+    this.syncPhoneLiveItem();
     for (const item of document.querySelectorAll("#phone-ai-menu [data-phone-action]")) {
       if (!(item instanceof HTMLElement)) continue;
       item.addEventListener("click", () => {
@@ -2648,8 +2652,17 @@ class FitRoomApp {
     const willOpen = menu.hasAttribute("hidden");
     this.closePhoneMenus();
     if (willOpen) {
+      if (menuId === "phone-menu") this.syncPhoneLiveItem();
       menu.removeAttribute("hidden");
       button?.setAttribute("aria-expanded", "true");
+    }
+  }
+
+  /** Keep the phone menu's first item on the current answers mode. */
+  private syncPhoneLiveItem(): void {
+    const item = document.querySelector('#phone-menu [data-phone-action="live-toggle"]');
+    if (item instanceof HTMLElement) {
+      item.textContent = isLive() ? LIVE_MENU_TO_DEMO : LIVE_MENU_TO_LIVE;
     }
   }
 
@@ -2686,7 +2699,10 @@ class FitRoomApp {
   }
 
   private phoneMenuAction(action: string): void {
-    if (action === "room-sample") {
+    if (action === "live-toggle") {
+      setLive(!isLive());
+      this.syncPhoneLiveItem();
+    } else if (action === "room-sample") {
       this.sheets?.close();
       this.closePhoneMenus();
       this.pickRoom("sample");

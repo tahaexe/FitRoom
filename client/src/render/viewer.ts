@@ -7,7 +7,7 @@
 
 import { buildRenderPrompt } from "@fitroom/shared";
 import type { CatalogItem, RenderWallView, RoomLayout, SceneState } from "@fitroom/shared";
-import { isLive, postRender, setLive } from "../api";
+import { LIVE_CHANGE_EVENT, isLive, postRender, setLive } from "../api";
 import { captureView } from "./capture";
 import {
   AI_UNREACHABLE,
@@ -67,6 +67,17 @@ export class RenderViewer {
     this.root = host;
     this.root.classList.add("render-viewer");
     this.root.setAttribute("hidden", "");
+    window.addEventListener(LIVE_CHANGE_EVENT, () => this.syncMode());
+  }
+
+  /** Redraw the demo-miss card's Live AI button for the current mode. */
+  syncMode(): void {
+    const live = isLive();
+    for (const b of this.root.querySelectorAll("button.render-quiet")) {
+      if (!(b instanceof HTMLButtonElement)) continue;
+      if (b.textContent !== TURN_ON_LIVE) continue;
+      b.toggleAttribute("hidden", live);
+    }
   }
 
   get isBusy(): boolean {

@@ -148,5 +148,39 @@ for (const [action, id] of [
   );
 }
 
+// The first phone-menu item switches Demo/Live AI and follows the mode.
+const copySrc = readFileSync(join(clientRoot, "src", "copy.ts"), "utf8");
+const apiSrc = readFileSync(join(clientRoot, "src", "api.ts"), "utf8");
+check(
+  "phone-menu:live-toggle-is-first",
+  html.indexOf('data-phone-action="live-toggle"') >= 0 &&
+    html.indexOf('data-phone-action="live-toggle"') <
+      html.indexOf('data-phone-action="room-sample"'),
+  "live-toggle must be the first phone-menu item",
+);
+check(
+  "phone-menu:live-labels-in-copy",
+  copySrc.includes('LIVE_MENU_TO_LIVE = "Answers: Demo · switch to Live AI"') &&
+    copySrc.includes('LIVE_MENU_TO_DEMO = "Answers: Live AI · switch to Demo"'),
+  "copy.ts LIVE_MENU_TO_LIVE/LIVE_MENU_TO_DEMO",
+);
+check(
+  "phone-menu:live-label-follows-mode",
+  main.includes("LIVE_MENU_TO_LIVE") &&
+    main.includes("LIVE_MENU_TO_DEMO") &&
+    main.includes("syncPhoneLiveItem"),
+  "main.ts syncPhoneLiveItem",
+);
+check(
+  "phone-menu:live-press-flips-isLive",
+  main.includes('action === "live-toggle"') && main.includes("setLive(!isLive())"),
+  "live-toggle branch must call setLive(!isLive())",
+);
+check(
+  "phone-menu:live-change-event",
+  apiSrc.includes("fitroom:live-change") && apiSrc.includes("dispatchEvent"),
+  "api.ts setLive dispatches fitroom:live-change",
+);
+
 if (failures > 0) process.exit(1);
 console.log("phone-menu ok");

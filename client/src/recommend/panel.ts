@@ -36,7 +36,7 @@ import {
   wallDisplayName,
   type CandidateQuery,
 } from "@fitroom/shared";
-import { isLive, postRecommend, setLive, type ApiResult } from "../api";
+import { LIVE_CHANGE_EVENT, isLive, postRecommend, setLive, type ApiResult } from "../api";
 import {
   AI_UNREACHABLE,
   NOT_READY_MESSAGE,
@@ -134,6 +134,29 @@ export class RecommendPanel {
     this.catalogById = new Map(deps.catalog.map((c) => [c.id, c]));
     this.root.classList.add("recommend-panel");
     this.render();
+    window.addEventListener(LIVE_CHANGE_EVENT, () => this.syncMode());
+  }
+
+  /** Redraw the mode (runs + demo-miss card) without losing results. */
+  syncMode(): void {
+    const live = isLive();
+    if (live) {
+      for (const b of this.root.querySelectorAll("button.recommend-run")) {
+        if (!(b instanceof HTMLButtonElement)) continue;
+        if (b.title.includes("needs Live AI")) {
+          b.removeAttribute("disabled");
+          b.removeAttribute("aria-disabled");
+        }
+      }
+    } else {
+      this.applyDemoDisabled();
+      void this.markUnavailableRuns(this.root);
+    }
+    for (const b of this.root.querySelectorAll("button.recommend-go")) {
+      if (!(b instanceof HTMLButtonElement)) continue;
+      if (b.textContent !== TURN_ON_LIVE) continue;
+      b.toggleAttribute("hidden", live);
+    }
   }
 
   /** Recompute the free runs (call after the scene changes). */

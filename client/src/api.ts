@@ -29,6 +29,8 @@ export function isLive(): boolean {
   }
 }
 
+export const LIVE_CHANGE_EVENT = "fitroom:live-change";
+
 export function setLive(live: boolean): void {
   try {
     window.localStorage.setItem(LIVE_STORAGE_KEY, live ? "1" : "0");
@@ -36,6 +38,7 @@ export function setLive(live: boolean): void {
     // Private mode: the switch still works for this visit.
   }
   updateLiveSwitch();
+  window.dispatchEvent(new CustomEvent(LIVE_CHANGE_EVENT, { detail: { live } }));
 }
 
 function toResult(payload: GatewayResponse): ApiResult {

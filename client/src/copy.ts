@@ -39,6 +39,10 @@ export const SHAPE_IN_EDITOR = "Doors, windows and exact walls: adjust them in t
 export const USE_SAMPLE_ROOM = "Use the sample room";
 export const TURN_ON_LIVE = "Turn on Live AI";
 
+/** Phone menu Live AI switch: first item, label follows the mode. */
+export const LIVE_MENU_TO_LIVE = "Answers: Demo · switch to Live AI";
+export const LIVE_MENU_TO_DEMO = "Answers: Live AI · switch to Demo";
+
 /** Demo-miss + capped sentences name the same action as their button. */
 export const DEMO_MISS_MESSAGE = `This answer isn't in the demo yet. ${USE_SAMPLE_ROOM} or turn on Live AI.`;
 export const CAPPED_MESSAGE = `The live AI is resting. ${USE_SAMPLE_ROOM} or try again later.`;
