@@ -1143,6 +1143,7 @@ class FakeSheetElement {
     if (child !== undefined) this.children.unshift(child);
   }
   appendChild(): void {}
+  after(): void {}
   addEventListener(): void {}
 }
 class FakeObserver {
