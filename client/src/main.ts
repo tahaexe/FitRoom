@@ -2469,6 +2469,7 @@ class FitRoomApp {
     try {
       new MutationObserver(() => {
         this.applyPhoneViewOffset();
+        this.renderGuide();
       }).observe(document.body, {
         attributes: true,
         attributeFilter: ["data-sheet-open", "data-sheet-size"],
@@ -3121,9 +3122,14 @@ class FitRoomApp {
     const screen = this.guideScreen();
     // On phones an open sheet covers the bubble's corner: hide the bubble
     // while a sheet is open (the tour keeps its step and shows again on
-    // close). On desktops the bubble stays showing beside the open
-    // right-hand panel, clear of it (see `GuideView.place`).
-    if (this.sidePanel !== "none" && screen.isPhone) {
+    // close), except moment 3 over the peek Inspector sheet, which docks
+    // above the sheet; a docked bubble over a full sheet would land on the
+    // top bar and the handle, so it stays hidden there. On desktops the
+    // bubble stays showing beside the open right-hand panel, clear of it
+    // (see `GuideView.place`).
+    const sheetFull = document.body.getAttribute("data-sheet-size") === "full";
+    const moment3OverInspector = this.sidePanel === "inspector" && this.guide.moment === 3;
+    if (screen.isPhone && (sheetFull || (this.sidePanel !== "none" && !moment3OverInspector))) {
       this.guideView.hide();
       this.updateEmptyHint(this.store.state.items.length);
       this.maybeShowDoorTip();

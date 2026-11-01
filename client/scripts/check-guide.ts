@@ -712,6 +712,44 @@ check(
       /watchPanelClose\(\)[\s\S]{0,2000}this\.renderGuide\(\)/.test(mainSource),
     "a panel × close shows the guide again",
   );
+  check(
+    "guide:moment-3-over-inspector",
+    renderBody.includes('this.sidePanel === "inspector"') &&
+      renderBody.includes("this.guide.moment === 3"),
+    "moment 3 stays up over the Inspector sheet",
+  );
+  check(
+    "guide:sheet-size-hides-full",
+    renderBody.includes("data-sheet-size") && renderBody.includes('=== "full"'),
+    "a full sheet still hides the docked bubble",
+  );
+  const sizeObserverAt = mainSource.indexOf(
+    'attributeFilter: ["data-sheet-open", "data-sheet-size"]',
+  );
+  const sizeObserverBody =
+    sizeObserverAt < 0 ? "" : mainSource.slice(Math.max(0, sizeObserverAt - 400), sizeObserverAt);
+  check(
+    "guide:sheet-size-rerenders",
+    sizeObserverBody.includes("this.renderGuide()"),
+    "a sheet peek/full change re-renders the guide",
+  );
+  // Moment 3 over the peek Inspector sheet: the docked bubble's bottom
+  // edge stays above the sheet's top (506 px at 390x844).
+  const sheetPeek = Math.round(0.4 * 844);
+  const overInspector = placeBubble(
+    { x: 135, y: 300, w: 120, h: 40 },
+    { x: 0, y: 0, w: 300, h: 140 },
+    { x: 0, y: 0, w: 390, h: 844 },
+    GUIDE_MARGIN_PX,
+    10,
+    { bottomChrome: 56 + sheetPeek },
+  );
+  const overInspectorBottom = overInspector.top + Math.min(140, 844 - GUIDE_MARGIN_PX * 2);
+  check(
+    "guide:placement-moment-3-above-inspector",
+    overInspectorBottom <= 506,
+    `bottom edge ${String(overInspectorBottom)} vs sheet top 506`,
+  );
 }
 
 // ---- The bubble stays inside the free area left of the open panel ----
