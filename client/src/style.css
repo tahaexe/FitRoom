@@ -876,6 +876,13 @@ button.cart-row {
   border: 1.5px solid var(--amber);
 }
 
+.fit-list .fit-note {
+  padding: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
 /* Side panels live in the right-hand column, never over the 3D stage, so
  * the fit verdict badge always keeps the top-right corner of the view. */
 
@@ -2560,6 +2567,10 @@ button.cart-row {
   max-width: calc(100% - 32px);
 }
 
+.door-tip[hidden] {
+  display: none;
+}
+
 .door-tip-dismiss {
   background: #ffffff;
   color: var(--ink);
@@ -3017,7 +3028,8 @@ body[data-flow-open="true"] #tool-phone-menu {
 
   .editor-pill,
   .photo-draft-tape,
-  .fit-list button {
+  .fit-list button,
+  .fit-list .fit-note {
     font-size: 15px;
   }
 

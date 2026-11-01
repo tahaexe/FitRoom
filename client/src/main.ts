@@ -60,6 +60,7 @@ import {
   CART_SHARE_TITLE,
   DEMO_STORE_LINE,
   EMPTY_ROOM_ACTION,
+  FIT_ALL_CLEAR,
   PHOTO_VIEW_BUTTON,
   SHARE_DIALOG_TEXT,
   SHARE_INVALID,
@@ -2941,7 +2942,10 @@ class FitRoomApp {
     if (host === null) return;
     host.innerHTML = "";
     if (this.issues.length === 0) {
-      host.setAttribute("hidden", "");
+      const note = document.createElement("div");
+      note.className = "fit-note";
+      note.textContent = FIT_ALL_CLEAR;
+      host.appendChild(note);
       return;
     }
     for (const issue of this.issues) {
@@ -3873,15 +3877,15 @@ class FitRoomApp {
         this.select(null);
         return;
       }
+      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
+      if (tag === "input" || tag === "textarea" || tag === "select") return;
+      const active = document.activeElement;
+      if (active instanceof HTMLElement && active.isContentEditable) return;
       if (event.key === "Home") {
         event.preventDefault();
         this.resetView();
         return;
       }
-      const tag = (document.activeElement?.tagName ?? "").toLowerCase();
-      if (tag === "input" || tag === "textarea" || tag === "select") return;
-      const active = document.activeElement;
-      if (active instanceof HTMLElement && active.isContentEditable) return;
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y") {
         event.preventDefault();
         this.doRedo();

@@ -91,6 +91,7 @@ export const CART_DOWNLOAD = "Download list";
 export const CART_DOWNLOAD_TITLE = "Download your cart as JSON";
 export const CART_BROWSE_CATALOG = "Browse the catalog";
 export const CART_FIT_OK = "✓ Everything fits";
+export const FIT_ALL_CLEAR = "Nothing blocks a door, a window or a walkway.";
 
 /** Error fit line naming the count of pieces that name errors. */
 export function cartFitError(count: number): string {
