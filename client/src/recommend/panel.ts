@@ -145,10 +145,7 @@ export class RecommendPanel {
     if (live) {
       for (const b of this.root.querySelectorAll("button.recommend-run")) {
         if (!(b instanceof HTMLButtonElement)) continue;
-        if (b.title.includes("needs Live AI")) {
-          b.removeAttribute("disabled");
-          b.removeAttribute("aria-disabled");
-        }
+        if (b.title.includes("needs Live AI")) this.clearRunNeedsLive(b);
       }
     } else {
       this.applyDemoDisabled();
@@ -313,6 +310,7 @@ export class RecommendPanel {
       b.type = "button";
       b.className = "recommend-run";
       b.textContent = name;
+      b.dataset["label"] = name;
       b.title = `What fits on ${name}?`;
       b.dataset["wall"] = wallDisplayName(this.deps.room, run.wall);
       b.dataset["start"] = String(run.start_cm);
@@ -361,6 +359,32 @@ export class RecommendPanel {
     return null;
   }
 
+  /**
+   * The visible second line under a run with no stored demo answer. The
+   * reason never lives in the tooltip alone.
+   */
+  private setRunNeedsLive(button: HTMLButtonElement): void {
+    button.toggleAttribute("disabled", true);
+    button.setAttribute("aria-disabled", "true");
+    const base = button.dataset["label"] ?? button.textContent ?? "";
+    button.title = `${base} — needs Live AI (no stored demo answer)`;
+    if (button.querySelector(":scope > .needs-live") === null) {
+      const line = document.createElement("span");
+      line.className = "needs-live";
+      line.textContent = "Needs Live AI";
+      button.appendChild(line);
+    }
+  }
+
+  /** Drop the Live AI line where Live AI enables the run again. */
+  private clearRunNeedsLive(button: HTMLButtonElement): void {
+    const base = button.dataset["label"] ?? "";
+    button.removeAttribute("disabled");
+    button.removeAttribute("aria-disabled");
+    if (base !== "") button.title = `What fits on ${base}?`;
+    button.querySelector(":scope > .needs-live")?.remove();
+  }
+
   /** In demo mode an entry with no stored answer is disabled with a Live AI hint. */
   private async markUnavailableRuns(host: Element): Promise<void> {
     if (isLive()) return;
@@ -377,11 +401,7 @@ export class RecommendPanel {
           Math.abs(spot.start_cm - start) <= 1 &&
           Math.abs(spot.end_cm - end) <= 1,
       );
-      if (!known) {
-        b.toggleAttribute("disabled", true);
-        b.setAttribute("aria-disabled", "true");
-        b.title = `${b.textContent ?? ""} — needs Live AI (no stored demo answer)`;
-      }
+      if (!known) this.setRunNeedsLive(b);
     }
   }
 
@@ -390,18 +410,13 @@ export class RecommendPanel {
     if (isLive()) return;
     for (const b of this.root.querySelectorAll("button.recommend-run")) {
       if (!(b instanceof HTMLButtonElement)) continue;
-      if (b.title.includes("needs Live AI")) {
-        b.toggleAttribute("disabled", true);
-        b.setAttribute("aria-disabled", "true");
-      }
+      if (b.title.includes("needs Live AI")) this.setRunNeedsLive(b);
     }
   }
 
   /** Mark one entry as needing Live AI after a demo-miss. */
   private disableRun(button: HTMLButtonElement): void {
-    button.toggleAttribute("disabled", true);
-    button.setAttribute("aria-disabled", "true");
-    button.title = `${button.textContent ?? ""} — needs Live AI (no stored demo answer)`;
+    this.setRunNeedsLive(button);
   }
 
   private loadTimer: ReturnType<typeof setInterval> | null = null;

@@ -82,6 +82,26 @@ export function hideARLayer(): void {
 /** Show the AR layer the tap opens (WebXR presents inside it). */
 export function showARLayer(): void {
   layerHost?.removeAttribute("hidden");
+  // A fresh open starts without the failure word.
+  layerHost?.querySelector(":scope > .ar-layer-note")?.remove();
+}
+
+/**
+ * A failed session keeps the layer open with a word above the Back button:
+ * back to the room, or view the piece in 3D instead.
+ */
+function showARFailure(): void {
+  if (layerHost === null) return;
+  layerHost.removeAttribute("hidden");
+  let note = layerHost.querySelector(":scope > .ar-layer-note");
+  if (note === null) {
+    note = document.createElement("p");
+    note.className = "ar-layer-note";
+    const back = layerHost.querySelector(":scope > .ar-layer-back");
+    if (back !== null) back.before(note);
+    else layerHost.appendChild(note);
+  }
+  note.textContent = "AR didn't open on this phone. Back to the room, or view it in 3D.";
 }
 
 /** True while the AR layer is open. */
@@ -122,7 +142,9 @@ export async function ensureARViewer(): Promise<ARViewerElement | null> {
     back.addEventListener("click", () => hideARLayer());
     el.addEventListener("ar-status", (event) => {
       const status = (event as CustomEvent<{ status?: unknown }>).detail?.status;
-      if (status === "not-presenting" || status === "failed") hideARLayer();
+      // Leaving AR closes the layer; a failed session keeps it with a word.
+      if (status === "not-presenting") hideARLayer();
+      else if (status === "failed") showARFailure();
     });
     document.addEventListener("visibilitychange", () => {
       // Scene Viewer and Quick Look leave the page: closing when it is

@@ -217,10 +217,10 @@ async function postGateway(
       }
       result = await readResult(res);
       if (result === null) {
-        return { status: "error", message: `The AI service answered HTTP ${String(res.status)}.` };
+        return { status: "error", message: AI_UNREACHABLE };
       }
     } else {
-      return { status: "error", message: `The AI service answered HTTP ${String(res.status)}.` };
+      return { status: "error", message: AI_UNREACHABLE };
     }
   }
   if (retryableHttp(res, result)) {

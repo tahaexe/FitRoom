@@ -57,10 +57,27 @@ import {
   CANCEL,
   CANCELLED,
   NOT_READY_MESSAGE,
+  RETRY,
   TURN_ON_LIVE,
   USE_SAMPLE_ROOM,
 } from "../copy";
 import { formatCatalogPrice } from "../catalog-ui";
+
+/**
+ * The visible second line under a chip with no stored demo answer. The
+ * reason never lives in the tooltip alone.
+ */
+function markNeedsLive(button: HTMLButtonElement, base: string): void {
+  button.toggleAttribute("disabled", true);
+  button.setAttribute("aria-disabled", "true");
+  button.title = `${base} — needs Live AI (no stored demo answer)`;
+  if (button.querySelector(":scope > .needs-live") === null) {
+    const line = document.createElement("span");
+    line.className = "needs-live";
+    line.textContent = "Needs Live AI";
+    button.appendChild(line);
+  }
+}
 
 /** The six scripted demo requests (same list as the server demo store). */
 export const ASSISTANT_DEMO_CHIPS: string[] = [
@@ -104,6 +121,8 @@ export interface AssistantDeps {
   isSampleScene: () => boolean;
   /** Toast the applied furnish turn ("Furnished · Undo"). */
   onFurnished: () => void;
+  /** Toast the applied arrange turn ("Arranged · Undo"). */
+  onArranged: () => void;
 }
 
 /** Demo brief chips start with the brief sentence the panel builds. */
@@ -335,9 +354,7 @@ export class AssistantPanel {
         chip.addEventListener("click", () => void this.sendDemo(text));
       } else {
         // In demo mode a chip with no stored answer is disabled: Live AI only.
-        chip.title = `${text} — needs Live AI (no stored demo answer)`;
-        chip.toggleAttribute("disabled", true);
-        chip.setAttribute("aria-disabled", "true");
+        markNeedsLive(chip, text);
       }
       host.appendChild(chip);
     }
@@ -626,9 +643,7 @@ export class AssistantPanel {
       chip.className = "assistant-chip";
       if (parsed === null) {
         chip.textContent = text;
-        chip.title = `${text} — needs Live AI (no stored demo answer)`;
-        chip.toggleAttribute("disabled", true);
-        chip.setAttribute("aria-disabled", "true");
+        markNeedsLive(chip, text);
       } else {
         // Short label on the chip; the request sentence stays the chat
         // line and the demo-store key.
@@ -1124,6 +1139,34 @@ export class AssistantPanel {
     log.scrollTop = log.scrollHeight;
   }
 
+  /**
+   * Live AI error: the typed request goes back in the input and the card
+   * carries a "Try again" button that resends it. Demo misses keep their
+   * own way out — no retry of the same miss.
+   */
+  private addErrorCard(message: string, request: string): void {
+    const input = this.root.querySelector(".assistant-row input");
+    if (input instanceof HTMLInputElement) input.value = request;
+    const log = this.logEl();
+    if (log === null) return;
+    const card = document.createElement("div");
+    card.className = "assistant-card";
+    const note = document.createElement("p");
+    note.className = "assistant-answer";
+    note.textContent = message;
+    const row = document.createElement("div");
+    row.className = "assistant-row";
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.className = "assistant-go";
+    retry.textContent = RETRY;
+    retry.addEventListener("click", () => void this.send(request));
+    row.appendChild(retry);
+    card.append(note, row);
+    log.appendChild(card);
+    log.scrollTop = log.scrollHeight;
+  }
+
   private addAnswer(answer: string, summary: string, records: AssistantToolRecord[]): void {
     const log = this.logEl();
     if (log === null) return;
@@ -1192,8 +1235,9 @@ export class AssistantPanel {
     for (const b of this.root.querySelectorAll("button.assistant-chip")) {
       if (!(b instanceof HTMLButtonElement)) continue;
       if (b.title.includes("needs Live AI")) {
-        b.toggleAttribute("disabled", true);
-        b.setAttribute("aria-disabled", "true");
+        // The visible line goes back with the disabled state after a send.
+        const base = b.title.split(" — needs Live AI")[0] ?? "";
+        markNeedsLive(b, base);
       }
     }
   }
@@ -1370,7 +1414,7 @@ export class AssistantPanel {
           } else if (result.status === "not-ready") {
             this.addNotice(NOT_READY_MESSAGE);
           } else {
-            this.addNotice(result.message);
+            this.addErrorCard(result.message, request);
           }
           return;
         }
@@ -1408,6 +1452,7 @@ export class AssistantPanel {
         }
         if (cleanSnapshot !== null) {
           this.deps.applyTurn(cleanSnapshot);
+          this.deps.onArranged();
           const composed = summarizeAssistantTurn(
             start,
             cleanSnapshot,
@@ -1440,7 +1485,10 @@ export class AssistantPanel {
         return;
       }
       const unchanged = JSON.stringify(draft.items) === JSON.stringify(start.items);
-      if (!unchanged) this.deps.applyTurn(draft);
+      if (!unchanged) {
+        this.deps.applyTurn(draft);
+        this.deps.onArranged();
+      }
       this.addAnswer(
         answer,
         summarizeAssistantTurn(start, draft, this.deps.room, this.deps.catalog),

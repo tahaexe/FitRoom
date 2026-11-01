@@ -759,6 +759,7 @@ class FitRoomApp {
         resetDemoRoom: () => this.resetDemoRoom(),
         isSampleScene: () => this.isSampleScene(),
         onFurnished: () => this.showFurnishedToast(),
+        onArranged: () => this.showArrangedToast(),
       });
     }
 
@@ -3197,6 +3198,16 @@ class FitRoomApp {
 
   /** Furnish-turn toast: applied as one undo step, undoable from the toast. */
   private showFurnishedToast(): void {
+    this.showAppliedToast("Furnished");
+  }
+
+  /** Arrange-turn toast: the Furnish shape with the Arrange word. */
+  private showArrangedToast(): void {
+    this.showAppliedToast("Arranged");
+  }
+
+  /** Applied-turn toast ("<word> · Undo"), undoable from the toast. */
+  private showAppliedToast(word: string): void {
     let host = document.getElementById("delete-toast");
     if (host === null) {
       host = document.createElement("div");
@@ -3208,7 +3219,7 @@ class FitRoomApp {
     }
     host.innerHTML = "";
     const text = document.createElement("span");
-    text.textContent = "Furnished · ";
+    text.textContent = `${word} · `;
     const btn = document.createElement("button");
     btn.type = "button";
     btn.textContent = "Undo";

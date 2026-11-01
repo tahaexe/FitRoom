@@ -1457,6 +1457,15 @@ button.cart-row {
   border-style: dashed;
 }
 
+/* Visible second line under a disabled chip or run: the Live AI reason. */
+.needs-live {
+  display: block;
+  margin-top: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: inherit;
+}
+
 .assistant-chip[disabled]:hover {
   background: #ffffff;
 }
@@ -3299,6 +3308,14 @@ body[data-flow-open="true"] #tool-phone-menu {
   font-size: 18px;
   font-weight: 700;
   margin: 0;
+  color: var(--ink);
+}
+
+/* Failed AR session: the word above the Back button. */
+.ar-layer-note {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
   color: var(--ink);
 }
 
