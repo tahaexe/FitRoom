@@ -62,6 +62,13 @@ export const TAPE_NOTE =
   "Measure at floor level, corner to corner. Leave one empty to estimate it from the photos.";
 export const BUILD_SOLVING = "Solving your room…";
 export const RETRY = "Try again";
+export const REMOVE = "Remove";
+export function loadingFurniture(n: number, total: number): string {
+  return `Loading furniture ${String(n)} of ${String(total)}…`;
+}
+export function loadFailed(name: string): string {
+  return `Couldn't load ${name}. Remove it or try again.`;
+}
 export const RETAKE = "Retake";
 
 /** Empty room + empty cart. */

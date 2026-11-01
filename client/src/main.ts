@@ -68,6 +68,8 @@ import {
   LIVE_MENU_TO_DEMO,
   LIVE_MENU_TO_LIVE,
   PHOTO_VIEW_BUTTON,
+  REMOVE,
+  RETRY,
   SHARE_DIALOG_TEXT,
   SHARE_INVALID,
   SHARE_KEEP,
@@ -83,6 +85,8 @@ import {
   TOOLBAR_ROTATE_RIGHT,
   TOOLBAR_VISUALISE,
   USE_SAMPLE_ROOM,
+  loadFailed,
+  loadingFurniture,
   storeAddHint,
 } from "./copy";
 import {
@@ -646,11 +650,22 @@ class FitRoomApp {
       load: async (item) => {
         const catalogEntry = CATALOG_MAP.get(item.productId);
         if (catalogEntry === undefined) throw new Error(`unknown product ${item.productId}`);
-        const group = await loadModel(catalogEntry);
-        group.position.set(cmToMeters(item.position.x), 0, cmToMeters(item.position.z));
-        group.rotation.y = (item.rotationY * Math.PI) / 180;
-        await applyVariant(group, catalogEntry, item.variant);
-        return group;
+        this.loadingBegin();
+        try {
+          const group = await loadModel(catalogEntry);
+          group.position.set(cmToMeters(item.position.x), 0, cmToMeters(item.position.z));
+          group.rotation.y = (item.rotationY * Math.PI) / 180;
+          await applyVariant(group, catalogEntry, item.variant);
+          return group;
+        } catch {
+          const box = this.failedModelBox(catalogEntry);
+          box.position.set(cmToMeters(item.position.x), 0, cmToMeters(item.position.z));
+          box.rotation.y = (item.rotationY * Math.PI) / 180;
+          this.showLoadFailedNote(item.instanceId, catalogEntry.name);
+          return box;
+        } finally {
+          this.loadingEnd();
+        }
       },
       place: (group, item) => {
         group.position.set(cmToMeters(item.position.x), 0, cmToMeters(item.position.z));
@@ -3208,6 +3223,89 @@ class FitRoomApp {
   /** Arrange-turn toast: the Furnish shape with the Arrange word. */
   private showArrangedToast(): void {
     this.showAppliedToast("Arranged");
+  }
+
+  private loadingPending = 0;
+  private loadingTotal = 0;
+
+  private loadingBegin(): void {
+    if (this.loadingPending === 0) this.loadingTotal = 0;
+    this.loadingPending += 1;
+    this.loadingTotal += 1;
+    this.updateLoadingLine();
+  }
+
+  private loadingEnd(): void {
+    this.loadingPending = Math.max(0, this.loadingPending - 1);
+    this.updateLoadingLine();
+  }
+
+  private updateLoadingLine(): void {
+    let line = document.getElementById("loading-line");
+    if (line === null) {
+      line = document.createElement("div");
+      line.id = "loading-line";
+      line.className = "loading-line";
+      line.setAttribute("role", "status");
+      line.setAttribute("aria-live", "polite");
+      line.setAttribute("hidden", "");
+      document.getElementById("scene-container")?.appendChild(line);
+    }
+    if (this.loadingPending === 0) {
+      line.setAttribute("hidden", "");
+    } else {
+      line.removeAttribute("hidden");
+      line.textContent = loadingFurniture(
+        this.loadingTotal - this.loadingPending + 1,
+        this.loadingTotal,
+      );
+    }
+  }
+
+  private failedModelBox(entry: CatalogItem): THREE.Group {
+    const group = new THREE.Group();
+    const mesh = new THREE.Mesh(
+      new THREE.BoxGeometry(entry.size.w / 100, entry.size.h / 100, entry.size.d / 100),
+      new THREE.MeshStandardMaterial({ color: 0xb8b2a8, transparent: true, opacity: 0.55 }),
+    );
+    mesh.position.y = entry.size.h / 200;
+    group.add(mesh);
+    group.userData["failedModel"] = true;
+    return group;
+  }
+
+  private showLoadFailedNote(instanceId: string, name: string): void {
+    let host = document.getElementById("delete-toast");
+    if (host === null) {
+      host = document.createElement("div");
+      host.id = "delete-toast";
+      host.className = "delete-toast";
+      host.setAttribute("hidden", "");
+      document.getElementById("scene-container")?.appendChild(host);
+      this.toastEl = host;
+    }
+    host.innerHTML = "";
+    const text = document.createElement("span");
+    text.textContent = loadFailed(name);
+    const retry = document.createElement("button");
+    retry.type = "button";
+    retry.textContent = RETRY;
+    retry.addEventListener("click", () => {
+      this.hideDeleteToast();
+      this.syncer?.forget(instanceId);
+      void this.syncInstances();
+    });
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.textContent = REMOVE;
+    remove.addEventListener("click", () => {
+      this.hideDeleteToast();
+      this.deleteItem(instanceId);
+    });
+    host.append(text, retry, remove);
+    host.removeAttribute("hidden");
+    this.placeToastAboveToolbar(host);
+    window.clearTimeout(this.toastTimer);
   }
 
   /** Applied-turn toast ("<word> · Undo"), undoable from the toast. */

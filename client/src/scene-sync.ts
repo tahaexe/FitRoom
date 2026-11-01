@@ -47,6 +47,14 @@ export class SceneSynchronizer<G> {
 
   constructor(private readonly hooks: SceneSyncHooks<G>) {}
 
+  forget(instanceId: string): void {
+    const entry = this.instances.get(instanceId);
+    if (entry === undefined) return;
+    this.hooks.detach(entry.group);
+    this.hooks.dispose?.(entry.group);
+    this.instances.delete(instanceId);
+  }
+
   /** Reconcile the scene with the given state items. Never throws. */
   async sync(stateItems: readonly SceneItem[]): Promise<void> {
     const epoch = (this.epoch += 1);
