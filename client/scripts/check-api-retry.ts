@@ -14,7 +14,13 @@
  */
 
 /* global console, process */
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { AI_UNREACHABLE } from "../src/copy.js";
+
+const clientSrcDir = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
+const panelSrc = (relative: string): string => readFileSync(join(clientSrcDir, relative), "utf8");
 
 let failures = 0;
 
@@ -225,6 +231,102 @@ async function main(): Promise<void> {
           result.status === "error" &&
           (result as { message?: string }).message === "The request timed out. Try again.",
         JSON.stringify({ result, calls }),
+      );
+    }
+
+    // 12. postRecommend and postAssistant take the caller's abort signal:
+    // an aborted live request is sent once with today's copy (no retry,
+    // so no second send that could bill twice).
+    {
+      setLive(true);
+      const calls: Array<{ name: string; call: (signal: AbortSignal) => Promise<unknown> }> = [
+        {
+          name: "postRecommend",
+          call: (signal) => api.postRecommend({ hello: "world" }, { signal }),
+        },
+        {
+          name: "postAssistant",
+          call: (signal) => api.postAssistant({ hello: "world" }, { signal }),
+        },
+      ];
+      for (const entry of calls) {
+        let sends = 0;
+        let seenAborted: boolean | null = null;
+        globalScope.fetch = (async (_url: unknown, init?: unknown) => {
+          sends += 1;
+          const signal = (init as { signal?: AbortSignal } | undefined)?.signal;
+          seenAborted = signal?.aborted ?? null;
+          throw new DOMException("aborted", "AbortError");
+        }) as unknown as typeof fetch;
+        const controller = new AbortController();
+        controller.abort();
+        const result = (await entry.call(controller.signal)) as {
+          status?: string;
+          message?: string;
+        };
+        check(
+          `${entry.name} aborted is sent once with today's copy`,
+          sends === 1 &&
+            seenAborted === true &&
+            result.status === "error" &&
+            result.message === "The request timed out. Try again.",
+          JSON.stringify({ result, sends }),
+        );
+      }
+    }
+
+    // 13. Arrange, Furnish and Recommend count seconds like Visualise and
+    // offer Cancel; an aborted request leaves no answer applied.
+    {
+      const assistant = panelSrc("assistant/panel.ts");
+      const recommend = panelSrc("recommend/panel.ts");
+      check(
+        "assistant passes the abort signal",
+        assistant.includes("new AbortController()") && assistant.includes("{ signal }"),
+        "assistant/panel.ts",
+      );
+      check(
+        "assistant wait counts seconds",
+        assistant.includes("`${ASSISTANT_LOADING} ${String(secs)}s`"),
+        "assistant/panel.ts",
+      );
+      check(
+        "assistant Cancel aborts the request",
+        assistant.includes("assistant-cancel") && assistant.includes("controller.abort()"),
+        "assistant/panel.ts",
+      );
+      check(
+        "assistant abort leaves no answer applied",
+        assistant.includes("An aborted request leaves no answer applied") &&
+          assistant.includes("this.addCancelled(request)"),
+        "assistant/panel.ts",
+      );
+      check(
+        "assistant keeps the typed text after Cancel",
+        assistant.includes("input.value = request") && assistant.includes("CANCELLED"),
+        "assistant/panel.ts",
+      );
+      check(
+        "recommend passes the abort signal",
+        recommend.includes("new AbortController()") &&
+          recommend.includes("signal: controller.signal"),
+        "recommend/panel.ts",
+      );
+      check(
+        "recommend wait counts seconds",
+        recommend.includes("`${RECOMMEND_LOADING} ${String(secs)}s`"),
+        "recommend/panel.ts",
+      );
+      check(
+        "recommend Cancel aborts the request",
+        recommend.includes("recommend-cancel") && recommend.includes("controller.abort()"),
+        "recommend/panel.ts",
+      );
+      check(
+        "recommend abort leaves no answer applied",
+        recommend.includes("An aborted request leaves no answer applied") &&
+          recommend.includes("showNotice(CANCELLED, false)"),
+        "recommend/panel.ts",
       );
     }
   } finally {

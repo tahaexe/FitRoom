@@ -240,12 +240,18 @@ async function postGateway(
   return result;
 }
 
-export function postRecommend(body: Record<string, unknown>): Promise<ApiResult> {
-  return postGateway("recommend", body);
+export function postRecommend(
+  body: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
+): Promise<ApiResult> {
+  return postGateway("recommend", body, options?.signal);
 }
 
-export function postAssistant(body: Record<string, unknown>): Promise<ApiResult> {
-  return postGateway("assistant", body);
+export function postAssistant(
+  body: Record<string, unknown>,
+  options?: { signal?: AbortSignal },
+): Promise<ApiResult> {
+  return postGateway("assistant", body, options?.signal);
 }
 
 export function postRender(body: Record<string, unknown>): Promise<ApiResult> {

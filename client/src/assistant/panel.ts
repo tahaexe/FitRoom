@@ -54,6 +54,8 @@ import {
   AI_UNREACHABLE,
   ARRANGE_PLACEHOLDER,
   ASSISTANT_LOADING,
+  CANCEL,
+  CANCELLED,
   NOT_READY_MESSAGE,
   TURN_ON_LIVE,
   USE_SAMPLE_ROOM,
@@ -869,18 +871,54 @@ export class AssistantPanel {
     brief: AssistantBrief,
     messages: AssistantMessage[],
     draft: SceneState,
+    signal: AbortSignal,
   ): Promise<ApiResult> {
     try {
-      return await postAssistant({
-        request,
-        messages,
-        room: this.deps.room,
-        scene: draft,
-        brief: { ...brief },
-      });
+      return await postAssistant(
+        {
+          request,
+          messages,
+          room: this.deps.room,
+          scene: draft,
+          brief: { ...brief },
+        },
+        { signal },
+      );
     } catch {
       return { status: "error", message: AI_UNREACHABLE };
     }
+  }
+
+  /**
+   * Furnish wait line while the brief runs: it counts seconds like
+   * Visualise and carries a Cancel button that aborts the request.
+   */
+  private addFurnishThinking(controller: AbortController): { stop: () => void } | null {
+    const log = this.furnishLogEl();
+    if (log === null) return null;
+    const p = document.createElement("p");
+    p.className = "furnish-thinking";
+    p.setAttribute("role", "status");
+    p.textContent = ASSISTANT_LOADING;
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "assistant-cancel";
+    cancel.textContent = CANCEL;
+    cancel.addEventListener("click", () => controller.abort());
+    log.append(p, cancel);
+    log.scrollTop = log.scrollHeight;
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      const secs = Math.floor((Date.now() - startedAt) / 1000);
+      p.textContent = `${ASSISTANT_LOADING} ${String(secs)}s`;
+    }, 500);
+    return {
+      stop: () => {
+        clearInterval(timer);
+        p.remove();
+        cancel.remove();
+      },
+    };
   }
 
   private async furnishTurn(brief: AssistantBrief, request: string): Promise<void> {
@@ -894,9 +932,26 @@ export class AssistantPanel {
     let answer: string | null = null;
 
     this.setSending(true);
+    const controller = new AbortController();
+    const thinking = this.addFurnishThinking(controller);
     try {
       for (let round = 0; round < ASSISTANT_MAX_ROUNDS; round += 1) {
-        const result = await this.roundWithBrief(request, brief, messages, draft);
+        if (controller.signal.aborted) {
+          this.addFurnishNotice(CANCELLED);
+          return;
+        }
+        const result = await this.roundWithBrief(
+          request,
+          brief,
+          messages,
+          draft,
+          controller.signal,
+        );
+        if (controller.signal.aborted) {
+          // An aborted request leaves no answer applied.
+          this.addFurnishNotice(CANCELLED);
+          return;
+        }
         if (result.status !== "ok") {
           if (result.status === "demo-miss" || result.status === "capped") {
             this.addFurnishDemoMiss(result.message);
@@ -968,6 +1023,7 @@ export class AssistantPanel {
       }
       this.addFurnishCard(brief, start, draft, answer);
     } finally {
+      thinking?.stop();
       this.setSending(false);
     }
   }
@@ -1115,7 +1171,10 @@ export class AssistantPanel {
   private setSending(on: boolean): void {
     this.sending = on;
     for (const b of this.root.querySelectorAll("button")) {
-      if (b.classList.contains("assistant-close")) continue;
+      // The Cancel button stays live while the request runs.
+      if (b.classList.contains("assistant-close") || b.classList.contains("assistant-cancel")) {
+        continue;
+      }
       b.toggleAttribute("disabled", on);
     }
     const input = this.root.querySelector(".assistant-row input");
@@ -1224,35 +1283,67 @@ export class AssistantPanel {
     request: string,
     messages: AssistantMessage[],
     draft: SceneState,
+    signal: AbortSignal,
   ): Promise<ApiResult> {
     try {
-      return await postAssistant({
-        request,
-        messages,
-        room: this.deps.room,
-        scene: draft,
-      });
+      return await postAssistant(
+        {
+          request,
+          messages,
+          room: this.deps.room,
+          scene: draft,
+        },
+        { signal },
+      );
     } catch {
       return { status: "error", message: AI_UNREACHABLE };
     }
   }
 
-  /** Loading line while the turn runs (removed when it ends). */
-  private addThinking(): HTMLElement | null {
+  /**
+   * Loading line while the turn runs (removed when it ends): it counts
+   * seconds like Visualise and carries a Cancel button that aborts the
+   * request through the signal `postGateway` takes.
+   */
+  private addThinking(controller: AbortController): { stop: () => void } | null {
     const log = this.logEl();
     if (log === null) return null;
     const p = document.createElement("p");
     p.className = "assistant-thinking";
     p.setAttribute("role", "status");
     p.textContent = ASSISTANT_LOADING;
-    log.appendChild(p);
+    const cancel = document.createElement("button");
+    cancel.type = "button";
+    cancel.className = "assistant-cancel";
+    cancel.textContent = CANCEL;
+    cancel.addEventListener("click", () => controller.abort());
+    log.append(p, cancel);
     log.scrollTop = log.scrollHeight;
-    return p;
+    const startedAt = Date.now();
+    const timer = setInterval(() => {
+      const secs = Math.floor((Date.now() - startedAt) / 1000);
+      p.textContent = `${ASSISTANT_LOADING} ${String(secs)}s`;
+    }, 500);
+    return {
+      stop: () => {
+        clearInterval(timer);
+        p.remove();
+        cancel.remove();
+      },
+    };
+  }
+
+  /** After Cancel the panel is back as before the request (typed text kept). */
+  private addCancelled(request: string): void {
+    const input = this.root.querySelector(".assistant-row input");
+    if (input instanceof HTMLInputElement) input.value = request;
+    this.addNotice(CANCELLED);
   }
 
   private async turn(request: string): Promise<void> {
     this.addUserLine(request);
-    const thinking = this.addThinking();
+    const controller = new AbortController();
+    const thinking = this.addThinking(controller);
     try {
       const start = cloneScene(this.deps.getScene());
       const draft = cloneScene(start);
@@ -1263,7 +1354,16 @@ export class AssistantPanel {
       let answer: string | null = null;
 
       for (let round = 0; round < ASSISTANT_MAX_ROUNDS; round += 1) {
-        const result = await this.round(request, messages, draft);
+        if (controller.signal.aborted) {
+          this.addCancelled(request);
+          return;
+        }
+        const result = await this.round(request, messages, draft, controller.signal);
+        if (controller.signal.aborted) {
+          // An aborted request leaves no answer applied.
+          this.addCancelled(request);
+          return;
+        }
         if (result.status !== "ok") {
           if (result.status === "demo-miss" || result.status === "capped") {
             this.addDemoMiss(result.message);
@@ -1347,7 +1447,7 @@ export class AssistantPanel {
         records,
       );
     } finally {
-      thinking?.remove();
+      thinking?.stop();
     }
   }
 }

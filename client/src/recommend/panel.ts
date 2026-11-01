@@ -39,6 +39,8 @@ import {
 import { LIVE_CHANGE_EVENT, isLive, postRecommend, requestLive, type ApiResult } from "../api";
 import {
   AI_UNREACHABLE,
+  CANCEL,
+  CANCELLED,
   NOT_READY_MESSAGE,
   RECOMMEND_LOADING,
   TURN_ON_LIVE,
@@ -402,11 +404,20 @@ export class RecommendPanel {
     button.title = `${button.textContent ?? ""} — needs Live AI (no stored demo answer)`;
   }
 
-  private setLoading(on: boolean): void {
+  private loadTimer: ReturnType<typeof setInterval> | null = null;
+
+  private setLoading(on: boolean, controller?: AbortController): void {
     this.loading = on;
     for (const b of this.root.querySelectorAll("button")) {
-      if (b.classList.contains("recommend-close")) continue;
+      // The Cancel button stays live while the request runs.
+      if (b.classList.contains("recommend-close") || b.classList.contains("recommend-cancel")) {
+        continue;
+      }
       b.toggleAttribute("disabled", on);
+    }
+    if (this.loadTimer !== null) {
+      clearInterval(this.loadTimer);
+      this.loadTimer = null;
     }
     if (!on) this.applyDemoDisabled();
     const out = this.root.querySelector(".recommend-results");
@@ -417,6 +428,21 @@ export class RecommendPanel {
       p.className = "recommend-empty";
       p.textContent = RECOMMEND_LOADING;
       out.appendChild(p);
+      // The wait line counts seconds like Visualise, with a Cancel button
+      // that aborts the request through the signal `postGateway` takes.
+      if (controller !== undefined) {
+        const cancel = document.createElement("button");
+        cancel.type = "button";
+        cancel.className = "recommend-cancel";
+        cancel.textContent = CANCEL;
+        cancel.addEventListener("click", () => controller.abort());
+        out.appendChild(cancel);
+        const startedAt = Date.now();
+        this.loadTimer = setInterval(() => {
+          const secs = Math.floor((Date.now() - startedAt) / 1000);
+          p.textContent = `${RECOMMEND_LOADING} ${String(secs)}s`;
+        }, 500);
+      }
     }
   }
 
@@ -466,6 +492,10 @@ export class RecommendPanel {
       return;
     }
     const result = await this.ask(request, "Nothing fits this run right now.", { kind: "place" });
+    if (result === null) {
+      this.deps.hoverRun(null);
+      return;
+    }
     if ((result.status === "demo-miss" || result.status === "capped") && button !== undefined) {
       this.disableRun(button);
     }
@@ -520,15 +550,23 @@ export class RecommendPanel {
     request: RecommendRequest,
     emptyText: string,
     mode: { kind: "place" } | { kind: "swap"; oldInstanceId: string },
-  ): Promise<ApiResult> {
-    this.setLoading(true);
+  ): Promise<ApiResult | null> {
+    const controller = new AbortController();
+    this.setLoading(true, controller);
     let result: ApiResult;
     try {
-      result = await postRecommend(request as unknown as Record<string, unknown>);
+      result = await postRecommend(request as unknown as Record<string, unknown>, {
+        signal: controller.signal,
+      });
     } catch {
       result = { status: "error", message: AI_UNREACHABLE };
     }
     this.setLoading(false);
+    if (controller.signal.aborted) {
+      // An aborted request leaves no answer applied; the typed budget kept.
+      this.showNotice(CANCELLED, false);
+      return null;
+    }
     if (result.status === "ok") {
       this.showAnswer(result.data, result.model, emptyText, request, mode);
     } else if (result.status === "demo-miss" || result.status === "capped") {

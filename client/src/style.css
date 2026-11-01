@@ -294,6 +294,17 @@ button {
   justify-content: flex-end;
 }
 
+/* ---- Live answer wait line: elapsed seconds plus a way out ---- */
+.assistant-cancel,
+.recommend-cancel {
+  margin: 8px 0;
+  min-height: 44px;
+}
+
+.furnish-thinking {
+  margin: 8px 0;
+}
+
 .api-status {
   font-size: 12px;
   font-weight: 600;

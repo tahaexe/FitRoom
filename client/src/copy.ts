@@ -141,6 +141,10 @@ export const RENDER_FAILED = "The visualiser couldn't make an image just now. Pl
 export const RENDER_CAPTURE_FAILED = "The visualiser couldn't capture the view. Please try again.";
 export const ASSISTANT_LOADING = "Asking Muse Spark…";
 export const RECOMMEND_LOADING = "Asking Muse Spark…";
+
+/** Cancel a live answer while it waits; the panel then says what happened. */
+export const CANCEL = "Cancel";
+export const CANCELLED = "Cancelled.";
 export const VISUALISING_PREFIX = "Visualising…";
 export const RENDER_HIDE = "Hide";
 export const RENDER_STILL_BUSY = "Still making your picture. It will appear here.";
