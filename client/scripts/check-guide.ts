@@ -228,11 +228,55 @@ check(
     paused === null && resumed === 4,
     `${String(paused)} then ${String(resumed)}`,
   );
-  // "Next" never jumps to a moment whose target is missing.
+  // "Next" never jumps to a moment whose target is missing: it hides instead.
   const stuck = new Guide(memoryStorage());
   stuck.start(emptyScreen);
   const stayed = stuck.next(emptyScreen);
-  check("guide:next-never-missing", stayed === 2, `got ${String(stayed)}`);
+  check("guide:next-never-missing", stayed === null, `got ${String(stayed)}`);
+}
+
+// ---- "Next" always moves on: the shown moment is done and never reshows ----
+{
+  // Next on moment 1 with the first-run dialog open hides the bubble.
+  const first = new Guide(memoryStorage());
+  first.start(dialogScreen);
+  check("guide:next-1-starts-at-1", first.moment === 1, `got ${String(first.moment)}`);
+  const afterNext1 = first.next(dialogScreen);
+  check("guide:next-1-hides", afterNext1 === null, `got ${String(afterNext1)}`);
+  check(
+    "guide:next-1-hidden",
+    first.showing === false && first.moment === null,
+    "the bubble hides when no later moment fits yet",
+  );
+  // The next undismissed moment shows as soon as its target is on screen.
+  const roomAfterDialog = first.reevaluate(emptyScreen);
+  check("guide:next-1-then-2", roomAfterDialog === 2, `got ${String(roomAfterDialog)}`);
+  // A dismissed moment never shows again until Help restarts the tour.
+  const backToDialog = first.reevaluate(dialogScreen);
+  check(
+    "guide:next-1-never-reshows",
+    backToDialog === null,
+    `moment 1 must stay hidden, got ${String(backToDialog)}`,
+  );
+
+  // Next on moment 2 in an empty room hides until a piece is added.
+  const second = new Guide(memoryStorage());
+  second.start(emptyScreen);
+  const afterNext2 = second.next(emptyScreen);
+  check("guide:next-2-hides", afterNext2 === null, `got ${String(afterNext2)}`);
+  check(
+    "guide:next-2-hidden",
+    second.showing === false && second.moment === null,
+    "the bubble hides when moments 3 and 4 need a piece",
+  );
+  const stillEmpty = second.reevaluate(emptyScreen);
+  check("guide:next-2-stays-hidden", stillEmpty === null, `got ${String(stillEmpty)}`);
+  const afterPiece = second.reevaluate(piecesScreen);
+  check("guide:next-2-then-3", afterPiece === 3, `got ${String(afterPiece)}`);
+
+  // Help shows moment 1 again on the first-run dialog after Next dismissed it.
+  const helped = first.restart(dialogScreen);
+  check("guide:help-after-next-dialog", helped === 1, `got ${String(helped)}`);
 }
 
 // ---- Help after `skipped` or `done` shows the moment that fits ----

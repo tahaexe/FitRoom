@@ -174,6 +174,8 @@ export class Guide {
   /** Moment parked by a screen that fits nothing (the size form, the plan
    * editor, the photo flow): the tour resumes there instead of rewinding. */
   private paused: GuideMoment | null = null;
+  /** Moments dismissed with Next: never shown again until Help restarts. */
+  private done = new Set<GuideMoment>();
 
   constructor(private readonly storage: GuideStorage = localGuideStorage()) {}
 
@@ -201,17 +203,33 @@ export class Guide {
     return this.active && this.moment !== null;
   }
 
+  /** Earliest fitting moment that Next has not dismissed yet. */
+  private fittingUndone(screen: GuideScreen, from: GuideMoment = 1): GuideMoment | null {
+    for (const moment of GUIDE_MOMENTS) {
+      if (moment >= from && !this.done.has(moment) && momentFits(moment, screen)) return moment;
+    }
+    return null;
+  }
+
+  /** The current moment if it still fits, else the earliest undismissed one. */
+  private resolveUndone(screen: GuideScreen, current: GuideMoment): GuideMoment | null {
+    if (!this.done.has(current) && momentFits(current, screen)) return current;
+    return this.fittingUndone(screen, 1);
+  }
+
   /** First paint: nothing when already seen, else the fitting moment only. */
   start(screen: GuideScreen): GuideMoment | null {
     if (this.hasSeen()) {
       this.active = false;
       this.moment = null;
       this.paused = null;
+      this.done.clear();
       return null;
     }
     this.active = true;
     this.paused = null;
-    this.moment = fittingMoment(screen, 1);
+    this.done.clear();
+    this.moment = this.fittingUndone(screen, 1);
     return this.moment;
   }
 
@@ -219,21 +237,27 @@ export class Guide {
   restart(screen: GuideScreen): GuideMoment | null {
     this.active = true;
     this.paused = null;
+    this.done.clear();
     this.storage.remove(GUIDE_KEY);
-    this.moment = fittingMoment(screen, 1);
+    this.moment = this.fittingUndone(screen, 1);
     return this.moment;
   }
 
   /** Room changes (menu, photo build, reload): never a missing target. */
   reevaluate(screen: GuideScreen): GuideMoment | null {
     if (!this.active) return null;
+    if (this.paused !== null && this.done.has(this.paused)) this.paused = null;
     if (this.moment !== null) {
+      if (this.done.has(this.moment)) {
+        this.moment = this.fittingUndone(screen, 1);
+        return this.moment;
+      }
       if (momentFits(this.moment, screen)) {
         this.paused = null;
         return this.moment;
       }
       this.paused = this.moment;
-      this.moment = fittingMoment(screen, 1);
+      this.moment = this.fittingUndone(screen, 1);
       // A room change rewinds the tour (empty room falls back to moment 2);
       // a mere detour keeps the parked moment for the way back.
       if (this.moment !== null && this.moment < (this.paused ?? 0)) this.paused = null;
@@ -244,22 +268,24 @@ export class Guide {
       this.paused = null;
       return this.moment;
     }
-    this.moment = fittingMoment(screen, 1);
+    this.moment = this.fittingUndone(screen, 1);
     return this.moment;
   }
 
-  /** "Next": the next fitting moment (the real action also moves on). */
+  /** "Next": the shown moment is done; the next undismissed fitting moment shows. */
   next(screen: GuideScreen): GuideMoment | null {
     if (!this.active || this.moment === null) return this.moment;
-    const following = fittingMoment(screen, (this.moment + 1) as GuideMoment);
-    if (following !== null) this.moment = following;
+    const current = this.moment;
+    this.done.add(current);
+    this.paused = null;
+    this.moment = this.fittingUndone(screen, (current + 1) as GuideMoment);
     return this.moment;
   }
 
   /** Adding a piece moves on from the catalog moment. */
   advanceOnItemsAdded(screen: GuideScreen): GuideMoment | null {
     if (this.active && this.moment === 2 && screen.itemCount > 0) {
-      this.moment = resolveMoment(screen, 3);
+      this.moment = this.resolveUndone(screen, 3);
     }
     return this.moment;
   }
@@ -267,7 +293,7 @@ export class Guide {
   /** Moving a piece moves on from the drag moment. */
   advanceOnPieceMoved(screen: GuideScreen): GuideMoment | null {
     if (this.active && this.moment === 3) {
-      this.moment = resolveMoment(screen, 4);
+      this.moment = this.resolveUndone(screen, 4);
     }
     return this.moment;
   }
@@ -277,6 +303,7 @@ export class Guide {
     this.active = false;
     this.moment = null;
     this.paused = null;
+    this.done.clear();
     this.storage.set(GUIDE_KEY, "skipped");
   }
 
@@ -285,6 +312,7 @@ export class Guide {
     this.active = false;
     this.moment = null;
     this.paused = null;
+    this.done.clear();
     this.storage.set(GUIDE_KEY, "done");
   }
 }
