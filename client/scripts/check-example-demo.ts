@@ -313,6 +313,23 @@ function main(): void {
     styleSource.includes(".furnish-style[disabled]") && styleSource.includes("cursor: not-allowed"),
     ".furnish-style[disabled] is lighter with cursor: not-allowed",
   );
+  const sendingAt = panelSource.indexOf("private setSending");
+  const sendingBody = sendingAt < 0 ? "" : panelSource.slice(sendingAt, sendingAt + 1600);
+  check(
+    "demo chips stay disabled after a send",
+    sendingBody.includes("applyDemoDisabled") &&
+      sendingBody.includes('title.includes("needs Live AI")'),
+    "setSending(false) re-disables chips with no recorded answer",
+  );
+  const recommendSource = readFileSync(join(clientDir, "src", "recommend", "panel.ts"), "utf8");
+  const loadingAt = recommendSource.indexOf("private setLoading");
+  const loadingBody = loadingAt < 0 ? "" : recommendSource.slice(loadingAt, loadingAt + 1600);
+  check(
+    "demo runs stay disabled after a send",
+    loadingBody.includes("applyDemoDisabled") &&
+      recommendSource.includes('title.includes("needs Live AI")'),
+    "setLoading(false) re-disables runs with no recorded answer",
+  );
 
   console.log(
     failures === 0

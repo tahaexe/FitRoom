@@ -1091,7 +1091,21 @@ export class AssistantPanel {
     if (input instanceof HTMLInputElement) input.toggleAttribute("disabled", on);
     // Re-enabling must not wake demo-only controls: the seats, style,
     // budget and Furnish button stay enabled, the rest until Live AI is on.
-    if (!on) this.syncMode();
+    if (!on) {
+      this.syncMode();
+      this.applyDemoDisabled();
+    }
+  }
+
+  private applyDemoDisabled(): void {
+    if (isLive()) return;
+    for (const b of this.root.querySelectorAll("button.assistant-chip")) {
+      if (!(b instanceof HTMLButtonElement)) continue;
+      if (b.title.includes("needs Live AI")) {
+        b.toggleAttribute("disabled", true);
+        b.setAttribute("aria-disabled", "true");
+      }
+    }
   }
 
   /**

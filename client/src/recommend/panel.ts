@@ -361,6 +361,18 @@ export class RecommendPanel {
     }
   }
 
+  /** Re-disable runs with no recorded answer after a send re-enables all. */
+  private applyDemoDisabled(): void {
+    if (isLive()) return;
+    for (const b of this.root.querySelectorAll("button.recommend-run")) {
+      if (!(b instanceof HTMLButtonElement)) continue;
+      if (b.title.includes("needs Live AI")) {
+        b.toggleAttribute("disabled", true);
+        b.setAttribute("aria-disabled", "true");
+      }
+    }
+  }
+
   /** Mark one entry as needing Live AI after a demo-miss. */
   private disableRun(button: HTMLButtonElement): void {
     button.toggleAttribute("disabled", true);
@@ -374,7 +386,9 @@ export class RecommendPanel {
       if (b.classList.contains("recommend-close")) continue;
       b.toggleAttribute("disabled", on);
     }
+    if (!on) this.applyDemoDisabled();
     const out = this.root.querySelector(".recommend-results");
+    if (out !== null && !on) void this.markUnavailableRuns(this.root);
     if (out !== null && on) {
       out.innerHTML = "";
       const p = document.createElement("p");
