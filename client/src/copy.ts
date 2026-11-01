@@ -126,6 +126,8 @@ export const RENDER_CAPTURE_FAILED = "The visualiser couldn't capture the view. 
 export const ASSISTANT_LOADING = "Asking Muse Spark…";
 export const RECOMMEND_LOADING = "Asking Muse Spark…";
 export const VISUALISING_PREFIX = "Visualising…";
+export const RENDER_HIDE = "Hide";
+export const RENDER_STILL_BUSY = "Still making your picture. It will appear here.";
 
 /**
  * Unviewed confirm-view wall chip: what was found on that wall, one tap to

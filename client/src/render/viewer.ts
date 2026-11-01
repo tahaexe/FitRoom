@@ -14,6 +14,8 @@ import {
   NOT_READY_MESSAGE,
   RENDER_CAPTURE_FAILED,
   RENDER_FAILED,
+  RENDER_HIDE,
+  RENDER_STILL_BUSY,
   RETRY,
   TURN_ON_LIVE,
   USE_SAMPLE_ROOM,
@@ -73,15 +75,19 @@ export class RenderViewer {
 
   open(): void {
     this.root.removeAttribute("hidden");
+    if (this.busy) this.showStillBusy();
   }
 
   close(): void {
     this.root.setAttribute("hidden", "");
   }
 
-  /** One click: capture, prompt, send, show. Ignored while busy. */
+  /** One click: capture, prompt, send, show. Reopens while busy. */
   async visualise(): Promise<void> {
-    if (this.busy) return;
+    if (this.busy) {
+      this.open();
+      return;
+    }
     this.busy = true;
     this.open();
     // After an orbit the sample room renders its recorded view: move the
@@ -142,6 +148,17 @@ export class RenderViewer {
     this.clearTimer();
   }
 
+  private showStillBusy(): void {
+    if (this.root.querySelector("[data-still-busy]") !== null) return;
+    const card = this.root.querySelector(".render-card");
+    if (card === null) return;
+    const note = document.createElement("p");
+    note.className = "render-still";
+    note.dataset["stillBusy"] = "true";
+    note.textContent = RENDER_STILL_BUSY;
+    card.appendChild(note);
+  }
+
   private showProgress(capture: { dataUrl: string; width: number; height: number }): void {
     this.clearTimer();
     this.root.innerHTML = "";
@@ -154,7 +171,8 @@ export class RenderViewer {
     close.type = "button";
     close.className = "render-close";
     close.textContent = "×";
-    close.title = "Close visualisation";
+    close.setAttribute("aria-label", RENDER_HIDE);
+    close.title = RENDER_HIDE;
     close.addEventListener("click", () => this.close());
     const head = document.createElement("div");
     head.className = "render-head";
@@ -204,7 +222,8 @@ export class RenderViewer {
     close.type = "button";
     close.className = "render-close";
     close.textContent = "×";
-    close.title = "Close visualisation";
+    close.setAttribute("aria-label", RENDER_HIDE);
+    close.title = RENDER_HIDE;
     close.addEventListener("click", () => this.close());
     const head = document.createElement("div");
     head.className = "render-head";
@@ -249,7 +268,8 @@ export class RenderViewer {
     close.type = "button";
     close.className = "render-close";
     close.textContent = "×";
-    close.title = "Close visualisation";
+    close.setAttribute("aria-label", RENDER_HIDE);
+    close.title = RENDER_HIDE;
     close.addEventListener("click", () => this.close());
     const head = document.createElement("div");
     head.className = "render-head";
@@ -297,7 +317,8 @@ export class RenderViewer {
     close.type = "button";
     close.className = "render-close";
     close.textContent = "×";
-    close.title = "Close visualisation";
+    close.setAttribute("aria-label", RENDER_HIDE);
+    close.title = RENDER_HIDE;
     close.addEventListener("click", () => this.close());
     const head = document.createElement("div");
     head.className = "render-head";
