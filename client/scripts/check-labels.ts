@@ -595,6 +595,31 @@ check(
   );
 }
 
+// ---- Inspector labels point at their fields ----
+{
+  const inspector = src("inspector.ts");
+  check(
+    "inspector position input carries a stable id",
+    inspector.includes("input.id = `inspector-${inputName}`"),
+    "inspector.ts",
+  );
+  check(
+    "inspector position label points at the field",
+    inspector.includes("label.htmlFor = input.id"),
+    "inspector.ts",
+  );
+  check(
+    "inspector rotation input carries a stable id",
+    inspector.includes('rInput.id = "inspector-rotation-deg"'),
+    "inspector.ts",
+  );
+  check(
+    "inspector rotation label points at the field",
+    inspector.includes('rLabel.htmlFor = "inspector-rotation-deg"'),
+    "inspector.ts",
+  );
+}
+
 // ---- Sample-room confirm stays in view with focus on Continue ----
 {
   const panel = src("assistant/panel.ts");

@@ -317,7 +317,8 @@ export class AssistantPanel {
     // Seats stepper (1-8, default 4).
     const seatsField = document.createElement("div");
     seatsField.className = "furnish-field";
-    const seatsLabel = document.createElement("label");
+    const seatsLabel = document.createElement("span");
+    seatsLabel.className = "furnish-label";
     seatsLabel.textContent = "Seats";
     seatsLabel.id = "furnish-seats-label";
     const stepper = document.createElement("div");

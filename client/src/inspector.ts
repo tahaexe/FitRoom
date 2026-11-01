@@ -135,11 +135,13 @@ export class Inspector {
       label.appendChild(hint);
       const input = document.createElement("input");
       input.type = "number";
+      input.id = `inspector-${inputName}`;
       input.name = inputName;
       input.step = "1";
       input.min = "0";
       input.value = String(Math.round(value));
       input.setAttribute("aria-label", ariaText);
+      label.htmlFor = input.id;
       input.addEventListener("change", () => {
         const raw = input.value.trim();
         if (raw === "" || !Number.isFinite(Number(raw))) {
@@ -190,8 +192,10 @@ export class Inspector {
     rotRow.className = "inspector-row";
     const rLabel = document.createElement("label");
     rLabel.textContent = "Rotation (°) ";
+    rLabel.htmlFor = "inspector-rotation-deg";
     const rInput = document.createElement("input");
     rInput.type = "number";
+    rInput.id = "inspector-rotation-deg";
     rInput.name = "rotation-deg";
     rInput.step = "15";
     rInput.value = String(Math.round(item.rotationY));
