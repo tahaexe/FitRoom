@@ -158,7 +158,7 @@ export class AssistantPanel {
       tab.setAttribute("role", "tab");
       tab.textContent = name === "arrange" ? "Arrange" : "Furnish";
       tab.setAttribute("aria-selected", String(this.tab === name));
-      tab.toggleAttribute("data-active", this.tab === name);
+      tab.setAttribute("data-active", String(this.tab === name));
       tab.addEventListener("click", () => {
         this.tab = name;
         this.render();
@@ -370,13 +370,13 @@ export class AssistantPanel {
       chip.className = "furnish-style";
       chip.textContent = option.label;
       chip.setAttribute("aria-pressed", String(this.furnishStyle === option.value));
-      chip.toggleAttribute("data-active", this.furnishStyle === option.value);
+      chip.setAttribute("data-active", String(this.furnishStyle === option.value));
       chip.addEventListener("click", () => {
         this.furnishStyle = option.value;
         for (const other of styleButtons) {
           const active = other === chip;
           other.setAttribute("aria-pressed", String(active));
-          other.toggleAttribute("data-active", active);
+          other.setAttribute("data-active", String(active));
         }
       });
       styleButtons.push(chip);

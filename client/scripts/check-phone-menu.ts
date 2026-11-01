@@ -82,6 +82,21 @@ check(
   hyphenKeys.slice(0, 5).join("; "),
 );
 
+// data-active is styled as [data-active="true"], so it must always carry
+// the string "true"/"false" (toggleAttribute writes data-active="").
+const toggleData: string[] = [];
+for (const file of listTsFiles(join(clientRoot, "src"))) {
+  const source = readFileSync(file, "utf8");
+  if (source.includes('toggleAttribute("data-') || source.includes("toggleAttribute('data-")) {
+    toggleData.push(relative(clientRoot, file));
+  }
+}
+check(
+  "phone-menu:no-toggle-data-attributes",
+  toggleData.length === 0,
+  toggleData.slice(0, 5).join("; "),
+);
+
 // Both menu loops read the camelCase key.
 for (const menuId of ["phone-menu", "phone-ai-menu"]) {
   const at = main.indexOf(`#${menuId} [data-phone-action]`);
