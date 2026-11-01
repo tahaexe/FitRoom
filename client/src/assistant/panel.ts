@@ -143,7 +143,14 @@ export class AssistantPanel {
     this.syncMode();
   }
 
+  private built = false;
+
   private render(): void {
+    if (this.built) {
+      this.updateTabs();
+      return;
+    }
+    this.built = true;
     this.root.innerHTML = "";
     const head = document.createElement("div");
     head.className = "assistant-head";
@@ -213,6 +220,27 @@ export class AssistantPanel {
     if (this.tab !== "furnish") furnishView.setAttribute("hidden", "");
     furnishView.appendChild(this.buildFurnishView());
     this.root.appendChild(furnishView);
+  }
+
+  private updateTabs(): void {
+    const names = ["arrange", "furnish"] as const;
+    const tabs = this.root.querySelectorAll("button.assistant-tab");
+    tabs.forEach((tab, i) => {
+      const name = names[i] ?? "arrange";
+      tab.setAttribute("aria-selected", String(this.tab === name));
+      tab.setAttribute("data-active", String(this.tab === name));
+    });
+    const views = this.root.querySelectorAll(".assistant-view");
+    const arrangeView = views[0];
+    const furnishView = views[1];
+    if (arrangeView instanceof HTMLElement) {
+      if (this.tab === "arrange") arrangeView.removeAttribute("hidden");
+      else arrangeView.setAttribute("hidden", "");
+    }
+    if (furnishView instanceof HTMLElement) {
+      if (this.tab === "furnish") furnishView.removeAttribute("hidden");
+      else furnishView.setAttribute("hidden", "");
+    }
   }
 
   /** Show or hide the demo chips without losing the chat log. */
