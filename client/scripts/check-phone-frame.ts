@@ -616,5 +616,25 @@ check(
   `${String(wrapLineCount(verdictB))} lines: ${verdictB}`,
 );
 
+// ---- The phone sheets end above the 56 px bottom bar ----
+const sheetRule =
+  /#catalog,\s*#inspector,\s*#recommend-panel,\s*#assistant-panel,\s*#render-viewer,\s*#cart-panel\s*\{([^}]*)\}/.exec(
+    phoneOnly,
+  )?.[1] ?? "";
+for (const id of [
+  "#catalog",
+  "#inspector",
+  "#recommend-panel",
+  "#assistant-panel",
+  "#render-viewer",
+  "#cart-panel",
+]) {
+  check(
+    `phone-frame:sheet-above-bar-${id}`,
+    sheetRule.includes("padding-bottom: calc(16px + var(--phone-bar-height)"),
+    sheetRule === "" ? "sheets rule missing" : `${id} padding keeps content above #phone-bar`,
+  );
+}
+
 if (failures > 0) process.exit(1);
 console.log("phone-frame: all checks passed");

@@ -2824,7 +2824,7 @@ button.cart-row {
     max-height: var(--sheet-full);
     border-radius: 16px 16px 0 0;
     z-index: 10;
-    padding-bottom: calc(16px + env(safe-area-inset-bottom));
+    padding-bottom: calc(16px + var(--phone-bar-height) + env(safe-area-inset-bottom));
     overscroll-behavior: contain;
   }
 
