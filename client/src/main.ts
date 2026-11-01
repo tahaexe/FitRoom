@@ -373,6 +373,7 @@ class FitRoomApp {
   private editorBase: RoomLayout | null = null;
   private menuChoice = "sample";
   private menuBeforePhotos = "sample";
+  private menuBeforeManual = "sample";
   private photoFlow: PhotoFlow | null = null;
   /** "See it in your photo" overlay (one more exclusive view, null when closed). */
   private photoView: PhotoView | null = null;
@@ -914,6 +915,11 @@ class FitRoomApp {
       onBuildRoom: (size) => this.buildRoomAtSize(size),
       onShapeInEditor: (size) => this.shapeInEditor(size),
       onViewChange: () => this.renderGuide(),
+      onCancelSize: () => {
+        this.menuChoice = this.menuBeforeManual;
+        this.refreshMenu();
+        this.updateTopBar();
+      },
     });
     document.body.appendChild(this.firstOpen.element);
     this.guideView = new GuideView({
@@ -1370,11 +1376,14 @@ class FitRoomApp {
   /** Header room menu: sample room, size-built room, or reopen the editor. Each room keeps its own placed pieces. */
   private pickRoom(id: string): void {
     this.closePhotoView();
+    // Picking another room closes the size form (the room changes behind it).
+    if (id !== "manual") this.firstOpen?.closeSize();
     if (id === "manual") {
       // "Build a room" opens the same size screen as first open instead of
       // the fixed start: Enter builds the plan editor at the typed size.
       this.closeEditor();
-      this.firstOpen?.showSize();
+      if (this.menuChoice !== "manual") this.menuBeforeManual = this.menuChoice;
+      this.firstOpen?.showSizeForBuild();
       this.updateTopBar();
       this.menuChoice = "manual";
     } else if (id === "edit") {
@@ -3822,6 +3831,12 @@ class FitRoomApp {
         if (this.photoFlow !== null) return;
         if (this.photoView !== null) {
           this.closePhotoView();
+          return;
+        }
+        // Escape on the size form goes back (start options, or the form
+        // closes from "Build a room"): it never skips the tour there.
+        if (this.firstOpen?.sizeVisible === true) {
+          this.firstOpen.backFromSize();
           return;
         }
         // Escape skips the guide (stored as `skipped`), like "Skip tour".

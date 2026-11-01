@@ -35,6 +35,8 @@ export interface FirstOpenCallbacks {
   onBuildRoom: (size: RoomSize) => void;
   onShapeInEditor: (size: RoomSize | null) => void;
   onViewChange?: () => void;
+  /** Back (or Escape) on a size form opened from "Build a room". */
+  onCancelSize?: () => void;
 }
 
 function el<K extends keyof HTMLElementTagNameMap>(
@@ -81,6 +83,8 @@ export class FirstOpen {
   private lengthError!: HTMLElement;
   private ceilingError!: HTMLElement;
   private slipRow!: HTMLElement;
+  /** True when the size form opened from "Build a room", not the cards. */
+  private sizeFromBuild = false;
   private buildBtn!: HTMLButtonElement;
   private buildReason!: HTMLElement;
   private planSvg!: SVGSVGElement;
@@ -116,12 +120,41 @@ export class FirstOpen {
   }
 
   showSize(): void {
+    this.sizeFromBuild = false;
     this.element.removeAttribute("hidden");
     this.cardsView.setAttribute("hidden", "");
     this.sizeView.removeAttribute("hidden");
     this.refreshEchoes();
     window.setTimeout(() => this.widthInput.focus(), 0);
     this.callbacks.onViewChange?.();
+  }
+
+  /** "Build a room" opens the same size screen over the live room. */
+  showSizeForBuild(): void {
+    this.showSize();
+    this.sizeFromBuild = true;
+  }
+
+  /**
+   * Back from the size form: the start options on the first visit, or the
+   * form just closes when "Build a room" opened it (nothing is built).
+   */
+  backFromSize(): void {
+    if (this.sizeFromBuild) {
+      this.sizeFromBuild = false;
+      this.hide();
+      this.callbacks.onCancelSize?.();
+    } else {
+      this.showCards();
+    }
+  }
+
+  /** Another room takes the screen: the size form closes. */
+  closeSize(): void {
+    if (this.sizeVisible) {
+      this.sizeFromBuild = false;
+      this.hide();
+    }
   }
 
   hide(): void {
@@ -135,6 +168,11 @@ export class FirstOpen {
   /** The cards view (with "Try with example photos") is the one on screen. */
   get cardsVisible(): boolean {
     return this.visible && !this.cardsView.hasAttribute("hidden");
+  }
+
+  /** The size form is the view on screen (not the start cards). */
+  get sizeVisible(): boolean {
+    return this.visible && !this.sizeView.hasAttribute("hidden");
   }
 
   private buildCards(): void {
@@ -246,6 +284,12 @@ export class FirstOpen {
     const form = document.createElement("form");
     form.className = "size-form";
     form.noValidate = true;
+
+    const back = el("button", "setup-secondary", "Back");
+    back.type = "button";
+    back.setAttribute("aria-label", "Back");
+    back.addEventListener("click", () => this.backFromSize());
+    form.appendChild(back);
 
     const head = el("div", "size-head");
     head.append(el("h2", "setup-title", "Enter my room size"), this.unitToggle());

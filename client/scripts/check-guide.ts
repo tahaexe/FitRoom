@@ -978,5 +978,48 @@ check(
   );
 }
 
+// ---- The size form has a way back (Back, Escape, room menu) ----
+{
+  const firstOpenSource = readFileSync(
+    join(dirname(fileURLToPath(import.meta.url)), "..", "src", "first-open.ts"),
+    "utf8",
+  );
+  const buildAt = firstOpenSource.indexOf("private buildSize(): void");
+  const buildBody = buildAt < 0 ? "" : firstOpenSource.slice(buildAt, buildAt + 800);
+  check(
+    "guide:size-back-button",
+    buildBody.includes('"Back"') && buildBody.includes("backFromSize()"),
+    "buildSize must start with a Back button wired to backFromSize",
+  );
+  const backAt = firstOpenSource.indexOf("backFromSize(): void");
+  const backBody = backAt < 0 ? "" : firstOpenSource.slice(backAt, backAt + 500);
+  check(
+    "guide:size-back-origin",
+    backBody.includes("showCards()") && backBody.includes("onCancelSize"),
+    "backFromSize must return to the cards or close a Build-a-room form",
+  );
+  check(
+    "guide:size-build-origin",
+    mainSource.includes("showSizeForBuild()"),
+    "Build a room must open the size form as a closable form",
+  );
+  const keysAt = mainSource.indexOf("private bindKeys()");
+  const keysBody = keysAt < 0 ? "" : mainSource.slice(keysAt, keysAt + 4000);
+  const escapeBack = keysBody.indexOf("backFromSize()");
+  const escapeSkip = keysBody.indexOf("this.skipGuide()");
+  check(
+    "guide:size-escape-back",
+    escapeBack >= 0 && escapeSkip >= 0 && escapeBack < escapeSkip,
+    "Escape on the size form must go back before it can skip the tour",
+  );
+  const pickAt = mainSource.indexOf("private pickRoom(");
+  const pickBody = pickAt < 0 ? "" : mainSource.slice(pickAt, pickAt + 1200);
+  check(
+    "guide:size-menu-closes",
+    pickBody.includes("closeSize()"),
+    "picking a room must close the size form",
+  );
+}
+
 if (failures > 0) process.exit(1);
 console.log("guide: all checks passed");
