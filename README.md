@@ -3,6 +3,7 @@
 FitRoom is a true-scale 3D fitting room for furniture stores, in the browser. A shopper builds a model of their room from four wall photos and one or two tape measurements, or draws it as a plan, and tries the store's furniture in it before buying. Every placement is checked in centimetres, and Meta's models recommend, arrange, furnish and picture the room.
 
 - Live demo: https://fitroom.fitroom-demo.workers.dev (opens in Demo mode: no sign-in, no model calls)
+- Video: https://youtu.be/Acif2gKHKos. The voice-over is an AI voice (Kokoro-82M, Apache-2.0); the music is "First Light Particles" by Yoiyami (CC0).
 
 ## Try it in Demo mode
 
@@ -269,7 +270,7 @@ visible words.
 
 - Rooms are rectangles with four walls, from photos or from the plan editor.
 - Fit is checked on the floor plan. Each piece is the rectangle of its width and depth, so a round table counts as its square and nothing slides under another piece, though pieces may stand on a rug; height matters only for the window warning.
-- Measured so far: on a generated 420 × 360 cm example room with both walls taped, windows came within 1 cm; a door read 100 cm against 90 cm and one edit in the plan fixes it. With only wall A taped, as in the app's example, wall B read 362 ± 9 cm against 360 cm. On eight public-domain (CC0) room photos, FitRoom picked the right floor type on 6 and asked for a retake on the 2 it could not read; the wall colour came within ΔE 10 of the photo on 3 of the 6 rooms it built (on all 6 once the photo's exposure is set aside: the 3D view lights the room itself). Its accuracy on real phone photos against a tape measure has not been assessed.
+- Measured so far: on a generated 420 × 360 cm example room with both walls taped, windows came within 1 cm; a door read 100 cm against 90 cm and one edit in the plan fixes it. With only wall A taped, as in the app's example, wall B read 362 ± 9 cm against 360 cm. On eight public-domain (CC0) room photos, FitRoom picked the right floor type on 6 and asked for a retake on the 2 it could not read; the wall colour came within ΔE 10 of the photo on 3 of the 6 rooms it built (on all 6 once the photo's exposure is set aside: the 3D view lights the room itself). On phone photos of a real living room (three of its four walls), FitRoom found the corners on 2 of the 3 walls; measuring needs all four walls, so no length error was computed.
 - An open door leaf can hide its doorway in a photo; when no opening is found, the app asks the shopper to tap the door.
 - Demo mode answers only its recorded requests on the sample room and the example room; everything else needs Live AI, which is capped.
 - The catalog is a sample store: product names and prices are invented for the demo, and each size matches its model within 1 cm. A store can't upload its own catalog yet, so the "See it in your room" button exists only on the demo store's pages.
